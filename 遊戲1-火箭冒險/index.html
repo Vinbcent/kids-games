@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a2a">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../manifest.json">
+<link rel="icon" href="../icon-192.png">
 <title>🚀 超級火箭冒險</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -281,13 +285,24 @@ canvas.addEventListener('touchend', e => {
 const startOverlay = document.getElementById('startOverlay');
 const loadingOverlay = document.getElementById('loadingOverlay');
 
+// 進入全螢幕：必須在使用者點擊的「同步階段」呼叫才會成功（手機限制）
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return; // PWA 已是全螢幕
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+// 遊戲中若意外退出全螢幕（例如下拉通知列），點一下畫面就會回到全螢幕
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
 async function begin(mode) {
+  goFullscreen(); // 一定要放在第一行（同步呼叫）
   audioInit();
   state.mode = mode;
   startOverlay.style.display = 'none';
 
-  // 全螢幕 + 保持螢幕常亮（投放時很重要）
-  try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  // 保持螢幕常亮（投放時很重要）
   try { await navigator.wakeLock.request('screen'); } catch (e) {}
 
   if (mode === 'body') {

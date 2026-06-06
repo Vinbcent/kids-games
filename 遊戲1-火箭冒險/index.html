@@ -188,7 +188,7 @@ function boostSoundOff() {
 function say(text) {
   try {
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-TW'; u.rate = 0.9; u.pitch = 1.2;
+    u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2;
     speechSynthesis.speak(u);
   } catch (e) {}
 }
@@ -344,7 +344,7 @@ function startCountdown() {
   const num = document.getElementById('countNum');
   el.style.display = 'flex';
   const seq = ['3', '2', '1', '發射！'];
-  say('三，二，一，發射！');
+  say('Three, two, one, blast off!');
   let i = 0;
   const step = () => {
     if (i < seq.length) {
@@ -470,7 +470,7 @@ function update(dt, now) {
         const lost = Math.min(3, state.stars);
         state.stars -= lost;
         if (lost > 0) burst(rx, ry - 50, lost, { emoji: ['⭐'] });
-        say('哎呀！');
+        say('Oops!');
         continue;
       }
       // 收集到！
@@ -484,7 +484,7 @@ function update(dt, now) {
         burst(ix, iy, 12, { color: '#ffdd44' });
         if (state.stars % 10 === 0) {
           sfxMilestone(); fireworks();
-          say(['好棒！', '你好厲害！', '哇！太強了！'][Math.floor(Math.random() * 3)]);
+          say(['Great job!', 'You are amazing!', 'Wow, super cool!'][Math.floor(Math.random() * 3)]);
         }
         const newLevel = Math.min(ROCKET_COLORS.length - 1, Math.floor(state.stars / 20));
         if (newLevel > state.level) { state.level = newLevel; state.shake = 8; fireworks(); }

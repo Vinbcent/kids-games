@@ -142,6 +142,18 @@ function sfxCollect() {
 }
 function sfxGift() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, 'triangle', 0.25, i * 0.08)); }
 function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxBoom() {
+  if (!AC) return;
+  const dur = 0.6;
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 600;
+  const g = AC.createGain(); g.gain.value = 0.6;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start();
+  tone(120, 0.5, 'sine', 0.4); // 低音「碰」
+}
 function sfxLaunch() {
   if (!AC) return;
   const dur = 2.2;
@@ -195,6 +207,8 @@ const state = {
   groundY: 0,             // 發射動畫用（畫面比例，>1 表示已離開畫面）
   t: 0,
   shake: 0,
+  spin: 0,                // 被炸到的轉圈動畫（剩餘弧度）
+  invulnT: 0,             // 被炸後的短暫無敵秒數
 };
 const ROCKET_COLORS = ['#ff4444', '#ff8800', '#ffd700', '#00cc66', '#00b8ff', '#aa66ff', '#ff66cc'];
 
@@ -355,13 +369,16 @@ function spawnItem(now) {
   const interval = state.boostLevel > 0.5 ? 450 : 850;
   if (now - lastItemSpawn < interval) return;
   lastItemSpawn = now;
-  const type = Math.random() < 0.12 ? 'gift' : 'star';
-  // 70% 出現在火箭附近搆得到的範圍、30% 隨機遠處（鼓勵跑動）
-  let x = Math.random() < 0.7
+  const r = Math.random();
+  let type = 'star';
+  if (r < 0.12) type = 'gift';
+  else if (r < 0.27 && state.stars >= 5) type = 'bomb'; // 收集 5 顆星後炸彈才登場
+  // 星星/禮物 70% 出現在火箭附近搆得到的範圍；炸彈一律隨機位置
+  let x = (type !== 'bomb' && Math.random() < 0.7)
     ? state.rocketX + (Math.random() * 2 - 1) * 0.35
     : Math.random();
   x = Math.min(0.92, Math.max(0.08, x));
-  items.push({ x, y: -0.1, type, size: type === 'gift' ? 44 : 38, wob: Math.random() * 6 });
+  items.push({ x, y: -0.1, type, size: type === 'star' ? 38 : 44, wob: Math.random() * 6 });
 }
 function spawnPlanet(now) {
   if (now - lastPlanetSpawn < 6000) return;
@@ -414,6 +431,8 @@ function update(dt, now) {
   state.speed = 1 + state.boostLevel * 1.8;
 
   if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
+  if (state.spin > 0) state.spin = Math.max(0, state.spin - dt * 9);
+  if (state.invulnT > 0) state.invulnT = Math.max(0, state.invulnT - dt);
 
   // ---- 發射動畫 ----
   if (state.phase === 'launch') {
@@ -438,6 +457,22 @@ function update(dt, now) {
     const iy = it.y * H;
     const dx = ix - rx, dy = iy - ry;
     if (Math.hypot(dx, dy) < catchR) {
+      // 炸彈：碰！掉幾顆星星 + 轉圈圈，但不會 Game Over
+      if (it.type === 'bomb') {
+        if (state.invulnT > 0) continue; // 剛被炸過，短暫無敵（閃爍中）
+        items.splice(i, 1);
+        sfxBoom();
+        burst(ix, iy, 26, { color: '#ff6600' });
+        burst(ix, iy, 6, { emoji: ['💥', '💨'] });
+        state.shake = 22;
+        state.spin = Math.PI * 2;
+        state.invulnT = 1.5;
+        const lost = Math.min(3, state.stars);
+        state.stars -= lost;
+        if (lost > 0) burst(rx, ry - 50, lost, { emoji: ['⭐'] });
+        say('哎呀！');
+        continue;
+      }
       // 收集到！
       items.splice(i, 1);
       if (it.type === 'gift') {
@@ -483,7 +518,8 @@ function drawRocket(x, y) {
   const lean = (state.targetX - state.rocketX) * 60; // 移動時微微傾斜
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(lean * 0.012);
+  ctx.rotate(lean * 0.012 - state.spin); // 被炸到時轉一整圈
+  if (state.invulnT > 0) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(state.t * 20); // 無敵閃爍
   const s = 1 + state.boostLevel * 0.1;
   ctx.scale(s, s);
 
@@ -581,8 +617,15 @@ function draw(now) {
   // 掉落物
   for (const it of items) {
     const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const iy = it.y * H;
+    if (it.type === 'bomb') { // 紅色閃爍光暈，提醒小朋友要躲開
+      ctx.globalAlpha = 0.25 + 0.15 * Math.sin(state.t * 8);
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.arc(ix, iy, it.size * 0.9, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     ctx.font = it.size + 'px serif';
-    ctx.fillText(it.type === 'gift' ? '🎁' : '⭐', ix, it.y * H);
+    ctx.fillText(it.type === 'gift' ? '🎁' : it.type === 'bomb' ? '💣' : '⭐', ix, iy);
   }
 
   // 火箭

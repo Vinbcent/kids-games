@@ -37,19 +37,20 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; color: #fff;
   }
-  #startOverlay { background: radial-gradient(ellipse at 50% 30%, #1a1a5e 0%, #0a0a2a 70%); }
-  #startOverlay h1 { font-size: clamp(36px, 8vw, 72px); margin-bottom: 8px; text-shadow: 0 0 30px #6688ff; }
-  #startOverlay .rocket-big { font-size: clamp(80px, 18vw, 160px); animation: float 2.5s ease-in-out infinite; }
-  @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-18px) } }
+  /* 尺寸全部用 vmin（螢幕短邊）縮放，手機橫向/直向/電視都不會爆版 */
+  #startOverlay { background: radial-gradient(ellipse at 50% 30%, #1a1a5e 0%, #0a0a2a 70%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 0 30px #6688ff; }
+  #startOverlay .rocket-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: float 2.5s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-1.5vmin) } }
   .btn {
-    margin: 14px; padding: 20px 44px; font-size: clamp(22px, 4.5vw, 34px); font-weight: bold;
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
     color: #fff; border: none; border-radius: 60px; cursor: pointer;
-    box-shadow: 0 6px 0 rgba(0,0,0,.35);
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35);
   }
-  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
   #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
   #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
-  #startOverlay .hint { margin-top: 18px; font-size: clamp(14px, 2.5vw, 20px); color: #aab; max-width: 80%; line-height: 1.6; }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #aab; max-width: 88%; line-height: 1.5; }
 
   #loadingOverlay { background: rgba(10,10,42,.92); display: none; }
   #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
@@ -75,7 +76,7 @@
     align-items: center; justify-content: center; pointer-events: none;
   }
   #countdown span {
-    font-size: clamp(120px, 30vw, 300px); font-weight: bold; color: #ffdd44;
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
     text-shadow: 0 0 50px #ff8800;
   }
 </style>

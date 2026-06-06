@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>🚀 Dylan 的火箭冒險</title>
+<title>🚀 超級火箭冒險</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a2a; touch-action: none; }
@@ -95,7 +95,7 @@
 
 <div class="overlay" id="startOverlay">
   <div class="rocket-big">🚀</div>
-  <h1>Dylan 的火箭冒險</h1>
+  <h1>超級火箭冒險</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
   <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高加速衝刺！🔥<br>影像只在手機上運算，不會上傳。</div>
@@ -425,7 +425,7 @@ function update(dt, now) {
         burst(ix, iy, 12, { color: '#ffdd44' });
         if (state.stars % 10 === 0) {
           sfxMilestone(); fireworks();
-          say(['好棒！', 'Dylan 好厲害！', '哇！太強了！'][Math.floor(Math.random() * 3)]);
+          say(['好棒！', '你好厲害！', '哇！太強了！'][Math.floor(Math.random() * 3)]);
         }
         const newLevel = Math.min(ROCKET_COLORS.length - 1, Math.floor(state.stars / 20));
         if (newLevel > state.level) { state.level = newLevel; state.shake = 8; fireworks(); }

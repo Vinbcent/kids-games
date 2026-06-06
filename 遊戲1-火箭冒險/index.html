@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>🚀 Dylan 的火箭冒險</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a2a; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 鏡頭預覽小視窗（給爸爸確認追蹤狀況用） */
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.5); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  /* 全螢幕覆蓋層共用 */
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  #startOverlay { background: radial-gradient(ellipse at 50% 30%, #1a1a5e 0%, #0a0a2a 70%); }
+  #startOverlay h1 { font-size: clamp(36px, 8vw, 72px); margin-bottom: 8px; text-shadow: 0 0 30px #6688ff; }
+  #startOverlay .rocket-big { font-size: clamp(80px, 18vw, 160px); animation: float 2.5s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-18px) } }
+  .btn {
+    margin: 14px; padding: 20px 44px; font-size: clamp(22px, 4.5vw, 34px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 6px 0 rgba(0,0,0,.35);
+  }
+  .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #startOverlay .hint { margin-top: 18px; font-size: clamp(14px, 2.5vw, 20px); color: #aab; max-width: 80%; line-height: 1.6; }
+
+  #loadingOverlay { background: rgba(10,10,42,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  /* 找不到玩家的提示 */
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 倒數數字 */
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(120px, 30vw, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff8800;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🛸</div>
+  <p id="loadingText">正在準備太空任務…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="rocket-big">🚀</div>
+  <h1>Dylan 的火箭冒險</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高加速衝刺！🔥<br>影像只在手機上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================== 音效（Web Audio 合成，不需音檔） ================== */
+let AC = null, boostNoise = null, boostGain = null;
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+}
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+const PENTA = [523, 587, 659, 784, 880, 1047];
+function sfxCollect() {
+  const n = PENTA[Math.floor(Math.random() * PENTA.length)];
+  tone(n, 0.15, 'sine', 0.3); tone(n * 1.5, 0.2, 'sine', 0.2, 0.07);
+}
+function sfxGift() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, 'triangle', 0.25, i * 0.08)); }
+function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxLaunch() {
+  if (!AC) return;
+  const dur = 2.2;
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(200, AC.currentTime);
+  f.frequency.exponentialRampToValueAtTime(2000, AC.currentTime + dur);
+  const g = AC.createGain(); g.gain.value = 0.5;
+  src.connect(f); f.connect(g); g.connect(AC.destination); src.start();
+}
+function boostSoundOn() {
+  if (!AC || boostNoise) return;
+  const buf = AC.createBuffer(1, AC.sampleRate * 1, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  boostNoise = AC.createBufferSource(); boostNoise.buffer = buf; boostNoise.loop = true;
+  const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;
+  boostGain = AC.createGain(); boostGain.gain.value = 0;
+  boostNoise.connect(f); f.connect(boostGain); boostGain.connect(AC.destination);
+  boostNoise.start();
+  boostGain.gain.linearRampToValueAtTime(0.25, AC.currentTime + 0.3);
+}
+function boostSoundOff() {
+  if (!boostNoise) return;
+  boostGain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.3);
+  const n = boostNoise; boostNoise = null;
+  setTimeout(() => { try { n.stop(); } catch (e) {} }, 400);
+}
+function say(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'zh-TW'; u.rate = 0.9; u.pitch = 1.2;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu',          // menu | countdown | launch | fly
+  mode: null,             // body | touch
+  rocketX: 0.5,           // 0~1 畫面比例
+  targetX: 0.5,
+  boost: false,
+  boostLevel: 0,          // 0~1 平滑加速量
+  speed: 1,
+  stars: 0,
+  level: 0,               // 火箭外觀等級
+  groundY: 0,             // 發射動畫用（畫面比例，>1 表示已離開畫面）
+  t: 0,
+  shake: 0,
+};
+const ROCKET_COLORS = ['#ff4444', '#ff8800', '#ffd700', '#00cc66', '#00b8ff', '#aa66ff', '#ff66cc'];
+
+const items = [];       // 掉落物 { x, y, type:'star'|'gift', size }
+const particles = [];   // 粒子 { x, y, vx, vy, life, color?, emoji?, size }
+const bgStars = [];     // 背景小星星
+const planets = [];     // 背景星球
+const PLANET_EMOJI = ['🪐', '🌍', '🌕', '☄️', '🛸', '👽', '🌈'];
+const GIFT_SURPRISE = ['🌈', '🦄', '🍭', '🎈', '🐶', '🍦', '⚽'];
+
+for (let i = 0; i < 80; i++) bgStars.push({ x: Math.random(), y: Math.random(), s: Math.random() * 2 + 0.5, tw: Math.random() * 6 });
+
+let lastItemSpawn = 0, lastPlanetSpawn = 0;
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1;
+let lastSeen = 0;          // 最後偵測到人的時間
+let personX = 0.5;         // 鏡像後 0~1
+let handsUp = false;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
+  pip.style.display = 'block';
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let result;
+  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  if (lm) {
+    lastSeen = performance.now();
+    // 肩膀中心當作身體位置；前鏡頭要左右鏡像（1 - x）才像照鏡子
+    const cx = (lm[11].x + lm[12].x) / 2;
+    personX = 1 - cx;
+    // 雙手手腕都高於鼻子 → 加速！（y 越小越高）
+    handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
+    pipDot.style.left = (personX * 100) + '%';
+    pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
+  }
+}
+
+/* ================== 觸控模式 ================== */
+let touching = false;
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'fly') return;
+  touching = true;
+  state.targetX = e.clientX / W;
+});
+canvas.addEventListener('pointermove', e => {
+  if (!touching) return;
+  state.targetX = e.clientX / W;
+});
+canvas.addEventListener('pointerup', () => touching = false);
+// 觸控模式：兩指同時按 = 加速
+canvas.addEventListener('touchstart', e => {
+  if (state.mode === 'touch' && e.touches.length >= 2) state.boost = true;
+});
+canvas.addEventListener('touchend', e => {
+  if (state.mode === 'touch' && e.touches.length < 2) state.boost = false;
+});
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+async function begin(mode) {
+  audioInit();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+
+  // 全螢幕 + 保持螢幕常亮（投放時很重要）
+  try { await document.documentElement.requestFullscreen(); } catch (e) {}
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try {
+      await setupBodyTracking();
+    } catch (e) {
+      loadingOverlay.style.display = 'none';
+      alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+      state.mode = 'touch';
+    }
+    loadingOverlay.style.display = 'none';
+  }
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function startCountdown() {
+  state.phase = 'countdown';
+  state.groundY = 0;
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '發射！'];
+  say('三，二，一，發射！');
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      num.style.animation = 'none'; void num.offsetWidth;
+      tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'launch';
+      state.t = 0;
+      state.shake = 14;
+      sfxLaunch();
+    }
+  };
+  step();
+}
+
+/* ================== 遊戲邏輯 ================== */
+function spawnItem(now) {
+  const interval = state.boostLevel > 0.5 ? 450 : 850;
+  if (now - lastItemSpawn < interval) return;
+  lastItemSpawn = now;
+  const type = Math.random() < 0.12 ? 'gift' : 'star';
+  items.push({ x: 0.08 + Math.random() * 0.84, y: -0.1, type, size: type === 'gift' ? 44 : 38, wob: Math.random() * 6 });
+}
+function spawnPlanet(now) {
+  if (now - lastPlanetSpawn < 6000) return;
+  lastPlanetSpawn = now;
+  planets.push({
+    x: Math.random(), y: -0.2,
+    emoji: PLANET_EMOJI[Math.floor(Math.random() * PLANET_EMOJI.length)],
+    size: 50 + Math.random() * 70, sp: 0.3 + Math.random() * 0.3,
+  });
+}
+function burst(x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2,
+      life: 1, size: opts.emoji ? 22 + Math.random() * 14 : 3 + Math.random() * 4,
+      color: opts.color || `hsl(${Math.random() * 360},100%,65%)`,
+      emoji: opts.emoji ? opts.emoji[Math.floor(Math.random() * opts.emoji.length)] : null,
+    });
+  }
+}
+function fireworks() {
+  for (let k = 0; k < 5; k++) {
+    setTimeout(() => burst(W * (0.2 + Math.random() * 0.6), H * (0.15 + Math.random() * 0.3), 30), k * 200);
+  }
+}
+
+function update(dt, now) {
+  state.t += dt;
+
+  // ---- 控制來源 ----
+  if (state.mode === 'body') {
+    trackFrame();
+    state.targetX = personX;
+    state.boost = handsUp;
+    const lost = poseLandmarker && performance.now() - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'fly') ? 'block' : 'none';
+  }
+
+  // 平滑跟隨（吸收鏡像投放的延遲，看起來像火箭的慣性）
+  const margin = 0.07;
+  const tx = Math.min(1 - margin, Math.max(margin, state.targetX));
+  state.rocketX += (tx - state.rocketX) * Math.min(1, dt * 5);
+
+  // 加速度平滑
+  const wantBoost = state.boost && state.phase === 'fly';
+  state.boostLevel += ((wantBoost ? 1 : 0) - state.boostLevel) * Math.min(1, dt * 3);
+  if (wantBoost && !boostNoise) boostSoundOn();
+  if (!wantBoost && boostNoise) boostSoundOff();
+  state.speed = 1 + state.boostLevel * 1.8;
+
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
+
+  // ---- 發射動畫 ----
+  if (state.phase === 'launch') {
+    state.groundY += dt * 0.5 * (0.5 + state.t * 0.8);
+    if (state.groundY > 1.3) state.phase = 'fly';
+  }
+
+  // ---- 掉落物 ----
+  if (state.phase === 'fly') {
+    spawnItem(now);
+    spawnPlanet(now);
+  }
+  const fall = 0.25 * state.speed;
+  const rx = state.rocketX * W, ry = H * 0.78;
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.y += fall * dt;
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const iy = it.y * H;
+    const dx = ix - rx, dy = iy - ry;
+    if (Math.hypot(dx, dy) < 70) {
+      // 收集到！
+      items.splice(i, 1);
+      if (it.type === 'gift') {
+        sfxGift();
+        burst(ix, iy, 14, { emoji: GIFT_SURPRISE });
+      } else {
+        state.stars++;
+        sfxCollect();
+        burst(ix, iy, 12, { color: '#ffdd44' });
+        if (state.stars % 10 === 0) {
+          sfxMilestone(); fireworks();
+          say(['好棒！', 'Dylan 好厲害！', '哇！太強了！'][Math.floor(Math.random() * 3)]);
+        }
+        const newLevel = Math.min(ROCKET_COLORS.length - 1, Math.floor(state.stars / 20));
+        if (newLevel > state.level) { state.level = newLevel; state.shake = 8; fireworks(); }
+      }
+    } else if (it.y > 1.15) {
+      items.splice(i, 1);
+    }
+  }
+
+  // ---- 背景 ----
+  for (const s of bgStars) {
+    s.y += fall * dt * 0.3 * (s.s / 2);
+    if (s.y > 1) { s.y = 0; s.x = Math.random(); }
+  }
+  for (let i = planets.length - 1; i >= 0; i--) {
+    planets[i].y += fall * dt * planets[i].sp;
+    if (planets[i].y > 1.3) planets.splice(i, 1);
+  }
+
+  // ---- 粒子 ----
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 1.2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+/* ================== 繪圖 ================== */
+function drawRocket(x, y) {
+  const c = ROCKET_COLORS[state.level];
+  const lean = (state.targetX - state.rocketX) * 60; // 移動時微微傾斜
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(lean * 0.012);
+  const s = 1 + state.boostLevel * 0.1;
+  ctx.scale(s, s);
+
+  // 火焰
+  const fl = 30 + state.boostLevel * 55 + Math.sin(state.t * 30) * 8;
+  const grad = ctx.createLinearGradient(0, 45, 0, 45 + fl);
+  grad.addColorStop(0, '#ffdd00'); grad.addColorStop(0.5, '#ff7700'); grad.addColorStop(1, 'rgba(255,50,0,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(-16, 45); ctx.quadraticCurveTo(0, 45 + fl * 1.4, 16, 45); ctx.closePath(); ctx.fill();
+
+  // 尾翼
+  ctx.fillStyle = c;
+  ctx.beginPath(); ctx.moveTo(-20, 45); ctx.lineTo(-38, 62); ctx.lineTo(-20, 15); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(20, 45); ctx.lineTo(38, 62); ctx.lineTo(20, 15); ctx.closePath(); ctx.fill();
+
+  // 機身
+  ctx.fillStyle = '#f0f0f5';
+  ctx.beginPath();
+  ctx.moveTo(0, -65);
+  ctx.quadraticCurveTo(26, -30, 24, 20);
+  ctx.quadraticCurveTo(24, 45, 0, 48);
+  ctx.quadraticCurveTo(-24, 45, -24, 20);
+  ctx.quadraticCurveTo(-26, -30, 0, -65);
+  ctx.fill();
+
+  // 鼻錐
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.moveTo(0, -65);
+  ctx.quadraticCurveTo(20, -42, 22, -25);
+  ctx.quadraticCurveTo(0, -38, -22, -25);
+  ctx.quadraticCurveTo(-20, -42, 0, -65);
+  ctx.fill();
+
+  // 窗戶
+  ctx.fillStyle = '#224';
+  ctx.beginPath(); ctx.arc(0, -5, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7df';
+  ctx.beginPath(); ctx.arc(0, -5, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.7)';
+  ctx.beginPath(); ctx.arc(-3, -8, 3.5, 0, Math.PI * 2); ctx.fill();
+
+  ctx.restore();
+}
+
+function draw(now) {
+  // 背景
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (state.phase === 'countdown' || (state.phase === 'launch' && state.groundY < 0.5)) {
+    g.addColorStop(0, '#1a2a6e'); g.addColorStop(1, '#4a6ed0');
+  } else {
+    g.addColorStop(0, '#05051f'); g.addColorStop(0.6, '#141452'); g.addColorStop(1, '#2a1a5e');
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 畫面震動
+  ctx.save();
+  if (state.shake > 0) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+
+  // 背景星星
+  for (const s of bgStars) {
+    ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(state.t * 2 + s.tw));
+    ctx.fillStyle = '#fff';
+    const len = state.boostLevel * 18;
+    if (len > 2) { // 加速時星星拉成線
+      ctx.fillRect(s.x * W, s.y * H, s.s, s.s + len);
+    } else {
+      ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.s, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // 背景星球
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const p of planets) {
+    ctx.font = p.size + 'px serif';
+    ctx.fillText(p.emoji, p.x * W, p.y * H);
+  }
+
+  // 發射台 / 地面
+  if (state.phase === 'countdown' || state.phase === 'launch') {
+    const gy = H * (0.88 + state.groundY);
+    ctx.fillStyle = '#2d5a2d';
+    ctx.fillRect(0, gy, W, H);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(W / 2 - 70, gy - 16, 140, 16);
+    ctx.font = '40px serif';
+    ctx.fillText('🌳', W * 0.15, gy - 20);
+    ctx.fillText('🌳', W * 0.85, gy - 20);
+    ctx.fillText('🏠', W * 0.3, gy - 22);
+  }
+
+  // 掉落物
+  for (const it of items) {
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    ctx.font = it.size + 'px serif';
+    ctx.fillText(it.type === 'gift' ? '🎁' : '⭐', ix, it.y * H);
+  }
+
+  // 火箭
+  const ry = state.phase === 'countdown' ? H * 0.88 - 65 : H * 0.78;
+  drawRocket(state.rocketX * W, ry);
+
+  // 粒子
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    if (p.emoji) {
+      ctx.font = p.size + 'px serif';
+      ctx.fillText(p.emoji, p.x, p.y);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // 星星計數
+  if (state.phase === 'fly' || state.phase === 'launch') {
+    ctx.font = 'bold ' + Math.min(54, W * 0.06) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    const label = '⭐ ' + state.stars;
+    ctx.fillText(label, W / 2 + 3, 52 + 3);
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillText(label, W / 2, 52);
+  }
+
+  // 加速提示
+  if (state.boostLevel > 0.3) {
+    ctx.globalAlpha = state.boostLevel;
+    ctx.font = 'bold ' + Math.min(40, W * 0.045) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.fillStyle = '#ff8800';
+    ctx.fillText('🔥 衝刺！🔥', W / 2, H * 0.15);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+/* ================== 主迴圈 ================== */
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (state.phase !== 'menu') {
+    update(dt, now);
+    draw(now);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -356,7 +356,12 @@ function spawnItem(now) {
   if (now - lastItemSpawn < interval) return;
   lastItemSpawn = now;
   const type = Math.random() < 0.12 ? 'gift' : 'star';
-  items.push({ x: 0.08 + Math.random() * 0.84, y: -0.1, type, size: type === 'gift' ? 44 : 38, wob: Math.random() * 6 });
+  // 70% 出現在火箭附近搆得到的範圍、30% 隨機遠處（鼓勵跑動）
+  let x = Math.random() < 0.7
+    ? state.rocketX + (Math.random() * 2 - 1) * 0.35
+    : Math.random();
+  x = Math.min(0.92, Math.max(0.08, x));
+  items.push({ x, y: -0.1, type, size: type === 'gift' ? 44 : 38, wob: Math.random() * 6 });
 }
 function spawnPlanet(now) {
   if (now - lastPlanetSpawn < 6000) return;
@@ -421,15 +426,18 @@ function update(dt, now) {
     spawnItem(now);
     spawnPlanet(now);
   }
-  const fall = 0.25 * state.speed;
+  // 橫式畫面（電視）上下距離短，下降速度依比例放慢，反應時間才夠
+  const aspect = Math.min(1, Math.max(0.55, H / W));
+  const fall = 0.25 * aspect * state.speed;
   const rx = state.rocketX * W, ry = H * 0.78;
+  const catchR = Math.max(55, Math.min(W, H) * 0.16); // 收集判定範圍跟著螢幕縮放
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
     it.y += fall * dt;
     const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
     const iy = it.y * H;
     const dx = ix - rx, dy = iy - ry;
-    if (Math.hypot(dx, dy) < 70) {
+    if (Math.hypot(dx, dy) < catchR) {
       // 收集到！
       items.splice(i, 1);
       if (it.type === 'gift') {

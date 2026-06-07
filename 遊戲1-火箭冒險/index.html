@@ -318,13 +318,15 @@ function trackFrame() {
     // 雙手手腕都高於鼻子 → 加速！（y 越小越高）
     handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
     shoulderW = Math.abs(lm[11].x - lm[12].x);
-    // 單手快速揮動 → 拍擊！（速度 = 手腕兩幀間移動距離 / 時間）
+    // 單手「用力且水平」揮動 → 拍擊！（門檻調高 + 方向過濾，跑步擺手不會誤觸）
     const tNow = performance.now();
     if (lastWrist && tNow - lastWrist.t < 300) {
       const dtw = (tNow - lastWrist.t) / 1000;
-      const ls = Math.hypot(lm[15].x - lastWrist.lx, lm[15].y - lastWrist.ly) / dtw;
-      const rs = Math.hypot(lm[16].x - lastWrist.rx, lm[16].y - lastWrist.ry) / dtw;
-      if (!handsUp && Math.max(ls, rs) > 1.1 && tNow - swatAt > 800) {
+      const ldx = Math.abs(lm[15].x - lastWrist.lx), ldy = Math.abs(lm[15].y - lastWrist.ly);
+      const rdx = Math.abs(lm[16].x - lastWrist.rx), rdy = Math.abs(lm[16].y - lastWrist.ry);
+      const lSwat = Math.hypot(ldx, ldy) / dtw > 2.0 && ldx > ldy * 1.2;
+      const rSwat = Math.hypot(rdx, rdy) / dtw > 2.0 && rdx > rdy * 1.2;
+      if (!handsUp && (lSwat || rSwat) && tNow - swatAt > 800) {
         swatAt = tNow;
         swatRequested = true;
       }
@@ -662,7 +664,7 @@ function update(dt, now) {
         burst(ix, iy, 26, { color: '#ff6600' });
         burst(ix, iy, 6, { emoji: ['💥', '💨'] });
         state.shake = 22;
-        state.spin = Math.PI * 2;
+        state.spin = Math.PI * 4; // 翻滾兩圈，更好笑
         state.invulnT = 1.5;
         const lost = Math.min(3, state.stars);
         state.stars -= lost;

@@ -151,9 +151,11 @@ function trackLoop() {
   const tNow = performance.now();
   if (lastWrist && tNow - lastWrist.t < 300) {
     const dtw = (tNow - lastWrist.t) / 1000;
-    const ls = Math.hypot(lm[15].x - lastWrist.lx, lm[15].y - lastWrist.ly) / dtw;
-    const rs = Math.hypot(lm[16].x - lastWrist.rx, lm[16].y - lastWrist.ry) / dtw;
-    if (!handsUp && Math.max(ls, rs) > 1.1 && tNow - swatAt > 800) {
+    const ldx = Math.abs(lm[15].x - lastWrist.lx), ldy = Math.abs(lm[15].y - lastWrist.ly);
+    const rdx = Math.abs(lm[16].x - lastWrist.rx), rdy = Math.abs(lm[16].y - lastWrist.ry);
+    const lSwat = Math.hypot(ldx, ldy) / dtw > 2.0 && ldx > ldy * 1.2;
+    const rSwat = Math.hypot(rdx, rdy) / dtw > 2.0 && rdx > rdy * 1.2;
+    if (!handsUp && (lSwat || rSwat) && tNow - swatAt > 800) {
       swatAt = tNow;
       swat = true;
     }

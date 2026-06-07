@@ -72,7 +72,7 @@
   <div class="ind">
     <span id="indPerson">🧍 偵測到人</span>
     <span id="indHands">🙌 舉手</span>
-    <span id="indSwat">👋 拍擊</span>
+    <span id="indSwat">🙅 打叉叉</span>
   </div>
   <div id="tip">保持這個頁面開著，螢幕會自動常亮。<br>影像只在手機上運算，只傳位置數據到電視。</div>
 </div>
@@ -92,8 +92,8 @@ if (pre) codeInput.value = pre.replace(/\D/g, '').slice(0, 4);
 let poseLandmarker = null, lastVideoTime = -1;
 let conn = null;
 
-// 揮手拍擊偵測（與遊戲本體相同邏輯）
-let lastWrist = null, swatAt = 0;
+// 胸前打叉叉偵測（與遊戲本體相同邏輯）
+let crossSince = 0, crossFired = false, swatAt = 0;
 
 async function setupCameraAndModel() {
   statusEl.textContent = '📷 啟動鏡頭…';
@@ -149,18 +149,23 @@ function trackLoop() {
   const shoulderW = Math.abs(lm[11].x - lm[12].x);
   let swat = false;
   const tNow = performance.now();
-  if (lastWrist && tNow - lastWrist.t < 300) {
-    const dtw = (tNow - lastWrist.t) / 1000;
-    const ldx = Math.abs(lm[15].x - lastWrist.lx), ldy = Math.abs(lm[15].y - lastWrist.ly);
-    const rdx = Math.abs(lm[16].x - lastWrist.rx), rdy = Math.abs(lm[16].y - lastWrist.ry);
-    const lSwat = Math.hypot(ldx, ldy) / dtw > 2.0 && ldx > ldy * 1.2;
-    const rSwat = Math.hypot(rdx, rdy) / dtw > 2.0 && rdx > rdy * 1.2;
-    if (!handsUp && (lSwat || rSwat) && tNow - swatAt > 800) {
+  const shoulderY = (lm[11].y + lm[12].y) / 2;
+  const hipY = (lm[23].y + lm[24].y) / 2;
+  const crossed =
+    (lm[15].x - lm[16].x) * (lm[11].x - lm[12].x) < 0 && // 左右手腕交叉
+    lm[15].y > shoulderY && lm[16].y > shoulderY &&       // 在肩膀以下
+    lm[15].y < hipY && lm[16].y < hipY;                   // 在屁股以上 = 胸口附近
+  if (crossed && !handsUp) {
+    if (!crossSince) crossSince = tNow;
+    if (!crossFired && tNow - crossSince > 300 && tNow - swatAt > 800) {
+      crossFired = true;
       swatAt = tNow;
       swat = true;
     }
+  } else {
+    crossSince = 0;
+    crossFired = false;
   }
-  lastWrist = { lx: lm[15].x, ly: lm[15].y, rx: lm[16].x, ry: lm[16].y, t: tNow };
 
   try { conn.send({ x: personX, h: handsUp ? 1 : 0, w: shoulderW, s: swat ? 1 : 0 }); } catch (e) {}
 

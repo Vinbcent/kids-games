@@ -131,7 +131,7 @@
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
   <button class="btn" id="btnTV">📺 電視模式（零延遲，手機當感應器）</button>
-  <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高加速、單手快揮拍炸彈！<br>影像只在裝置上運算，不會上傳。</div>
+  <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高加速、胸前打叉叉拍炸彈！<br>影像只在裝置上運算，不會上傳。</div>
   <a id="sensorLink" href="sensor.html">📡 我是手機感應器（電視模式配對用）</a>
 </div>
 
@@ -277,7 +277,7 @@ let personX = 0.5;         // 鏡像後 0~1
 let handsUp = false;
 let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
-let lastWrist = null, swatAt = 0, swatRequested = false; // 揮手拍擊偵測
+let crossSince = 0, crossFired = false, swatAt = 0, swatRequested = false; // 胸前打叉叉偵測
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
@@ -318,20 +318,25 @@ function trackFrame() {
     // 雙手手腕都高於鼻子 → 加速！（y 越小越高）
     handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
     shoulderW = Math.abs(lm[11].x - lm[12].x);
-    // 單手「用力且水平」揮動 → 拍擊！（門檻調高 + 方向過濾，跑步擺手不會誤觸）
+    // 胸前打叉叉 → 拍擊！（靜態姿勢 + 維持 0.3 秒確認，蹦蹦跳跳不會誤觸）
     const tNow = performance.now();
-    if (lastWrist && tNow - lastWrist.t < 300) {
-      const dtw = (tNow - lastWrist.t) / 1000;
-      const ldx = Math.abs(lm[15].x - lastWrist.lx), ldy = Math.abs(lm[15].y - lastWrist.ly);
-      const rdx = Math.abs(lm[16].x - lastWrist.rx), rdy = Math.abs(lm[16].y - lastWrist.ry);
-      const lSwat = Math.hypot(ldx, ldy) / dtw > 2.0 && ldx > ldy * 1.2;
-      const rSwat = Math.hypot(rdx, rdy) / dtw > 2.0 && rdx > rdy * 1.2;
-      if (!handsUp && (lSwat || rSwat) && tNow - swatAt > 800) {
+    const shoulderY = (lm[11].y + lm[12].y) / 2;
+    const hipY = (lm[23].y + lm[24].y) / 2;
+    const crossed =
+      (lm[15].x - lm[16].x) * (lm[11].x - lm[12].x) < 0 && // 左右手腕交叉（與肩膀順序相反）
+      lm[15].y > shoulderY && lm[16].y > shoulderY &&       // 在肩膀以下
+      lm[15].y < hipY && lm[16].y < hipY;                   // 在屁股以上 = 胸口附近
+    if (crossed && !handsUp) {
+      if (!crossSince) crossSince = tNow;
+      if (!crossFired && tNow - crossSince > 300 && tNow - swatAt > 800) {
+        crossFired = true;
         swatAt = tNow;
         swatRequested = true;
       }
+    } else {
+      crossSince = 0;
+      crossFired = false; // 手放開後才能再觸發下一次
     }
-    lastWrist = { lx: lm[15].x, ly: lm[15].y, rx: lm[16].x, ry: lm[16].y, t: tNow };
     pipDot.style.left = (personX * 100) + '%';
     pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
   }

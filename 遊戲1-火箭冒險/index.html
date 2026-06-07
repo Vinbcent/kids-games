@@ -70,6 +70,19 @@
   }
   @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
 
+  /* 太靠近電視的提醒（遊戲會暫停直到退後） */
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+
   /* 倒數數字 */
   #countdown {
     position: fixed; inset: 0; z-index: 28; display: none;
@@ -91,6 +104,7 @@
 </div>
 
 <div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣</div></div>
 <div id="countdown"><span id="countNum"></span></div>
 
 <div class="overlay" id="loadingOverlay">
@@ -209,6 +223,7 @@ const state = {
   shake: 0,
   spin: 0,                // 被炸到的轉圈動畫（剩餘弧度）
   invulnT: 0,             // 被炸後的短暫無敵秒數
+  paused: false,          // 太靠近電視時暫停
 };
 const ROCKET_COLORS = ['#ff4444', '#ff8800', '#ffd700', '#00cc66', '#00b8ff', '#aa66ff', '#ff66cc'];
 
@@ -232,6 +247,8 @@ let lastVideoTime = -1;
 let lastSeen = 0;          // 最後偵測到人的時間
 let personX = 0.5;         // 鏡像後 0~1
 let handsUp = false;
+let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
+let tooCloseSince = 0, lastCloseSay = 0, wasPaused = false;
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
@@ -271,6 +288,7 @@ function trackFrame() {
     personX = 1 - cx;
     // 雙手手腕都高於鼻子 → 加速！（y 越小越高）
     handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
+    shoulderW = Math.abs(lm[11].x - lm[12].x);
     pipDot.style.left = (personX * 100) + '%';
     pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
   }
@@ -414,8 +432,24 @@ function update(dt, now) {
     trackFrame();
     state.targetX = personX;
     state.boost = handsUp;
-    const lost = poseLandmarker && performance.now() - lastSeen > 2500;
+    const nowMs = performance.now();
+    const lost = poseLandmarker && nowMs - lastSeen > 2500;
     document.getElementById('findPlayer').style.display = (lost && state.phase === 'fly') ? 'block' : 'none';
+
+    // ---- 太靠近電視偵測（肩寬比例 + 遲滯 + 0.4 秒確認，避免誤判跳動）----
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) {
+      if (!tooCloseSince) tooCloseSince = nowMs;
+    } else if (shoulderW < 0.21 || lost) {
+      tooCloseSince = 0;
+    }
+    state.paused = !!tooCloseSince && nowMs - tooCloseSince > 400 && state.phase === 'fly';
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused && nowMs - lastCloseSay > 4000) {
+      say('Too close! Step back, please!');
+      lastCloseSay = nowMs;
+    }
+    if (wasPaused && !state.paused) say("OK! Let's go!"); // 退後了，開心繼續
+    wasPaused = state.paused;
   }
 
   // 平滑跟隨（吸收鏡像投放的延遲，看起來像火箭的慣性）
@@ -424,7 +458,7 @@ function update(dt, now) {
   state.rocketX += (tx - state.rocketX) * Math.min(1, dt * 5);
 
   // 加速度平滑
-  const wantBoost = state.boost && state.phase === 'fly';
+  const wantBoost = state.boost && state.phase === 'fly' && !state.paused;
   state.boostLevel += ((wantBoost ? 1 : 0) - state.boostLevel) * Math.min(1, dt * 3);
   if (wantBoost && !boostNoise) boostSoundOn();
   if (!wantBoost && boostNoise) boostSoundOff();
@@ -441,13 +475,13 @@ function update(dt, now) {
   }
 
   // ---- 掉落物 ----
-  if (state.phase === 'fly') {
+  if (state.phase === 'fly' && !state.paused) {
     spawnItem(now);
     spawnPlanet(now);
   }
   // 橫式畫面（電視）上下距離短，下降速度依比例放慢，反應時間才夠
   const aspect = Math.min(1, Math.max(0.55, H / W));
-  const fall = 0.25 * aspect * state.speed;
+  const fall = state.paused ? 0 : 0.25 * aspect * state.speed; // 太靠近時整個世界暫停
   const rx = state.rocketX * W, ry = H * 0.78;
   const catchR = Math.max(55, Math.min(W, H) * 0.16); // 收集判定範圍跟著螢幕縮放
   for (let i = items.length - 1; i >= 0; i--) {
@@ -456,7 +490,7 @@ function update(dt, now) {
     const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
     const iy = it.y * H;
     const dx = ix - rx, dy = iy - ry;
-    if (Math.hypot(dx, dy) < catchR) {
+    if (!state.paused && Math.hypot(dx, dy) < catchR) {
       // 炸彈：碰！掉幾顆星星 + 轉圈圈，但不會 Game Over
       if (it.type === 'bomb') {
         if (state.invulnT > 0) continue; // 剛被炸過，短暫無敵（閃爍中）

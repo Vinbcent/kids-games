@@ -82,6 +82,7 @@
     padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
     animation: bounce 1s ease-in-out infinite;
   }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
 
   /* 倒數數字 */
   #countdown {
@@ -104,7 +105,7 @@
 </div>
 
 <div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
-<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
 <div id="countdown"><span id="countNum"></span></div>
 
 <div class="overlay" id="loadingOverlay">
@@ -158,6 +159,9 @@ function sfxGift() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25,
 function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
 function sfxPow() { // 拍掉炸彈的「砰！」
   tone(660, 0.1, 'square', 0.3); tone(990, 0.12, 'square', 0.25, 0.04); tone(1320, 0.15, 'triangle', 0.2, 0.08);
+}
+function sfxAlarm() { // 太靠近的「咿－嗚－」警報
+  [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); });
 }
 function sfxBoom() {
   if (!AC) return;
@@ -251,7 +255,7 @@ let lastSeen = 0;          // 最後偵測到人的時間
 let personX = 0.5;         // 鏡像後 0~1
 let handsUp = false;
 let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
-let tooCloseSince = 0, lastCloseSay = 0, wasPaused = false;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
 let lastWrist = null, swatAt = 0, swatRequested = false; // 揮手拍擊偵測
 
 async function setupBodyTracking() {
@@ -500,13 +504,24 @@ function update(dt, now) {
     } else if (shoulderW < 0.21 || lost) {
       tooCloseSince = 0;
     }
-    state.paused = !!tooCloseSince && nowMs - tooCloseSince > 400 && state.phase === 'fly';
-    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
-    if (state.paused && nowMs - lastCloseSay > 4000) {
-      say('Too close! Step back, please!');
-      lastCloseSay = nowMs;
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'fly') {
+      // 觸發 = 強制暫停 5 秒 + 警報音；倒數結束時若還是太近 → 再來一輪
+      if (tooCloseNow && nowMs >= pauseUntil) {
+        pauseUntil = nowMs + 5000;
+        sfxAlarm();
+        say('Too close! Step back, please!');
+      }
+      state.paused = nowMs < pauseUntil;
+    } else {
+      state.paused = false;
     }
-    if (wasPaused && !state.paused) say("OK! Let's go!"); // 退後了，開心繼續
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) {
+      const remain = Math.ceil((pauseUntil - nowMs) / 1000);
+      document.getElementById('pauseCount').textContent = remain > 0 ? remain : '';
+    }
+    if (wasPaused && !state.paused) say("OK! Let's go!"); // 時間到且退後了，開心繼續
     wasPaused = state.paused;
   }
 

@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#6ec6ff">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png">
+<title>🚛 水泥車大作戰</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #6ec6ff; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 鏡頭預覽小視窗（給爸爸確認追蹤狀況用） */
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  /* 全螢幕覆蓋層共用 */
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  /* 尺寸全部用 vmin（螢幕短邊）縮放，手機橫向/直向/電視都不會爆版 */
+  #startOverlay { background: linear-gradient(180deg, #3a9ad9 0%, #6ec6ff 60%, #b8e4ff 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(0,40,90,.45); }
+  #startOverlay .truck-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: rumble 1.6s ease-in-out infinite; }
+  @keyframes rumble { 0%,100% { transform: translateY(0) rotate(0deg) } 25% { transform: translateY(-0.6vmin) rotate(-2deg) } 75% { transform: translateY(-0.3vmin) rotate(2deg) } }
+  .btn {
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35);
+  }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #btnTV    { background: linear-gradient(180deg, #b266ff, #7733ff); }
+  #sensorLink { margin-top: 2vmin; color: #fffbe6; font-size: clamp(13px, 3vmin, 18px); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #eaf6ff; max-width: 88%; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,40,90,.5); }
+
+  /* 直拿手機時的提醒（橫式設計） */
+  #rotateHint {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.7); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  /* 電視模式配對畫面 */
+  #pairOverlay { background: linear-gradient(180deg, #3a9ad9, #1a4a7e); display: none; }
+  #pairOverlay h2 { font-size: clamp(24px, 7vmin, 48px); margin-bottom: 2vmin; }
+  #pairOverlay .steps { font-size: clamp(14px, 3.5vmin, 24px); color: #cde; line-height: 1.8; margin-bottom: 2vmin; }
+  .pairCode {
+    font-size: clamp(60px, 22vmin, 180px); font-weight: bold; color: #ffdd44;
+    letter-spacing: 2vmin; text-shadow: 0 0 40px #ff8800;
+  }
+  #pairStatus { font-size: clamp(14px, 3.5vmin, 22px); color: #8f8; margin-top: 2vmin; }
+
+  #loadingOverlay { background: rgba(20,50,90,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  /* 找不到玩家的提示 */
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 太靠近電視的提醒（強制暫停 5 秒） */
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  /* 倒數數字 */
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff8800, 0 4px 10px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🚧</div>
+  <p id="loadingText">正在準備工地…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="truck-big">🚛</div>
+  <h1>水泥車大作戰</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <button class="btn" id="btnTV">📺 電視模式（零延遲，手機當感應器）</button>
+  <div class="hint">左右移動身體開水泥車、雙手舉高倒水泥！<br>把空貨車倒滿就過關，小汽車被黏住會很好笑 😆<br>影像只在裝置上運算，不會上傳。</div>
+  <a id="sensorLink" href="sensor.html">📡 我是手機感應器（電視模式配對用）</a>
+</div>
+
+<div class="overlay" id="pairOverlay">
+  <h2>📺 電視模式</h2>
+  <div class="steps">手機打開遊戲 → 點最下面「📡 我是手機感應器」→ 輸入配對碼</div>
+  <div class="pairCode" id="pairCode"></div>
+  <div id="pairStatus">⏳ 等待手機連線中…</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// roundRect 舊瀏覽器保險
+if (!ctx.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+}
+
+/* ================== 音效（Web Audio 合成，不需音檔） ================== */
+let AC = null, pourNoise = null, pourGain = null;
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+}
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sfxFull() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, 'triangle', 0.25, i * 0.08)); }
+function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxAlarm() { // 太靠近的「咿－嗚－」警報
+  [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); });
+}
+function sfxHonk() { tone(370, 0.16, 'square', 0.3); tone(370, 0.16, 'square', 0.3, 0.24); } // 叭叭！
+function sfxSplat() { // 黏住了～滑稽下滑音
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(900, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(160, AC.currentTime + 0.5);
+  g.gain.setValueAtTime(0.32, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.55);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + 0.6);
+}
+function sfxZoom() { // 掙脫衝出去～上滑音
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(180, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(900, AC.currentTime + 0.4);
+  g.gain.setValueAtTime(0.18, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + 0.45);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + 0.5);
+}
+function pourSoundOn() { // 倒水泥的「嘩啦啦」
+  if (!AC || pourNoise) return;
+  const buf = AC.createBuffer(1, AC.sampleRate * 1, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  pourNoise = AC.createBufferSource(); pourNoise.buffer = buf; pourNoise.loop = true;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 420;
+  pourGain = AC.createGain(); pourGain.gain.value = 0;
+  pourNoise.connect(f); f.connect(pourGain); pourGain.connect(AC.destination);
+  pourNoise.start();
+  pourGain.gain.linearRampToValueAtTime(0.22, AC.currentTime + 0.25);
+}
+function pourSoundOff() {
+  if (!pourNoise) return;
+  pourGain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.25);
+  const n = pourNoise; pourNoise = null;
+  setTimeout(() => { try { n.stop(); } catch (e) {} }, 350);
+}
+function say(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+const lastSay = {};
+function sayT(key, text, gap = 3000) { // 同類語音節流，避免連環觸發吵死人
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  say(text);
+}
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu',          // menu | countdown | play
+  mode: null,             // body | touch | remote
+  truckX: 0.5,            // 0~1 畫面比例
+  targetX: 0.5,
+  pouring: false,
+  pourLevel: 0,           // 0~1 平滑倒水泥量
+  filled: 0,              // 倒滿的貨車數
+  level: 0,               // 水泥車外觀等級
+  t: 0,
+  drumA: 0,               // 攪拌筒旋轉角
+  shake: 0,
+  paused: false,          // 太靠近電視時暫停
+};
+const MIXER_COLORS = ['#ff8800', '#00b8ff', '#ff5577', '#44cc66', '#aa66ff', '#ffd700', '#ff66cc'];
+const CAR_COLORS = ['#ff5555', '#44aaff', '#ffcc00', '#66dd66', '#ff88cc', '#aa77ff', '#ff9944'];
+const TRUCK_COLORS = ['#5588cc', '#cc8855', '#55aa77', '#8877cc'];
+const PRAISE = ['Great job!', 'Super cement truck!', 'Wow, amazing!'];
+
+// 兩條車道：遠的往左（畫小一點）、近的往右
+const LANES = [
+  { ground: 0.775, dir: -1, sc: 0.78 },
+  { ground: 0.915, dir: 1,  sc: 1 },
+];
+
+const vehicles = [];   // { lane, x(0~1), dir, speed, type:'truck'|'car'|'sport', wv, hv, color, fill, goo, stuck, honkT, full, escaped }
+const blobs = [];      // 水泥滴 { x, y, vx, vy, size }
+const puddles = [];    // 落地水泥灘 { x, y, r, life }
+const particles = [];  // 粒子 { x, y, vx, vy, life, color?, emoji?, size }
+const clouds = [];     // 背景雲
+const SKYLINE = ['🏠', '🏢', '🌳', '🏫', '🌳', '🏠', '🏪', '🌳']; // 地平線小鎮
+
+for (let i = 0; i < 5; i++) clouds.push({ x: Math.random(), y: 0.36 + Math.random() * 0.24, s: 0.05 + Math.random() * 0.05, sp: 0.004 + Math.random() * 0.008 });
+
+let lastVehSpawn = 0, pourAcc = 0, truckVel = 0;
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1;
+let lastSeen = 0;          // 最後偵測到人的時間
+let personX = 0.5;         // 鏡像後 0~1
+let handsUp = false;
+let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
+  pip.style.display = 'block';
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let result;
+  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  if (lm) {
+    lastSeen = performance.now();
+    // 肩膀中心當作身體位置；前鏡頭要左右鏡像（1 - x）才像照鏡子
+    const cx = (lm[11].x + lm[12].x) / 2;
+    personX = 1 - cx;
+    // 雙手手腕都高於鼻子 → 倒水泥！（y 越小越高）
+    handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
+    shoulderW = Math.abs(lm[11].x - lm[12].x);
+    pipDot.style.left = (personX * 100) + '%';
+    pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
+  }
+}
+
+/* ================== 觸控模式：按住 = 倒水泥 + 拖曳移動 ================== */
+let touching = false;
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  touching = true;
+  state.targetX = e.clientX / W;
+  state.pouring = true; // 按著就倒，放開就停（水泥無限量，不怕亂倒）
+});
+canvas.addEventListener('pointermove', e => {
+  if (!touching) return;
+  state.targetX = e.clientX / W;
+});
+window.addEventListener('pointerup', () => {
+  touching = false;
+  if (state.mode === 'touch') state.pouring = false;
+});
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+// 進入全螢幕：必須在使用者點擊的「同步階段」呼叫才會成功（手機限制）
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return; // PWA 已是全螢幕
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+// 遊戲中若意外退出全螢幕（例如下拉通知列），點一下畫面就會回到全螢幕
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen(); // 一定要放在第一行（同步呼叫）
+  audioInit();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+
+  // 保持螢幕常亮（投放時很重要）
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try {
+      await setupBodyTracking();
+    } catch (e) {
+      loadingOverlay.style.display = 'none';
+      alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+      state.mode = 'touch';
+    }
+    loadingOverlay.style.display = 'none';
+  }
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('btnTV').addEventListener('click', () => beginTV());
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+/* ===== 電視模式：遊戲在電視上跑，手機只傳感應數據（零畫面延遲） ===== */
+let conn = null; // 與手機感應器的 P2P 連線
+async function beginTV() {
+  goFullscreen(); // 同步呼叫（使用者點擊當下）
+  audioInit();
+  state.mode = 'remote';
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+
+  loadingOverlay.style.display = 'flex';
+  document.getElementById('loadingText').textContent = '正在準備配對…';
+  try {
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+      s.onload = res; s.onerror = () => rej(new Error('PeerJS 載入失敗，請檢查網路'));
+      document.head.appendChild(s);
+    });
+  } catch (e) {
+    loadingOverlay.style.display = 'none';
+    alert(e.message);
+    startOverlay.style.display = 'flex';
+    state.mode = null;
+    return;
+  }
+  loadingOverlay.style.display = 'none';
+
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  document.getElementById('pairCode').textContent = code;
+  const pairOverlay = document.getElementById('pairOverlay');
+  pairOverlay.style.display = 'flex';
+
+  const peer = new Peer('vbk-cement-' + code);
+  peer.on('error', e => {
+    document.getElementById('pairStatus').textContent = '❌ 連線錯誤（' + e.type + '），請重新整理再試';
+  });
+  peer.on('connection', c => {
+    c.on('open', () => {
+      conn = c;
+      lastSeen = performance.now();
+      document.getElementById('pairStatus').textContent = '✅ 已連線！';
+      if (pairOverlay.style.display !== 'none') { // 第一次連上才開始遊戲；之後是斷線重連
+        pairOverlay.style.display = 'none';
+        startCountdown();
+      }
+    });
+    c.on('data', onSensorData);
+    c.on('close', () => { lastSeen = 0; }); // 觸發「站到鏡頭前面吧」提示
+  });
+}
+function onSensorData(d) {
+  if (!d) return;
+  if (typeof d.x === 'number') {
+    personX = d.x;
+    handsUp = !!d.h;
+    shoulderW = d.w || 0;
+    lastSeen = performance.now();
+  }
+}
+
+function startCountdown() {
+  state.phase = 'countdown';
+  // 先放兩台車在路上，倒數完馬上有得玩
+  vehicles.length = 0;
+  spawnVehicleAt(1, 0.25, 'truck');
+  spawnVehicleAt(0, 0.65, 'car');
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '開工！'];
+  say("Three, two, one, let's pour!");
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      num.style.animation = 'none'; void num.offsetWidth;
+      tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'play';
+      state.t = 0;
+    }
+  };
+  step();
+}
+
+/* ================== 遊戲邏輯 ================== */
+function makeVehicle(lane, x, type) {
+  const dir = LANES[lane].dir;
+  let v;
+  if (type === 'truck')      v = { type, wv: 0.26,  hv: 0.115, speed: 0.035 + Math.random() * 0.02, color: TRUCK_COLORS[Math.floor(Math.random() * TRUCK_COLORS.length)] };
+  else if (type === 'sport') v = { type, wv: 0.16,  hv: 0.065, speed: 0.13 + Math.random() * 0.05,  color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)] };
+  else                       v = { type: 'car', wv: 0.165, hv: 0.082, speed: 0.06 + Math.random() * 0.04, color: CAR_COLORS[Math.floor(Math.random() * CAR_COLORS.length)] };
+  return { ...v, lane, x, dir, fill: 0, goo: 0, stuck: 0, honkT: 0, full: false, escaped: false };
+}
+function spawnVehicleAt(lane, x, type) { vehicles.push(makeVehicle(lane, x, type)); }
+
+function spawnVehicle(now) {
+  if (vehicles.length >= 6 || now - lastVehSpawn < 900) return;
+  const lane = Math.random() < 0.5 ? 0 : 1;
+  const entry = LANES[lane].dir === 1 ? -0.16 : 1.16;
+  // 入口附近要淨空才生，避免車疊車
+  for (const veh of vehicles) {
+    if (veh.lane === lane && Math.abs(veh.x - entry) < 0.26) return;
+  }
+  lastVehSpawn = now;
+  const r = Math.random();
+  const type = r < 0.45 ? 'truck' : r < 0.9 ? 'car' : 'sport';
+  spawnVehicleAt(lane, entry, type);
+}
+
+// 車輛在畫面上的幾何（px）
+function vehGeom(veh) {
+  const v = Math.min(W, H), sc = LANES[veh.lane].sc;
+  const w = veh.wv * v * sc, h = veh.hv * v * sc;
+  const wheelR = h * 0.32;
+  const ground = LANES[veh.lane].ground * H;
+  return { x: veh.x * W, w, h, wheelR, ground, topY: ground - wheelR - h };
+}
+
+// 攪拌筒出料口位置（水泥從這裡流下來）
+function chuteTip() {
+  const v = Math.min(W, H), s = v / 700;
+  return { x: state.truckX * W - 84 * s, y: H * 0.30 - 6 * s };
+}
+
+function burst(x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2,
+      life: 1, size: opts.emoji ? 22 + Math.random() * 14 : 3 + Math.random() * 4,
+      color: opts.color || `hsl(${Math.random() * 360},100%,65%)`,
+      emoji: opts.emoji ? opts.emoji[Math.floor(Math.random() * opts.emoji.length)] : null,
+    });
+  }
+}
+function fireworks() {
+  for (let k = 0; k < 5; k++) {
+    setTimeout(() => burst(W * (0.2 + Math.random() * 0.6), H * (0.12 + Math.random() * 0.3), 30), k * 200);
+  }
+}
+
+function truckFull(veh, geom) {
+  veh.full = true;
+  veh.fill = 1;
+  veh.speed *= 3; // 載滿開心出場
+  state.filled++;
+  state.shake = 8;
+  sfxFull();
+  burst(geom.x, geom.topY, 16, { emoji: ['⭐', '🎉', '✨'] });
+  sayT('full', 'Truck is full! Great job!');
+  if (state.filled % 5 === 0) { // 每 5 台放煙火
+    sfxMilestone(); fireworks();
+    say(PRAISE[Math.floor(Math.random() * PRAISE.length)]);
+  }
+  const newLevel = Math.min(MIXER_COLORS.length - 1, Math.floor(state.filled / 10));
+  if (newLevel > state.level) { state.level = newLevel; fireworks(); } // 每 10 台水泥車換新色
+}
+
+function carStuck(veh, geom) {
+  veh.stuck = 3;       // 黏住 3 秒：輪子空轉、狂按喇叭、整台車抖
+  veh.honkT = 0.3;
+  sfxSplat();
+  burst(geom.x, geom.topY, 10, { color: '#9aa0a8' });
+  burst(geom.x, geom.topY - 20, 4, { emoji: ['💦', '😵'] });
+  sayT('sticky', 'Oh no! Sticky sticky!');
+}
+
+function update(dt, now) {
+  state.t += dt;
+  state.drumA += dt * (1.5 + state.pourLevel * 9); // 攪拌筒一直轉，倒的時候轉更快
+
+  // ---- 控制來源 ----
+  if (state.mode === 'body' || state.mode === 'remote') {
+    if (state.mode === 'body') trackFrame(); // remote 模式的數據由手機感應器傳來
+    state.targetX = personX;
+    state.pouring = handsUp;
+    const nowMs = performance.now();
+    const tracking = state.mode === 'remote' ? !!conn : !!poseLandmarker;
+    const lost = tracking && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'play') ? 'block' : 'none';
+
+    // ---- 太靠近電視偵測（肩寬比例 + 遲滯 + 0.4 秒確認，避免誤判跳動）----
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) {
+      if (!tooCloseSince) tooCloseSince = nowMs;
+    } else if (shoulderW < 0.21 || lost) {
+      tooCloseSince = 0;
+    }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'play') {
+      // 觸發 = 強制暫停 5 秒 + 警報音；倒數結束時若還是太近 → 再來一輪
+      if (tooCloseNow && nowMs >= pauseUntil) {
+        pauseUntil = nowMs + 5000;
+        sfxAlarm();
+        say('Too close! Step back, please!');
+      }
+      state.paused = nowMs < pauseUntil;
+    } else {
+      state.paused = false;
+    }
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) {
+      const remain = Math.ceil((pauseUntil - nowMs) / 1000);
+      document.getElementById('pauseCount').textContent = remain > 0 ? remain : '';
+    }
+    if (wasPaused && !state.paused) say("OK! Let's go!"); // 時間到且退後了，開心繼續
+    wasPaused = state.paused;
+  }
+
+  // 平滑跟隨（吸收延遲，看起來像大卡車的慣性）
+  const margin = 0.13; // 水泥車比較寬
+  const tx = Math.min(1 - margin, Math.max(margin, state.targetX));
+  const prevX = state.truckX;
+  state.truckX += (tx - state.truckX) * Math.min(1, dt * 4.5);
+  truckVel = dt > 0 ? (state.truckX - prevX) / dt : 0;
+
+  // 倒水泥量平滑 + 音效
+  const wantPour = state.pouring && state.phase === 'play' && !state.paused;
+  state.pourLevel += ((wantPour ? 1 : 0) - state.pourLevel) * Math.min(1, dt * 6);
+  if (wantPour && !pourNoise) pourSoundOn();
+  if (!wantPour && pourNoise) pourSoundOff();
+
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
+
+  // ---- 生水泥滴 ----
+  if (state.pourLevel > 0.25 && !state.paused && state.phase === 'play') {
+    pourAcc += dt * 85 * state.pourLevel;
+    const tip = chuteTip();
+    const v = Math.min(W, H);
+    while (pourAcc >= 1) {
+      pourAcc--;
+      blobs.push({
+        x: tip.x / W + (Math.random() - 0.5) * 0.008,
+        y: tip.y / H,
+        vx: truckVel * 0.25 + (Math.random() - 0.5) * 0.02,
+        vy: 0.12 + Math.random() * 0.06,
+        size: (5 + Math.random() * 4) * (v / 700),
+      });
+    }
+  }
+
+  if (state.paused) return; // 太靠近電視 → 整個世界暫停
+
+  // ---- 車輛 ----
+  if (state.phase === 'play' || state.phase === 'countdown') spawnVehicle(now);
+  for (let i = vehicles.length - 1; i >= 0; i--) {
+    const veh = vehicles[i];
+    if (veh.stuck > 0) {
+      veh.stuck -= dt;
+      veh.honkT -= dt;
+      const geom = vehGeom(veh);
+      if (veh.honkT <= 0) { sfxHonk(); veh.honkT = 0.85; } // 黏住狂按喇叭
+      if (Math.random() < dt * 7) { // 輪子空轉噴煙
+        particles.push({
+          x: geom.x + (Math.random() - 0.5) * geom.w * 0.7, y: geom.ground - 4,
+          vx: -veh.dir * (1 + Math.random() * 2), vy: -1 - Math.random(),
+          life: 0.8, size: 18 + Math.random() * 10, emoji: '💨', color: '#fff',
+        });
+      }
+      if (veh.stuck <= 0) { // 掙脫！咻—跑掉
+        veh.escaped = true;
+        veh.goo = 0;
+        veh.speed = 0.3;
+        sfxZoom();
+        burst(geom.x, geom.ground - geom.h, 8, { emoji: ['💨'] });
+        sayT('escape', 'Vroom! Bye bye!');
+      }
+    } else {
+      veh.x += veh.dir * veh.speed * dt;
+    }
+    if (veh.x < -0.3 || veh.x > 1.3) vehicles.splice(i, 1);
+  }
+
+  // ---- 水泥滴 ----
+  for (let i = blobs.length - 1; i >= 0; i--) {
+    const b = blobs[i];
+    b.vy += 2.2 * dt;
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+    const bx = b.x * W, by = b.y * H;
+    let hit = false;
+    for (const veh of vehicles) {
+      const geom = vehGeom(veh);
+      if (Math.abs(bx - geom.x) < geom.w / 2 && by > geom.topY && by < geom.ground) {
+        hit = true;
+        if (veh.type === 'truck' && !veh.full) {
+          veh.fill = Math.min(1, veh.fill + 0.013);
+          if (veh.fill >= 1) truckFull(veh, geom);
+        } else if (veh.type !== 'truck' && !veh.escaped) {
+          if (veh.stuck > 0) {
+            veh.stuck = Math.min(3.5, veh.stuck + 0.04); // 繼續倒就繼續黏（嘿嘿）
+          } else {
+            veh.goo = Math.min(0.6, veh.goo + 0.02);
+            if (veh.goo >= 0.5) carStuck(veh, geom);
+          }
+        }
+        if (Math.random() < 0.25) { // 噴濺
+          particles.push({
+            x: bx, y: geom.topY, vx: (Math.random() - 0.5) * 4, vy: -1 - Math.random() * 2,
+            life: 0.6, size: 3 + Math.random() * 3, color: '#aab0b8',
+          });
+        }
+        break;
+      }
+    }
+    if (hit) { blobs.splice(i, 1); continue; }
+    if (b.y > 0.93) { // 落地變水泥灘
+      const v = Math.min(W, H);
+      puddles.push({ x: bx, y: H * (0.93 + Math.random() * 0.04), r: (7 + Math.random() * 9) * (v / 700), life: 1 });
+      if (puddles.length > 40) puddles.shift();
+      blobs.splice(i, 1);
+    }
+  }
+
+  // ---- 水泥灘慢慢乾掉消失 ----
+  for (let i = puddles.length - 1; i >= 0; i--) {
+    puddles[i].life -= dt * 0.12;
+    if (puddles[i].life <= 0) puddles.splice(i, 1);
+  }
+
+  // ---- 雲飄 ----
+  for (const c of clouds) {
+    c.x += c.sp * dt;
+    if (c.x > 1.15) { c.x = -0.15; c.y = 0.36 + Math.random() * 0.24; }
+  }
+
+  // ---- 粒子 ----
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 1.2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+/* ================== 繪圖 ================== */
+function drawMixer(x, groundY) {
+  const v = Math.min(W, H), s = v / 700;
+  const c = MIXER_COLORS[state.level];
+  const lean = (state.targetX - state.truckX) * 40;
+  ctx.save();
+  ctx.translate(x, groundY);
+  ctx.rotate(-lean * 0.006); // 移動時微微傾斜
+
+  const wheelR = 16 * s;
+  // 輪子（三顆）
+  for (const wx of [-52, -12, 48]) {
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(wx * s, -wheelR, wheelR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#999';
+    ctx.beginPath(); ctx.arc(wx * s, -wheelR, wheelR * 0.45, 0, Math.PI * 2); ctx.fill();
+  }
+  // 底盤
+  ctx.fillStyle = '#445';
+  ctx.fillRect(-72 * s, -wheelR * 2 - 10 * s, 148 * s, 12 * s);
+
+  // 駕駛艙（右側）＋ 笑臉窗戶
+  ctx.fillStyle = c;
+  ctx.beginPath(); ctx.roundRect(30 * s, -wheelR * 2 - 56 * s, 46 * s, 58 * s, 8 * s); ctx.fill();
+  ctx.fillStyle = '#bde6ff';
+  ctx.beginPath(); ctx.roundRect(38 * s, -wheelR * 2 - 50 * s, 32 * s, 24 * s, 5 * s); ctx.fill();
+  ctx.fillStyle = '#234';
+  ctx.beginPath(); ctx.arc(48 * s, -wheelR * 2 - 40 * s, 2.6 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(60 * s, -wheelR * 2 - 40 * s, 2.6 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#234'; ctx.lineWidth = 1.8 * s;
+  ctx.beginPath(); ctx.arc(54 * s, -wheelR * 2 - 36 * s, 5 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  // 攪拌筒（會轉的條紋）
+  const dcx = -14 * s, dcy = -wheelR * 2 - 44 * s;
+  ctx.save();
+  ctx.translate(dcx, dcy);
+  ctx.rotate(-0.12);
+  const dw = 92 * s, dh = 56 * s;
+  ctx.fillStyle = '#e8ecf2';
+  ctx.beginPath(); ctx.ellipse(0, 0, dw / 2, dh / 2, 0, 0, Math.PI * 2); ctx.fill();
+  // 旋轉條紋（剪在筒身裡）
+  ctx.beginPath(); ctx.ellipse(0, 0, dw / 2, dh / 2, 0, 0, Math.PI * 2); ctx.clip();
+  ctx.strokeStyle = c; ctx.lineWidth = 9 * s;
+  for (let k = 0; k < 3; k++) {
+    const ph = state.drumA + k * (Math.PI * 2 / 3);
+    const yy = Math.sin(ph) * dh * 0.38;
+    ctx.globalAlpha = 0.35 + 0.65 * Math.max(0, Math.cos(ph));
+    ctx.beginPath(); ctx.moveTo(-dw / 2, yy); ctx.lineTo(dw / 2, yy * 0.6); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  // 筒口（左後方）
+  ctx.fillStyle = '#9aa2ac';
+  ctx.beginPath(); ctx.roundRect(-70 * s, dcy - 12 * s, 16 * s, 24 * s, 4 * s); ctx.fill();
+
+  // 出料滑槽（倒的時候放下來）
+  const chuteDrop = state.pourLevel;
+  ctx.strokeStyle = '#7a828c'; ctx.lineWidth = 10 * s; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-64 * s, dcy + 6 * s);
+  ctx.lineTo(-84 * s, dcy + (26 + chuteDrop * 26) * s);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawVehicle(veh) {
+  const geom = vehGeom(veh);
+  const { w, h, wheelR, ground } = geom;
+  const x = geom.x;
+  const jx = veh.stuck > 0 ? (Math.random() - 0.5) * 5 : 0; // 黏住時整台車狂抖
+  const jy = veh.stuck > 0 ? (Math.random() - 0.5) * 3 : 0;
+  ctx.save();
+  ctx.translate(x + jx, ground + jy);
+  if (veh.dir === -1) ctx.scale(-1, 1); // 統一畫成朝右，往左開就鏡像
+
+  // 輪子
+  for (const wx of [-w * 0.32, w * 0.3]) {
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(wx, -wheelR, wheelR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#999';
+    ctx.beginPath(); ctx.arc(wx, -wheelR, wheelR * 0.45, 0, Math.PI * 2); ctx.fill();
+    if (veh.stuck > 0) { // 空轉的輪輻線
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+      const a = state.t * 30;
+      ctx.beginPath();
+      ctx.moveTo(wx - Math.cos(a) * wheelR * 0.8, -wheelR - Math.sin(a) * wheelR * 0.8);
+      ctx.lineTo(wx + Math.cos(a) * wheelR * 0.8, -wheelR + Math.sin(a) * wheelR * 0.8);
+      ctx.stroke();
+    }
+  }
+
+  const bodyB = -wheelR;          // 車身底
+  const bodyT = -wheelR - h;      // 車身頂
+
+  if (veh.type === 'truck') {
+    // —— 小貨車：後斗（開口）＋ 駕駛艙 ——
+    const t = h * 0.14; // 斗壁厚
+    ctx.fillStyle = veh.color;
+    // 後斗左壁、底、右壁
+    ctx.fillRect(-w / 2, bodyT, t, h * 0.85);
+    ctx.fillRect(-w / 2, bodyB - t, w * 0.64, t);
+    ctx.fillRect(w * 0.14 - t, bodyT, t, h * 0.85);
+    // 水泥填充（從底往上長）
+    if (veh.fill > 0) {
+      const innerL = -w / 2 + t, innerR = w * 0.14 - t;
+      const fh = (h * 0.7) * veh.fill;
+      ctx.fillStyle = '#b7bdc6';
+      ctx.fillRect(innerL, bodyB - t - fh, innerR - innerL, fh);
+      if (veh.full) { // 滿載小山丘 + 亮晶晶
+        ctx.beginPath();
+        ctx.ellipse((innerL + innerR) / 2, bodyB - t - fh, (innerR - innerL) / 2, h * 0.18, 0, Math.PI, 0);
+        ctx.fill();
+        ctx.font = h * 0.45 + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText('✨', (innerL + innerR) / 2, bodyT - h * 0.15);
+      }
+    }
+    // 駕駛艙
+    ctx.fillStyle = veh.color;
+    ctx.beginPath(); ctx.roundRect(w * 0.14, bodyT - h * 0.08, w * 0.36, h * 0.93, h * 0.16); ctx.fill();
+    ctx.fillStyle = '#bde6ff';
+    ctx.beginPath(); ctx.roundRect(w * 0.2, bodyT, w * 0.2, h * 0.4, h * 0.1); ctx.fill();
+  } else {
+    // —— 小汽車 / 跑車 ——
+    const low = veh.type === 'sport' ? 0.45 : 0.55; // 跑車更扁
+    ctx.fillStyle = veh.color;
+    ctx.beginPath(); ctx.roundRect(-w / 2, bodyB - h * low, w, h * low, h * 0.2); ctx.fill();
+    // 車頂
+    ctx.beginPath(); ctx.roundRect(-w * 0.24, bodyT, w * 0.5, h * (1 - low) + h * 0.08, h * 0.18); ctx.fill();
+    // 車窗
+    ctx.fillStyle = '#bde6ff';
+    ctx.beginPath(); ctx.roundRect(-w * 0.18, bodyT + h * 0.07, w * 0.38, h * 0.3, h * 0.08); ctx.fill();
+    // 車燈
+    ctx.fillStyle = '#fff6aa';
+    ctx.beginPath(); ctx.arc(w / 2 - 3, bodyB - h * low * 0.5, h * 0.1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 車上的水泥（越倒越多 → 黏住變一大坨）
+  if (veh.goo > 0 || veh.stuck > 0) {
+    const amt = veh.stuck > 0 ? 1 : veh.goo / 0.5;
+    ctx.globalAlpha = 0.5 + 0.5 * amt;
+    ctx.fillStyle = '#b7bdc6';
+    ctx.beginPath();
+    ctx.ellipse(0, bodyT, w * 0.32 * (0.5 + amt * 0.5), h * 0.26 * amt + 2, 0, Math.PI, 0);
+    ctx.fill();
+    // 滴下來的水泥
+    ctx.beginPath(); ctx.ellipse(-w * 0.2, bodyT + h * 0.3, h * 0.08, h * 0.18 * amt, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(w * 0.15, bodyT + h * 0.22, h * 0.07, h * 0.14 * amt, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+
+  // 黏住時頭上冒「!」和音符（不跟著鏡像，文字才不會反）
+  if (veh.stuck > 0) {
+    ctx.font = h * 0.6 + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(Math.sin(state.t * 10) > 0 ? '❗' : '🎵', x + jx, ground - h - wheelR - h * 0.5);
+  }
+}
+
+function draw(now) {
+  const v = Math.min(W, H);
+  // 天空
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.72);
+  g.addColorStop(0, '#4aa8e8'); g.addColorStop(1, '#bfe6ff');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H * 0.72);
+
+  ctx.save();
+  if (state.shake > 0) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  // 太陽 + 雲
+  ctx.font = v * 0.09 + 'px serif';
+  ctx.fillText('🌞', W * 0.9, H * 0.42);
+  for (const c of clouds) {
+    ctx.font = c.s * 2 * v + 'px serif';
+    ctx.fillText('☁️', c.x * W, c.y * H);
+  }
+
+  // 地平線小鎮
+  ctx.font = v * 0.055 + 'px serif';
+  for (let i = 0; i < SKYLINE.length; i++) {
+    ctx.fillText(SKYLINE[i], W * (0.06 + i * 0.13), H * 0.685);
+  }
+
+  // 馬路
+  ctx.fillStyle = '#3a3f47';
+  ctx.fillRect(0, H * 0.71, W, H * 0.29);
+  ctx.fillStyle = '#5a5f67';
+  ctx.fillRect(0, H * 0.71, W, v * 0.012);
+  // 車道分隔虛線
+  ctx.strokeStyle = 'rgba(255,255,255,.45)';
+  ctx.lineWidth = v * 0.008;
+  ctx.setLineDash([v * 0.045, v * 0.035]);
+  ctx.beginPath(); ctx.moveTo(0, H * 0.838); ctx.lineTo(W, H * 0.838); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 落地的水泥灘
+  ctx.fillStyle = '#b7bdc6';
+  for (const p of puddles) {
+    ctx.globalAlpha = Math.min(0.85, p.life);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, p.r, p.r * 0.35, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // 車輛（遠車道先畫，近車道蓋在上面）
+  for (const veh of vehicles) if (veh.lane === 0) drawVehicle(veh);
+  for (const veh of vehicles) if (veh.lane === 1) drawVehicle(veh);
+
+  // 高架橋（水泥車的舞台）
+  const bY = H * 0.30;
+  ctx.fillStyle = '#8a93a0';
+  ctx.fillRect(0, bY, W, v * 0.05);
+  ctx.fillStyle = '#6e7783';
+  ctx.fillRect(0, bY + v * 0.05, W, v * 0.014);
+  // 橋墩
+  ctx.fillStyle = '#7a8390';
+  ctx.fillRect(W * 0.06 - v * 0.018, bY, v * 0.036, H * 0.41);
+  ctx.fillRect(W * 0.94 - v * 0.018, bY, v * 0.036, H * 0.41);
+  // 欄杆
+  ctx.strokeStyle = '#aab3c0'; ctx.lineWidth = v * 0.006;
+  ctx.beginPath(); ctx.moveTo(0, bY - v * 0.03); ctx.lineTo(W, bY - v * 0.03); ctx.stroke();
+  for (let px = v * 0.03; px < W; px += v * 0.08) {
+    ctx.beginPath(); ctx.moveTo(px, bY - v * 0.03); ctx.lineTo(px, bY); ctx.stroke();
+  }
+
+  // 瞄準輔助虛線（水泥會掉在哪裡）
+  if (state.phase === 'play' && !state.paused) {
+    const tip = chuteTip();
+    ctx.globalAlpha = 0.18 + state.pourLevel * 0.15;
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = v * 0.004;
+    ctx.setLineDash([v * 0.015, v * 0.02]);
+    ctx.beginPath(); ctx.moveTo(tip.x, tip.y); ctx.lineTo(tip.x, H * 0.9); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
+  // 水泥車
+  drawMixer(state.truckX * W, bY);
+
+  // 水泥滴
+  for (const b of blobs) {
+    ctx.fillStyle = '#aab0b8';
+    ctx.beginPath(); ctx.arc(b.x * W, b.y * H, b.size, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#c9ced6';
+    ctx.beginPath(); ctx.arc(b.x * W - b.size * 0.25, b.y * H - b.size * 0.25, b.size * 0.4, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // 粒子
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    if (p.emoji) {
+      ctx.font = p.size + 'px serif';
+      ctx.fillText(p.emoji, p.x, p.y);
+    } else {
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // 計數（倒滿幾台貨車）
+  if (state.phase === 'play') {
+    ctx.textAlign = 'left';
+    ctx.font = 'bold ' + Math.min(54, v * 0.07) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.fillStyle = 'rgba(0,0,0,.3)';
+    const label = '🛻 ' + state.filled;
+    ctx.fillText(label, 24 + 3, 52 + 3);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(label, 24, 52);
+    ctx.textAlign = 'center';
+  }
+
+  // 倒水泥提示
+  if (state.pourLevel > 0.3) {
+    ctx.globalAlpha = state.pourLevel;
+    ctx.font = 'bold ' + Math.min(40, v * 0.05) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('🌊 倒水泥！🌊', W / 2, H * 0.1);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+/* ================== 主迴圈 ================== */
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (state.phase !== 'menu') {
+    update(dt, now);
+    draw(now);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

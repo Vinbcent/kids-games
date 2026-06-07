@@ -50,18 +50,6 @@
   .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
   #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
   #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
-  #btnTV    { background: linear-gradient(180deg, #b266ff, #7733ff); }
-  #sensorLink { margin-top: 2vmin; color: #88aaff; font-size: clamp(13px, 3vmin, 18px); }
-
-  /* 電視模式配對畫面 */
-  #pairOverlay { background: radial-gradient(ellipse at 50% 30%, #1a1a5e 0%, #0a0a2a 70%); display: none; }
-  #pairOverlay h2 { font-size: clamp(24px, 7vmin, 48px); margin-bottom: 2vmin; }
-  #pairOverlay .steps { font-size: clamp(14px, 3.5vmin, 24px); color: #aab; line-height: 1.8; margin-bottom: 2vmin; }
-  .pairCode {
-    font-size: clamp(60px, 22vmin, 180px); font-weight: bold; color: #ffdd44;
-    letter-spacing: 2vmin; text-shadow: 0 0 40px #ff8800;
-  }
-  #pairStatus { font-size: clamp(14px, 3.5vmin, 22px); color: #8f8; margin-top: 2vmin; }
   #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #aab; max-width: 88%; line-height: 1.5; }
 
   #loadingOverlay { background: rgba(10,10,42,.92); display: none; }
@@ -130,16 +118,7 @@
   <h1>超級火箭冒險</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
-  <button class="btn" id="btnTV">📺 電視模式（零延遲，手機當感應器）</button>
   <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高加速衝刺！🔥<br>影像只在裝置上運算，不會上傳。</div>
-  <a id="sensorLink" href="sensor.html">📡 我是手機感應器（電視模式配對用）</a>
-</div>
-
-<div class="overlay" id="pairOverlay">
-  <h2>📺 電視模式</h2>
-  <div class="steps">手機打開遊戲 → 點最下面「📡 我是手機感應器」→ 輸入配對碼</div>
-  <div class="pairCode" id="pairCode"></div>
-  <div id="pairStatus">⏳ 等待手機連線中…</div>
 </div>
 
 <script type="module">
@@ -378,68 +357,7 @@ async function begin(mode) {
 }
 document.getElementById('btnBody').addEventListener('click', () => begin('body'));
 document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
-document.getElementById('btnTV').addEventListener('click', () => beginTV());
 document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
-
-/* ===== 電視模式：遊戲在電視上跑，手機只傳感應數據（零畫面延遲） ===== */
-let conn = null; // 與手機感應器的 P2P 連線
-async function beginTV() {
-  goFullscreen(); // 同步呼叫（使用者點擊當下）
-  audioInit();
-  state.mode = 'remote';
-  startOverlay.style.display = 'none';
-  try { await navigator.wakeLock.request('screen'); } catch (e) {}
-
-  loadingOverlay.style.display = 'flex';
-  document.getElementById('loadingText').textContent = '正在準備配對…';
-  try {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
-      s.onload = res; s.onerror = () => rej(new Error('PeerJS 載入失敗，請檢查網路'));
-      document.head.appendChild(s);
-    });
-  } catch (e) {
-    loadingOverlay.style.display = 'none';
-    alert(e.message);
-    startOverlay.style.display = 'flex';
-    state.mode = null;
-    return;
-  }
-  loadingOverlay.style.display = 'none';
-
-  const code = String(Math.floor(1000 + Math.random() * 9000));
-  document.getElementById('pairCode').textContent = code;
-  const pairOverlay = document.getElementById('pairOverlay');
-  pairOverlay.style.display = 'flex';
-
-  const peer = new Peer('vbk-rocket-' + code);
-  peer.on('error', e => {
-    document.getElementById('pairStatus').textContent = '❌ 連線錯誤（' + e.type + '），請重新整理再試';
-  });
-  peer.on('connection', c => {
-    c.on('open', () => {
-      conn = c;
-      lastSeen = performance.now();
-      document.getElementById('pairStatus').textContent = '✅ 已連線！';
-      if (pairOverlay.style.display !== 'none') { // 第一次連上才開始遊戲；之後是斷線重連
-        pairOverlay.style.display = 'none';
-        startCountdown();
-      }
-    });
-    c.on('data', onSensorData);
-    c.on('close', () => { lastSeen = 0; }); // 觸發「站到鏡頭前面吧」提示
-  });
-}
-function onSensorData(d) {
-  if (!d) return;
-  if (typeof d.x === 'number') {
-    personX = d.x;
-    handsUp = !!d.h;
-    shoulderW = d.w || 0;
-    lastSeen = performance.now();
-  }
-}
 
 function startCountdown() {
   state.phase = 'countdown';
@@ -514,12 +432,12 @@ function update(dt, now) {
   state.t += dt;
 
   // ---- 控制來源 ----
-  if (state.mode === 'body' || state.mode === 'remote') {
-    if (state.mode === 'body') trackFrame(); // remote 模式的數據由手機感應器傳來
+  if (state.mode === 'body') {
+    trackFrame();
     state.targetX = personX;
     state.boost = handsUp;
     const nowMs = performance.now();
-    const tracking = state.mode === 'remote' ? !!conn : !!poseLandmarker;
+    const tracking = !!poseLandmarker;
     const lost = tracking && nowMs - lastSeen > 2500;
     document.getElementById('findPlayer').style.display = (lost && state.phase === 'fly') ? 'block' : 'none';
 

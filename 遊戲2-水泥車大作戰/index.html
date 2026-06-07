@@ -615,13 +615,10 @@ function update(dt, now) {
         if (veh.type === 'truck' && !veh.full) {
           veh.fill = Math.min(1, veh.fill + 0.013);
           if (veh.fill >= 1) truckFull(veh, geom);
-        } else if (veh.type !== 'truck' && !veh.escaped) {
-          if (veh.stuck > 0) {
-            veh.stuck = Math.min(3.5, veh.stuck + 0.04); // 繼續倒就繼續黏（嘿嘿）
-          } else {
-            veh.goo = Math.min(0.6, veh.goo + 0.02);
-            if (veh.goo >= 0.5) carStuck(veh, geom);
-          }
+        } else if (veh.type !== 'truck' && !veh.escaped && veh.stuck <= 0) {
+          // 一台小汽車只能被黏一次：黏住中或掙脫過的，再倒只會噴濺
+          veh.goo = Math.min(0.6, veh.goo + 0.02);
+          if (veh.goo >= 0.5) carStuck(veh, geom);
         }
         if (Math.random() < 0.25) { // 噴濺
           particles.push({

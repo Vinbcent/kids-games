@@ -28,29 +28,48 @@
     transition: transform .15s;
   }
   a.card:active { transform: scale(.95); }
-  .card .icon { font-size: 90px; margin-bottom: 10px; }
+  .card .icon { font-size: 84px; margin-bottom: 6px; }
   .card .name { font-size: 24px; font-weight: bold; }
+  .card .date { font-size: 14px; color: #aab4e8; margin-top: 8px; }
+  .empty { color: #8890c0; font-size: 18px; margin-top: 20px; }
   .stars { position: fixed; inset: 0; pointer-events: none; z-index: -1; }
 </style>
 </head>
 <body>
 <h1>🎮 遊戲樂園</h1>
-<div class="games">
-  <!-- href 的 ?v=N 是快取版本號：每次更新該遊戲就 +1 -->
-  <a class="card" href="遊戲1-火箭冒險/?v=14">
-    <div class="icon">🚀</div>
-    <div class="name">火箭冒險</div>
-  </a>
-  <!-- 一週上架一款；尚未輪到的遊戲先藏起來（網址仍可直接遊玩），要上架就把對應卡片取消註解 -->
-  <!--
-  <a class="card" href="遊戲2-水泥車大作戰/?v=4">
-    <div class="icon">🚛</div>
-    <div class="name">水泥車大作戰</div>
-  </a>
-  -->
-  <!-- 之後的新遊戲加在這裡 -->
-</div>
+<div class="games" id="games"></div>
 <canvas class="stars" id="stars"></canvas>
+<script>
+  /* ===== 遊戲清單 =====
+     一週上架一款：每款填「上線日期 release」。
+     開頁時用裝置「今天」比對，release 比今天晚的就先不顯示（網址仍可直接遊玩）。
+     新增遊戲 = 在這裡加一行；ver 是快取版本號，更新該遊戲就 +1。 */
+  const GAMES = [
+    { folder: '遊戲1-火箭冒險',     icon: '🚀', name: '火箭冒險',     ver: 14, release: '2026-06-07' },
+    { folder: '遊戲2-水泥車大作戰', icon: '🚛', name: '水泥車大作戰', ver: 4,  release: '2026-06-14' },
+  ];
+
+  // 今天（取本地日期、歸零時分秒）；上線日同一天就算已上線
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const fmt = s => s.replaceAll('-', '/'); // 2026-06-07 → 2026/06/07
+  const box = document.getElementById('games');
+
+  const live = GAMES.filter(g => new Date(g.release + 'T00:00:00') <= today);
+  for (const g of live) {
+    const a = document.createElement('a');
+    a.className = 'card';
+    a.href = encodeURIComponent(g.folder) + '/?v=' + g.ver;
+    a.innerHTML = `<div class="icon">${g.icon}</div><div class="name">${g.name}</div>`
+                + `<div class="date">📅 ${fmt(g.release)} 上線</div>`;
+    box.appendChild(a);
+  }
+  if (!live.length) {
+    const p = document.createElement('div');
+    p.className = 'empty';
+    p.textContent = '新遊戲即將登場，敬請期待 ✨';
+    box.appendChild(p);
+  }
+</script>
 <script>
   // 簡單的閃爍星空背景
   const c = document.getElementById('stars'), x = c.getContext('2d');

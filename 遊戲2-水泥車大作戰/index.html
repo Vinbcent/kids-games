@@ -129,7 +129,7 @@
   <h1>水泥車大作戰</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
-  <div class="hint">左右移動身體開水泥車、雙手平舉（張開兩臂）倒水泥！<br>把空貨車倒滿就過關，小汽車被黏住會很好笑 😆<br>影像只在裝置上運算，不會上傳。</div>
+  <div class="hint">左右移動身體開水泥車、雙手高舉（舉過頭）倒水泥！<br>把空貨車倒滿就過關，小汽車被黏住會很好笑 😆<br>影像只在裝置上運算，不會上傳。</div>
 </div>
 
 <script type="module">
@@ -283,7 +283,7 @@ let poseLandmarker = null;
 let lastVideoTime = -1;
 let lastSeen = 0;          // 最後偵測到人的時間
 let personX = 0.5;         // 鏡像後 0~1
-let armsOut = false;       // 手臂平舉（張開兩臂）= 倒水泥
+let armsOut = false;       // 雙手高舉（舉過頭）= 倒水泥
 let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
 
@@ -324,13 +324,12 @@ function trackFrame() {
     const cx = (lm[11].x + lm[12].x) / 2;
     personX = 1 - cx;
     shoulderW = Math.abs(lm[11].x - lm[12].x);
-    // 雙手橫向平舉（張開兩臂像飛機）→ 倒水泥！
-    // 判定：兩手腕都在肩膀高度附近（不是放下、也不是舉高）＋ 雙手張得比肩膀寬
+    // 雙手高舉（兩手舉過頭）→ 倒水泥！
+    // 判定：兩手腕都明顯高過肩膀（高門檻防誤觸）
     const shoulderY = (lm[11].y + lm[12].y) / 2;
-    const band = shoulderW * 0.6; // 肩寬當尺規，距離遠近都適用
-    const wristsLevel = Math.abs(lm[15].y - shoulderY) < band && Math.abs(lm[16].y - shoulderY) < band;
-    const wristSpan = Math.abs(lm[15].x - lm[16].x);
-    armsOut = wristsLevel && wristSpan > shoulderW * 1.4;
+    const band = shoulderW * 0.5; // 肩寬當尺規，距離遠近都適用；要舉超過這個高度
+    // y 越小越高，手腕要比肩膀高出 band 才算
+    armsOut = (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
     pipDot.style.left = (personX * 100) + '%';
     pipDot.style.background = armsOut ? '#ffdd00' : '#00ff88';
   }

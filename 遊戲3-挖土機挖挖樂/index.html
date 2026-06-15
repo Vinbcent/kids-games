@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#c8923f">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🚜 挖土機挖挖樂</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #c8923f; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 鏡頭預覽小視窗（給爸爸確認追蹤狀況用） */
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear, top .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  /* 全螢幕覆蓋層共用 */
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  /* 尺寸全部用 vmin（螢幕短邊）縮放，手機橫向/直向/電視都不會爆版 */
+  #startOverlay { background: linear-gradient(180deg, #5ec0e8 0%, #bfe6ff 40%, #d7a44f 70%, #b9822f 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(60,30,0,.45); }
+  #startOverlay .dig-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: rumble 1.6s ease-in-out infinite; }
+  @keyframes rumble { 0%,100% { transform: translateY(0) rotate(0deg) } 25% { transform: translateY(-0.6vmin) rotate(-2deg) } 75% { transform: translateY(-0.3vmin) rotate(2deg) } }
+  .btn {
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35);
+  }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #fff8ec; max-width: 90%; line-height: 1.5; text-shadow: 0 1px 4px rgba(60,30,0,.5); }
+
+  /* 直拿手機時的提醒（橫式設計） */
+  #rotateHint {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.7); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(90,55,15,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  /* 找不到玩家的提示 */
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 太靠近電視的提醒（強制暫停 5 秒） */
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  /* 倒數數字 */
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff8800, 0 4px 10px rgba(0,0,0,.5);
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🚧</div>
+  <p id="loadingText">正在準備工地…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="dig-big">🚜</div>
+  <h1>挖土機挖挖樂</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">左右移動身體開挖土機、<b>蹲下</b>挖坑、<b>雙手高舉</b>填土！<br>挖坑讓馬路上的車掉進去，填土把車救出來 😆 地底還埋著水管💧、寶藏💎、恐龍骨🦴！<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// roundRect 舊瀏覽器保險
+if (!ctx.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+}
+
+/* ================== 音效（Web Audio 合成，不需音檔） ================== */
+let AC = null;
+function audioInit() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); }
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweep(f0, f1, dur, type, vol) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur + 0.05);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur + 0.1);
+}
+function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxAlarm() { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); }); }
+/* 各種車掉坑時叫聲都不一樣 */
+function sfxHonkCar()   { tone(370, 0.16, 'square', 0.3); tone(370, 0.16, 'square', 0.3, 0.24); }
+function sfxHonkTaxi()  { tone(466, 0.12, 'square', 0.3); tone(415, 0.2, 'square', 0.3, 0.16); }
+function sfxHonkSport() { [0, 0.11, 0.22].forEach(d => tone(640, 0.08, 'square', 0.26, d)); }
+function sfxHonkBus()   { tone(165, 0.55, 'sawtooth', 0.32); tone(110, 0.55, 'sawtooth', 0.26); }
+function sfxSiren()     { tone(660, 0.27, 'sine', 0.3); tone(880, 0.27, 'sine', 0.3, 0.27); }
+function sfxFall()   { sweep(820, 150, 0.45, 'sine', 0.3); tone(90, 0.18, 'sawtooth', 0.3, 0.4); } // 掉坑～砰
+function sfxPop()    { sweep(200, 900, 0.4, 'sawtooth', 0.22); }                                   // 被救/彈出
+function sfxBurst()  { sweep(140, 700, 0.3, 'square', 0.3); }                                       // 水管爆
+function sfxCoin()   { [784, 988, 1319, 1568].forEach((f, i) => tone(f, 0.16, 'triangle', 0.22, i * 0.07)); } // 寶藏
+function sfxDino()   { sweep(300, 130, 0.35, 'sawtooth', 0.3); tone(220, 0.25, 'square', 0.2, 0.18); }        // 恐龍吼
+function sfxClang()  { tone(1300, 0.07, 'square', 0.25); tone(820, 0.12, 'square', 0.2, 0.06); tone(500, 0.16, 'square', 0.16, 0.13); } // 鏟到石頭
+function honkFor(veh) {
+  if (veh.type === 'bus')         { sfxHonkBus();   veh.honkT = 1.3; }
+  else if (veh.type === 'police') { sfxSiren();     veh.honkT = 0.6; }
+  else if (veh.type === 'sport')  { sfxHonkSport(); veh.honkT = 0.7; }
+  else if (veh.type === 'taxi')   { sfxHonkTaxi();  veh.honkT = 0.9; }
+  else                            { sfxHonkCar();   veh.honkT = 0.85; }
+}
+// 迴圈雜訊工廠（挖土沙沙、噴水嘩啦、填土轟隆）
+function noiseLoop(filterType, freq, vol) {
+  let src = null, gain = null;
+  return {
+    on() {
+      if (!AC || src) return;
+      const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+      const f = AC.createBiquadFilter(); f.type = filterType; f.frequency.value = freq;
+      gain = AC.createGain(); gain.gain.value = 0;
+      src.connect(f); f.connect(gain); gain.connect(AC.destination);
+      src.start();
+      gain.gain.linearRampToValueAtTime(vol, AC.currentTime + 0.15);
+    },
+    off() {
+      if (!src) return;
+      gain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.2);
+      const n = src; src = null;
+      setTimeout(() => { try { n.stop(); } catch (e) {} }, 300);
+    },
+  };
+}
+const digSfx = noiseLoop('bandpass', 1100, 0.13);
+const fillSfx = noiseLoop('lowpass', 480, 0.13);
+const waterSfx = noiseLoop('lowpass', 900, 0.24);
+
+function say(text) {
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+const lastSay = {};
+function sayT(key, text, gap = 3000) {
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  say(text);
+}
+
+/* ================== 版面（上：工地台挖土機 / 中：馬路車 / 下：深地底） ================== */
+const LEDGE = 0.30;   // 挖土機站的工地台高度（畫面比例）
+const ROAD  = 0.56;   // 馬路 = 地底頂端，車的輪子貼這裡
+const v2 = () => Math.min(W, H);
+const MAX_DIG = () => (H - H * ROAD) * 0.82; // 坑最深（深地底，很深）
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu',          // menu | countdown | play
+  mode: null,             // body | touch
+  diggerX: 0.5,
+  targetX: 0.5,
+  digging: false,         // 蹲下 / 按下半 = 挖
+  filling: false,         // 雙手高舉 / 按上半 = 填土
+  dig: 0,                 // 0~1 平滑挖動作
+  fill: 0,                // 0~1 平滑填動作
+  dropped: 0,             // 掉坑的車（挖成功）
+  rescued: 0,             // 填土救出的車
+  finds: 0,               // 挖到的寶藏/恐龍/水管總數
+  level: 0,               // 挖土機外觀等級
+  t: 0, shake: 0, paused: false,
+};
+const DIGGER_COLORS = ['#ffb300', '#ff7043', '#ffd54f', '#9ccc65', '#4fc3f7', '#ba68c8', '#ff8a80'];
+const CAR_COLORS = ['#ff5555', '#44aaff', '#ffcc00', '#66dd66', '#ff88cc', '#aa77ff', '#ff9944'];
+const TRUCK_COLORS = ['#5588cc', '#cc8855', '#55aa77', '#8877cc'];
+const PRAISE = ['Great digging!', 'Super excavator!', 'Wow, amazing!'];
+
+const holes = [];      // 坑 { x, depth(0~1), w, occupied, water }
+const buried = [];     // 地底埋的東西 { type:'pipe'|'treasure'|'dino'|'rock', x, depth(0~1), w, done, burst, burstT }
+const vehicles = [];   // 車
+const particles = [];  // 粒子（泥土、水花、金幣、星星、emoji）
+const clouds = [];
+const SKYLINE = ['🏠', '🏢', '🌳', '🏗️', '🌳', '🏪', '🏠', '🌳'];
+
+for (let i = 0; i < 5; i++) clouds.push({ x: Math.random(), y: 0.08 + Math.random() * 0.14, s: 0.05 + Math.random() * 0.05, sp: 0.004 + Math.random() * 0.008 });
+
+let lastVehSpawn = 0, digAcc = 0, fillAcc = 0, buryTimer = 0;
+let digOn = false, fillOn = false, waterOn = false; // 迴圈音效開關旗標
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1, lastSeen = 0;
+let personX = 0.5;
+let squat = false, armsUp = false;   // 蹲下=挖、雙手高舉=填土
+let isSquatHeld = false;
+let standBaseY = 0;
+let shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+  });
+  pip.style.display = 'block';
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let result;
+  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  if (lm) {
+    lastSeen = performance.now();
+    const cx = (lm[11].x + lm[12].x) / 2;
+    personX = 1 - cx; // 前鏡頭鏡像
+    shoulderW = Math.abs(lm[11].x - lm[12].x);
+    const shoulderY = (lm[11].y + lm[12].y) / 2;
+
+    // ---- 雙手高舉（兩手腕都明顯高過肩）= 填土（高門檻防誤觸）----
+    const band = shoulderW * 0.5;
+    armsUp = (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
+
+    // ---- 蹲下 = 挖（高門檻 + 遲滯防抖）----
+    const hipY = (lm[23].y + lm[24].y) / 2;
+    const kneeY = (lm[25].y + lm[26].y) / 2;
+    const vis = Math.min(lm[23].visibility ?? 1, lm[24].visibility ?? 1, lm[25].visibility ?? 1, lm[26].visibility ?? 1);
+    if (vis > 0.55) {
+      const torso = Math.max(0.02, hipY - shoulderY);
+      const ratio = (kneeY - hipY) / torso;
+      if (isSquatHeld) { if (ratio > 0.72) isSquatHeld = false; }
+      else { if (ratio < 0.48) isSquatHeld = true; }
+    } else {
+      if (!standBaseY) standBaseY = shoulderY;
+      else standBaseY += (shoulderY - standBaseY) * (shoulderY < standBaseY ? 0.5 : 0.02);
+      const drop = shoulderY - standBaseY;
+      const dband = shoulderW * 0.6;
+      if (isSquatHeld) { if (drop < dband * 0.55) isSquatHeld = false; }
+      else { if (drop > dband) isSquatHeld = true; }
+    }
+    squat = isSquatHeld && !armsUp; // 舉手優先當填土，避免同時
+    pipDot.style.left = (personX * 100) + '%';
+    pipDot.style.top = armsUp ? '20%' : squat ? '80%' : '50%';
+    pipDot.style.background = armsUp ? '#66ccff' : squat ? '#ffdd00' : '#00ff88';
+  }
+}
+
+/* ================== 觸控模式：拖曳移動；按下半=挖、按上半=填 ================== */
+let touching = false;
+function touchUpdate(e) {
+  state.targetX = e.clientX / W;
+  const lower = e.clientY > H * 0.45;
+  state.digging = lower;
+  state.filling = !lower;
+}
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  touching = true; touchUpdate(e);
+});
+canvas.addEventListener('pointermove', e => { if (touching) touchUpdate(e); });
+window.addEventListener('pointerup', () => {
+  touching = false;
+  if (state.mode === 'touch') { state.digging = false; state.filling = false; }
+});
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen();
+  audioInit();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try { await setupBodyTracking(); }
+    catch (e) {
+      loadingOverlay.style.display = 'none';
+      alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+      state.mode = 'touch';
+    }
+    loadingOverlay.style.display = 'none';
+  }
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function startCountdown() {
+  state.phase = 'countdown';
+  vehicles.length = 0; holes.length = 0; buried.length = 0;
+  // 先埋好地底彩蛋 + 放兩台車
+  buryItem('pipe'); buryItem('pipe'); buryItem('treasure'); buryItem('dino'); buryItem('rock');
+  spawnVehicleAt(0.22, 1, 'truck');
+  spawnVehicleAt(0.74, -1, 'car');
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '開挖！'];
+  say("Three, two, one, let's dig!");
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      num.style.animation = 'none'; void num.offsetWidth;
+      tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'play';
+      state.t = 0;
+    }
+  };
+  step();
+}
+
+/* ================== 車輛 ================== */
+const pickColor = arr => arr[Math.floor(Math.random() * arr.length)];
+const VEH_TYPES = {
+  truck:  { wv: 0.24,  hv: 0.105, sp: [0.035, 0.055], colors: TRUCK_COLORS },
+  car:    { wv: 0.155, hv: 0.078, sp: [0.06, 0.10],   colors: CAR_COLORS },
+  sport:  { wv: 0.15,  hv: 0.062, sp: [0.13, 0.18],   colors: CAR_COLORS },
+  taxi:   { wv: 0.16,  hv: 0.08,  sp: [0.065, 0.095], colors: ['#ffcc22'] },
+  police: { wv: 0.17,  hv: 0.08,  sp: [0.09, 0.13],   colors: ['#eef2f7'] },
+  bus:    { wv: 0.28,  hv: 0.115, sp: [0.04, 0.06],   colors: ['#ff8844', '#44bb88', '#6699ee'] },
+};
+function makeVehicle(x, dir, type) {
+  const cfg = VEH_TYPES[type];
+  return {
+    type, x, dir, wv: cfg.wv, hv: cfg.hv,
+    speed: cfg.sp[0] + Math.random() * (cfg.sp[1] - cfg.sp[0]),
+    color: pickColor(cfg.colors),
+    fallState: null, sink: 0, stuckT: 0, spin: 0, honkT: 0, escaped: false, hole: null,
+  };
+}
+function spawnVehicleAt(x, dir, type) { vehicles.push(makeVehicle(x, dir, type)); }
+function spawnVehicle(now) {
+  if (vehicles.length >= 5 || now - lastVehSpawn < 1100) return;
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const entry = dir === 1 ? -0.16 : 1.16;
+  for (const veh of vehicles) if (Math.abs(veh.x - entry) < 0.26) return;
+  lastVehSpawn = now;
+  const r = Math.random();
+  const type = r < 0.38 ? 'car' : r < 0.55 ? 'truck' : r < 0.70 ? 'taxi'
+             : r < 0.82 ? 'police' : r < 0.92 ? 'bus' : 'sport';
+  spawnVehicleAt(entry, dir, type);
+}
+
+/* ================== 地底彩蛋 ================== */
+function buryItem(type) {
+  // 找一個跟現有東西不太重疊的 x
+  let x = 0.5;
+  for (let tries = 0; tries < 12; tries++) {
+    x = 0.12 + Math.random() * 0.76;
+    if (!buried.some(b => Math.abs(b.x - x) < 0.13)) break;
+  }
+  const item = { type, x, done: false, w: 0.14 };
+  if (type === 'pipe')     { item.depth = 0.45 + Math.random() * 0.3; item.burst = false; item.burstT = 0; }
+  else if (type === 'rock'){ item.depth = 0.22 + Math.random() * 0.12; } // 淺淺就擋住 → 挖不深、車不會掉這
+  else                     { item.depth = 0.4 + Math.random() * 0.35; }  // 寶藏/恐龍
+  buried.push(item);
+}
+
+function burst(x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2,
+      life: opts.life ?? 1, size: opts.emoji ? 22 + Math.random() * 16 : 3 + Math.random() * 4,
+      color: opts.color || `hsl(${Math.random() * 360},100%,65%)`,
+      emoji: opts.emoji ? opts.emoji[Math.floor(Math.random() * opts.emoji.length)] : null,
+      grav: opts.grav ?? 0.12,
+    });
+  }
+}
+function fountainUp(x, n, emojis) { // 往上噴的東西（恐龍、金幣）
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x: x + (Math.random() - 0.5) * v2() * 0.05, y: H * ROAD,
+      vx: (Math.random() - 0.5) * 4, vy: -7 - Math.random() * 6,
+      life: 1.6, size: 26 + Math.random() * 18,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)], color: '#fff', grav: 0.22,
+    });
+  }
+}
+function fireworks() {
+  for (let k = 0; k < 5; k++) setTimeout(() => burst(W * (0.2 + Math.random() * 0.6), H * (0.08 + Math.random() * 0.18), 30), k * 200);
+}
+
+function levelUpCheck() {
+  const nl = Math.min(DIGGER_COLORS.length - 1, Math.floor(state.dropped / 10));
+  if (nl > state.level) { state.level = nl; fireworks(); }
+}
+
+/* ---- 挖坑 ---- */
+function digHole(dt) {
+  let h = holes.find(h => Math.abs(h.x - state.diggerX) < 0.05 && !h.occupied);
+  if (!h) { h = { x: state.diggerX, depth: 0, w: 0.15, occupied: null, water: false }; holes.push(h); }
+
+  // 這個坑底下有沒有挖不動的大石頭？有 → 卡在石頭頂、鏗一聲
+  const rock = buried.find(b => b.type === 'rock' && Math.abs(b.x - h.x) < h.w * 0.5);
+  const cap = rock ? rock.depth : 1;
+  const before = h.depth;
+  h.depth = Math.min(cap, h.depth + dt * 0.5 * state.dig);
+  if (rock && h.depth >= cap - 0.001 && before < cap - 0.001) { sfxClang(); state.shake = 7; sayT('rock', 'Too hard! A big rock!'); }
+  if (rock && h.depth >= cap - 0.001 && Math.random() < dt * 4) { sfxClang(); state.shake = Math.max(state.shake, 4); }
+
+  // 噴泥土塊
+  digAcc += dt * 26 * state.dig;
+  while (digAcc >= 1) {
+    digAcc--;
+    particles.push({
+      x: h.x * W + (Math.random() - 0.5) * h.w * W * 0.5, y: H * ROAD - 2,
+      vx: (Math.random() - 0.5) * 3, vy: -2 - Math.random() * 3,
+      life: 0.9, size: 4 + Math.random() * 5,
+      color: ['#7a4a1e', '#8a5a26', '#6b3e18'][Math.floor(Math.random() * 3)], grav: 0.3,
+    });
+  }
+  // 挖到地底彩蛋？
+  for (const b of buried) {
+    if (b.done || b.type === 'rock') continue;
+    if (Math.abs(b.x - h.x) < h.w * 0.5 && h.depth >= b.depth) revealBuried(b, h);
+  }
+}
+
+function revealBuried(b, hole) {
+  b.done = true;
+  state.shake = 10;
+  if (b.type === 'pipe') {
+    b.burst = true; b.burstT = 5; hole.water = true; hole.pipe = b;
+    state.finds++; sfxBurst();
+    burst(b.x * W, H * ROAD, 22, { emoji: ['💦', '💧', '🌊'] });
+    sayT('water', 'Whoa! A water pipe! So funny!');
+  } else if (b.type === 'treasure') {
+    state.finds++; sfxCoin();
+    fountainUp(b.x * W, 16, ['💰', '🪙', '💎', '⭐']);
+    burst(b.x * W, H * ROAD, 18, { color: '#ffd700' });
+    say('Treasure! Wow, gold coins!'); fireworks();
+  } else if (b.type === 'dino') {
+    state.finds++; sfxDino();
+    fountainUp(b.x * W, 12, ['🦕', '🦖', '🦴', '⭐']);
+    say('Wow! A dinosaur! Roar!'); fireworks();
+  }
+  // 寶藏/恐龍挖到就收掉；待會兒補埋新的
+  if (b.type !== 'pipe') buried.splice(buried.indexOf(b), 1);
+}
+
+/* ---- 填土 ---- */
+function fillHole(dt) {
+  const h = holes.find(h => Math.abs(h.x - state.diggerX) < 0.06);
+  if (!h) return;
+  h.depth = Math.max(0, h.depth - dt * 0.45 * state.fill);
+
+  // 倒土的土塊往坑裡掉
+  fillAcc += dt * 20 * state.fill;
+  while (fillAcc >= 1) {
+    fillAcc--;
+    particles.push({
+      x: h.x * W + (Math.random() - 0.5) * h.w * W * 0.4, y: H * (ROAD - 0.04),
+      vx: (Math.random() - 0.5) * 1.5, vy: 1 + Math.random() * 2,
+      life: 0.8, size: 4 + Math.random() * 5,
+      color: ['#7a4a1e', '#8a5a26', '#6b3e18'][Math.floor(Math.random() * 3)], grav: 0.2,
+    });
+  }
+  // 把掉坑的車頂出來救走
+  if (h.occupied && h.depth < 0.34) {
+    const veh = h.occupied;
+    veh.fallState = 'out'; h.occupied = null; veh.hole = null;
+    state.rescued++;
+    sfxPop();
+    burst(h.x * W, H * ROAD, 8, { emoji: ['🎉', '⭐'] });
+    sayT('rescue', 'Yay! Pushed out! Thank you!');
+  }
+  // 把噴水的水管蓋住止水
+  if (h.water && h.depth < 0.28) {
+    h.water = false;
+    if (h.pipe) { const i = buried.indexOf(h.pipe); if (i >= 0) buried.splice(i, 1); h.pipe = null; }
+    burst(h.x * W, H * ROAD, 6, { emoji: ['😌', '✨'] });
+    sayT('seal', 'Phew! Water stopped!');
+  }
+  if (h.depth <= 0.02 && !h.occupied) holes.splice(holes.indexOf(h), 1);
+}
+
+function carFall(veh, hole) {
+  veh.fallState = 'in'; veh.hole = hole; hole.occupied = veh;
+  veh.stuckT = 12; veh.spin = 0; veh.honkT = 0.3; // 12 秒安全網，主要還是靠填土救
+  state.dropped++; state.shake = 8;
+  sfxFall();
+  burst(hole.x * W, H * ROAD, 12, { color: '#7a4a1e', grav: 0.3 });
+  burst(hole.x * W, H * ROAD - 20, 4, { emoji: ['💥', '😲'] });
+  sayT('fall', 'Oh no! Down the hole!');
+  if (state.dropped % 5 === 0) { sfxMilestone(); fireworks(); say(PRAISE[Math.floor(Math.random() * PRAISE.length)]); }
+  levelUpCheck();
+}
+
+/* ================== 更新 ================== */
+function update(dt, now) {
+  state.t += dt;
+
+  if (state.mode === 'body') {
+    trackFrame();
+    state.targetX = personX;
+    state.digging = squat;
+    state.filling = armsUp;
+    const nowMs = performance.now();
+    const lost = poseLandmarker && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'play') ? 'block' : 'none';
+
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) { if (!tooCloseSince) tooCloseSince = nowMs; }
+    else if (shoulderW < 0.21 || lost) { tooCloseSince = 0; }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'play') {
+      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('Too close! Step back, please!'); }
+      state.paused = nowMs < pauseUntil;
+    } else state.paused = false;
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) {
+      const remain = Math.ceil((pauseUntil - nowMs) / 1000);
+      document.getElementById('pauseCount').textContent = remain > 0 ? remain : '';
+    }
+    if (wasPaused && !state.paused) say("OK! Let's dig!");
+    wasPaused = state.paused;
+  }
+
+  // 平滑跟隨
+  const margin = 0.08;
+  const tx = Math.min(1 - margin, Math.max(margin, state.targetX));
+  state.diggerX += (tx - state.diggerX) * Math.min(1, dt * 4.5);
+
+  // 挖 / 填 動作平滑（填優先）+ 音效
+  const canAct = state.phase === 'play' && !state.paused;
+  const wantFill = canAct && state.filling;
+  const wantDig = canAct && state.digging && !state.filling;
+  state.dig += ((wantDig ? 1 : 0) - state.dig) * Math.min(1, dt * 7);
+  state.fill += ((wantFill ? 1 : 0) - state.fill) * Math.min(1, dt * 7);
+  if (wantDig && !digOn) { digSfx.on(); digOn = true; } if ((!wantDig) && digOn) { digSfx.off(); digOn = false; }
+  if (wantFill && !fillOn) { fillSfx.on(); fillOn = true; } if ((!wantFill) && fillOn) { fillSfx.off(); fillOn = false; }
+
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
+  for (const c of clouds) { c.x += c.sp * dt; if (c.x > 1.15) { c.x = -0.15; c.y = 0.08 + Math.random() * 0.14; } }
+
+  if (state.paused) return;
+
+  if (state.dig > 0.4) digHole(dt);
+  if (state.fill > 0.4) fillHole(dt);
+
+  // 坑：沒在動也沒車的慢慢塌回
+  for (let i = holes.length - 1; i >= 0; i--) {
+    const h = holes[i];
+    const active = Math.abs(h.x - state.diggerX) < 0.06 && (state.dig > 0.4 || state.fill > 0.4);
+    if (!active && !h.occupied && !h.water) {
+      h.depth -= dt * 0.02;
+      if (h.depth <= 0.02) holes.splice(i, 1);
+    }
+  }
+
+  // 水管噴水
+  let anyBurst = false;
+  for (const b of buried) {
+    if (b.type === 'pipe' && b.burst) {
+      anyBurst = true;
+      b.burstT -= dt;
+      for (let k = 0; k < 3; k++) {
+        particles.push({
+          x: b.x * W + (Math.random() - 0.5) * v2() * 0.03, y: H * ROAD,
+          vx: (Math.random() - 0.5) * 4, vy: -9 - Math.random() * 7,
+          life: 1.1, size: 4 + Math.random() * 5,
+          color: ['#7fd0ff', '#bfeaff', '#4fb0ff'][Math.floor(Math.random() * 3)], grav: 0.32, water: true,
+        });
+      }
+      if (b.burstT <= 0) { // 噴夠久自己停（沒被填也不會卡關）
+        b.burst = false;
+        const h = holes.find(h => h.pipe === b); if (h) { h.water = false; h.pipe = null; }
+        buried.splice(buried.indexOf(b), 1);
+      }
+    }
+  }
+  if (anyBurst && !waterOn) { waterSfx.on(); waterOn = true; }
+  if (!anyBurst && waterOn) { waterSfx.off(); waterOn = false; }
+
+  // 補埋地底彩蛋（保持地底一直有東西可挖）
+  buryTimer -= dt;
+  const liveEgg = buried.filter(b => b.type !== 'rock').length;
+  if (buryTimer <= 0 && liveEgg < 4 && state.phase === 'play') {
+    const pool = ['pipe', 'treasure', 'dino', 'treasure', 'pipe'];
+    buryItem(pool[Math.floor(Math.random() * pool.length)]);
+    buryTimer = 3 + Math.random() * 3;
+  }
+
+  // 車輛
+  if (state.phase === 'play' || state.phase === 'countdown') spawnVehicle(now);
+  for (let i = vehicles.length - 1; i >= 0; i--) {
+    const veh = vehicles[i];
+    if (veh.fallState === 'in') {
+      const targetSink = veh.hole ? Math.min(1, veh.hole.depth) : veh.sink;
+      veh.sink += (targetSink - veh.sink) * Math.min(1, dt * 5);
+      veh.spin += dt * 12; veh.stuckT -= dt; veh.honkT -= dt;
+      if (veh.honkT <= 0) honkFor(veh);
+      if (Math.random() < dt * 6) particles.push({
+        x: veh.x * W + (Math.random() - 0.5) * 30, y: H * ROAD,
+        vx: (Math.random() - 0.5) * 2, vy: -1 - Math.random(), life: 0.8, size: 16 + Math.random() * 10, emoji: '💨', color: '#fff', grav: -0.02,
+      });
+      if (veh.stuckT <= 0) { // 安全網：太久沒被救，自己爬出來
+        veh.fallState = 'out';
+        if (veh.hole) { veh.hole.occupied = null; veh.hole = null; }
+        sfxPop(); sayT('escape', 'Vroom! Climbing out!');
+      }
+    } else if (veh.fallState === 'out') {
+      veh.sink += (0 - veh.sink) * Math.min(1, dt * 5);
+      veh.x += veh.dir * veh.speed * 1.7 * dt;
+      if (veh.sink < 0.05) { veh.fallState = null; veh.escaped = true; }
+    } else {
+      veh.x += veh.dir * veh.speed * dt;
+      if (!veh.escaped) {
+        for (const h of holes) {
+          if (h.depth > 0.42 && !h.occupied && Math.abs(veh.x - h.x) < h.w * 0.5) { carFall(veh, h); break; }
+        }
+      }
+    }
+    if (veh.x < -0.3 || veh.x > 1.3) vehicles.splice(i, 1);
+  }
+
+  // 粒子
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += p.grav; p.life -= dt * 1.0;
+    if (p.water && p.y > H * (ROAD + 0.02)) p.life -= dt * 3;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+/* ================== 繪圖 ================== */
+function drawHole(h) {
+  const x = h.x * W, mouthW = h.w * W, dep = h.depth * MAX_DIG(), gy = H * ROAD;
+  ctx.save();
+  const grad = ctx.createLinearGradient(0, gy, 0, gy + dep);
+  if (h.water) { grad.addColorStop(0, '#3a6b50'); grad.addColorStop(1, '#123a52'); }
+  else { grad.addColorStop(0, '#3a2410'); grad.addColorStop(1, '#140c05'); }
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(x - mouthW / 2, gy);
+  ctx.lineTo(x - mouthW * 0.34, gy + dep);
+  ctx.quadraticCurveTo(x, gy + dep + mouthW * 0.1, x + mouthW * 0.34, gy + dep);
+  ctx.lineTo(x + mouthW / 2, gy);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.3)';
+  ctx.beginPath(); ctx.ellipse(x, gy, mouthW / 2, mouthW * 0.08, 0, 0, Math.PI * 2); ctx.fill();
+  if (h.water) {
+    ctx.fillStyle = 'rgba(120,200,255,.75)';
+    ctx.beginPath(); ctx.ellipse(x, gy + dep * 0.72, mouthW * 0.3, mouthW * 0.07, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawDigger(x, ledgeY) {
+  const s = v2() / 700;
+  const c = DIGGER_COLORS[state.level];
+  ctx.save();
+  ctx.translate(x, ledgeY);
+
+  // 履帶
+  ctx.fillStyle = '#333';
+  ctx.beginPath(); ctx.roundRect(-54 * s, -2 * s, 108 * s, 24 * s, 12 * s); ctx.fill();
+  ctx.fillStyle = '#555';
+  for (let wx = -42; wx <= 42; wx += 21) { ctx.beginPath(); ctx.arc(wx * s, 10 * s, 7 * s, 0, Math.PI * 2); ctx.fill(); }
+
+  // 車身 + 配重
+  ctx.fillStyle = c;
+  ctx.beginPath(); ctx.roundRect(-46 * s, -48 * s, 64 * s, 50 * s, 8 * s); ctx.fill();
+  ctx.fillStyle = '#5a5a5a';
+  ctx.beginPath(); ctx.roundRect(-54 * s, -34 * s, 14 * s, 36 * s, 5 * s); ctx.fill();
+  // 駕駛窗 + 笑臉
+  ctx.fillStyle = '#bde6ff';
+  ctx.beginPath(); ctx.roundRect(-38 * s, -42 * s, 32 * s, 26 * s, 6 * s); ctx.fill();
+  ctx.fillStyle = '#234';
+  ctx.beginPath(); ctx.arc(-28 * s, -31 * s, 3 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-17 * s, -31 * s, 3 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#234'; ctx.lineWidth = 2 * s;
+  ctx.beginPath(); ctx.arc(-22 * s, -27 * s, 5 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+
+  // ---- 挖臂：從車身伸到下面的鏟斗 ----
+  const roadPx = (H * ROAD) - ledgeY;                 // 工地台到馬路的垂直距離
+  const pit = holes.find(h => Math.abs(h.x - state.diggerX) < 0.06);
+  const pitPx = pit ? pit.depth * MAX_DIG() : 0;
+  let bucketY;                                        // 鏟斗相對工地台的 y（往下為正）
+  if (state.fill > 0.15) bucketY = roadPx - (v2() * 0.04 + state.fill * v2() * 0.18); // 填土：抬高倒土
+  else bucketY = roadPx + Math.max(8 * s, pitPx * 0.9) * Math.max(0.15, state.dig);   // 挖土：伸進坑底
+  const bx = 18 * s, by = bucketY;
+  const elbowX = 40 * s, elbowY = Math.min(by * 0.45, -10 * s + by * 0.4);
+  // 大臂
+  ctx.strokeStyle = c; ctx.lineCap = 'round'; ctx.lineWidth = 12 * s;
+  ctx.beginPath(); ctx.moveTo(8 * s, -34 * s); ctx.lineTo(elbowX, elbowY); ctx.stroke();
+  // 小臂（伸到鏟斗）
+  ctx.lineWidth = 9 * s;
+  ctx.beginPath(); ctx.moveTo(elbowX, elbowY); ctx.lineTo(bx, by - 12 * s); ctx.stroke();
+  // 油壓桿
+  ctx.strokeStyle = '#aaa'; ctx.lineWidth = 4 * s;
+  ctx.beginPath(); ctx.moveTo(4 * s, -38 * s); ctx.lineTo(elbowX, elbowY); ctx.stroke();
+
+  // 鏟斗
+  ctx.save();
+  ctx.translate(bx, by);
+  const digging = state.dig > 0.5, filling = state.fill > 0.5;
+  ctx.rotate(filling ? -1.9 : digging ? 0.4 : 0.05); // 填土時翻過來倒、挖土時張口
+  ctx.fillStyle = '#888';
+  ctx.beginPath();
+  ctx.moveTo(-12 * s, -14 * s); ctx.lineTo(12 * s, -10 * s); ctx.lineTo(10 * s, 12 * s);
+  ctx.quadraticCurveTo(0, 22 * s, -14 * s, 10 * s); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#bbb';
+  for (let k = -1; k <= 1; k++) {
+    ctx.beginPath();
+    ctx.moveTo(k * 7 * s - 2 * s, 12 * s); ctx.lineTo(k * 7 * s + 2 * s, 12 * s); ctx.lineTo(k * 7 * s, 19 * s);
+    ctx.closePath(); ctx.fill();
+  }
+  if (digging || filling) { // 鏟到/裝著的土
+    ctx.fillStyle = '#7a4a1e';
+    ctx.beginPath(); ctx.ellipse(-1 * s, 2 * s, 9 * s, 6 * s, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawVehicle(veh) {
+  const v = v2();
+  const w = veh.wv * v, h = veh.hv * v, wheelR = h * 0.32;
+  const x = veh.x * W;
+  const ground = H * ROAD + veh.sink * MAX_DIG() * 0.9;
+  const jx = veh.fallState === 'in' ? (Math.random() - 0.5) * 5 : 0;
+  const jy = veh.fallState === 'in' ? (Math.random() - 0.5) * 3 : 0;
+  ctx.save();
+  ctx.translate(x + jx, ground + jy);
+  if (veh.dir === -1) ctx.scale(-1, 1);
+
+  for (const wx of [-w * 0.32, w * 0.3]) {
+    ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(wx, -wheelR, wheelR, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#999'; ctx.beginPath(); ctx.arc(wx, -wheelR, wheelR * 0.45, 0, Math.PI * 2); ctx.fill();
+    if (veh.fallState === 'in') {
+      ctx.strokeStyle = '#555'; ctx.lineWidth = 2;
+      const a = veh.spin;
+      ctx.beginPath();
+      ctx.moveTo(wx - Math.cos(a) * wheelR * 0.8, -wheelR - Math.sin(a) * wheelR * 0.8);
+      ctx.lineTo(wx + Math.cos(a) * wheelR * 0.8, -wheelR + Math.sin(a) * wheelR * 0.8);
+      ctx.stroke();
+    }
+  }
+  const bodyB = -wheelR, bodyT = -wheelR - h;
+  if (veh.type === 'truck') {
+    ctx.fillStyle = veh.color;
+    ctx.beginPath(); ctx.roundRect(-w / 2, bodyT + h * 0.2, w * 0.62, h * 0.8, h * 0.12); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(w * 0.14, bodyT - h * 0.05, w * 0.36, h * 0.95, h * 0.16); ctx.fill();
+    ctx.fillStyle = '#bde6ff';
+    ctx.beginPath(); ctx.roundRect(w * 0.2, bodyT + h * 0.02, w * 0.2, h * 0.4, h * 0.1); ctx.fill();
+  } else if (veh.type === 'bus') {
+    ctx.fillStyle = veh.color;
+    ctx.beginPath(); ctx.roundRect(-w / 2, bodyT, w, h, h * 0.15); ctx.fill();
+    ctx.fillStyle = '#bde6ff';
+    for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.roundRect(-w * 0.44 + k * w * 0.19, bodyT + h * 0.12, w * 0.13, h * 0.3, h * 0.06); ctx.fill(); }
+    ctx.fillStyle = '#9fb8cc'; ctx.beginPath(); ctx.roundRect(w * 0.33, bodyT + h * 0.12, w * 0.11, h * 0.74, h * 0.05); ctx.fill();
+    ctx.fillStyle = '#fff6aa'; ctx.beginPath(); ctx.arc(w / 2 - 3, bodyB - h * 0.25, h * 0.08, 0, Math.PI * 2); ctx.fill();
+  } else {
+    const low = veh.type === 'sport' ? 0.45 : 0.55;
+    ctx.fillStyle = veh.color;
+    ctx.beginPath(); ctx.roundRect(-w / 2, bodyB - h * low, w, h * low, h * 0.2); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(-w * 0.24, bodyT, w * 0.5, h * (1 - low) + h * 0.08, h * 0.18); ctx.fill();
+    ctx.fillStyle = '#bde6ff'; ctx.beginPath(); ctx.roundRect(-w * 0.18, bodyT + h * 0.07, w * 0.38, h * 0.3, h * 0.08); ctx.fill();
+    ctx.fillStyle = '#fff6aa'; ctx.beginPath(); ctx.arc(w / 2 - 3, bodyB - h * low * 0.5, h * 0.1, 0, Math.PI * 2); ctx.fill();
+    if (veh.type === 'taxi') {
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(-w * 0.05, bodyT - h * 0.16, w * 0.15, h * 0.15, h * 0.04); ctx.fill();
+      ctx.fillStyle = '#222';
+      for (let k = 0; k < 6; k++) if (k % 2 === 0) ctx.fillRect(-w / 2 + k * w / 6, bodyB - h * low * 0.95, w / 6, h * 0.09);
+    }
+    if (veh.type === 'police') {
+      const phase = Math.sin(state.t * (veh.fallState === 'in' ? 16 : 5)) > 0;
+      ctx.fillStyle = phase ? '#ff3344' : 'rgba(255,51,68,.3)'; ctx.beginPath(); ctx.roundRect(-w * 0.1, bodyT - h * 0.15, w * 0.09, h * 0.14, h * 0.03); ctx.fill();
+      ctx.fillStyle = phase ? 'rgba(51,102,255,.3)' : '#3366ff'; ctx.beginPath(); ctx.roundRect(0, bodyT - h * 0.15, w * 0.09, h * 0.14, h * 0.03); ctx.fill();
+      ctx.fillStyle = '#2a4a9e'; ctx.fillRect(-w / 2, bodyB - h * low * 0.62, w, h * 0.11);
+    }
+  }
+  ctx.restore();
+
+  if (veh.fallState === 'in') {
+    ctx.font = h * 0.6 + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const ind = veh.type === 'police' ? '🚨' : Math.sin(state.t * 10) > 0 ? '❗' : '🎵';
+    ctx.fillText(ind, x + jx, ground - h - wheelR - h * 0.5);
+  }
+}
+
+function draw(now) {
+  const v = v2();
+  // 天空
+  const g = ctx.createLinearGradient(0, 0, 0, H * ROAD);
+  g.addColorStop(0, '#5ec0e8'); g.addColorStop(1, '#d4f0ff');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * ROAD);
+
+  ctx.save();
+  if (state.shake > 0) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  // 太陽 + 雲
+  ctx.font = v * 0.085 + 'px serif';
+  ctx.fillText('🌞', W * 0.9, H * 0.1);
+  for (const c of clouds) { ctx.font = c.s * 2 * v + 'px serif'; ctx.fillText('☁️', c.x * W, c.y * H); }
+  // 遠方小鎮（在馬路後面）
+  ctx.font = v * 0.05 + 'px serif';
+  for (let i = 0; i < SKYLINE.length; i++) ctx.fillText(SKYLINE[i], W * (0.06 + i * 0.13), H * (ROAD - 0.05));
+
+  // 深地底（剖面）
+  const dg = ctx.createLinearGradient(0, H * ROAD, 0, H);
+  dg.addColorStop(0, '#c8923f'); dg.addColorStop(0.12, '#a9762e'); dg.addColorStop(0.5, '#8a5f24'); dg.addColorStop(1, '#5c3d16');
+  ctx.fillStyle = dg; ctx.fillRect(0, H * ROAD, W, H * (1 - ROAD));
+  // 地層線
+  ctx.strokeStyle = 'rgba(0,0,0,.08)'; ctx.lineWidth = v * 0.004;
+  for (let k = 1; k <= 3; k++) { const yy = H * ROAD + (H * (1 - ROAD)) * k / 4; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+  // 土裡小石頭點綴
+  ctx.fillStyle = 'rgba(255,255,255,.06)';
+  for (let i = 0; i < 22; i++) { const px = ((i * 137) % 100) / 100 * W; const py = H * (ROAD + 0.06 + (i % 6) * 0.06); ctx.beginPath(); ctx.arc(px, py, v * 0.006, 0, Math.PI * 2); ctx.fill(); }
+
+  // 地底埋的東西（沒挖到的給半透明線索；大石頭畫實）
+  for (const b of buried) {
+    if (b.done) continue;
+    const bx = b.x * W, by = H * ROAD + b.depth * MAX_DIG();
+    if (b.type === 'rock') {
+      ctx.fillStyle = '#6b6b6b';
+      ctx.beginPath(); ctx.ellipse(bx, by, v * 0.05, v * 0.035, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#7d7d7d';
+      ctx.beginPath(); ctx.ellipse(bx - v * 0.012, by - v * 0.01, v * 0.018, v * 0.012, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.globalAlpha = 0.4;
+      ctx.font = v * 0.045 + 'px serif';
+      ctx.fillText(b.type === 'pipe' ? '🔧' : b.type === 'treasure' ? '💎' : '🦴', bx, by);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 坑
+  for (const h of holes) drawHole(h);
+
+  // 車（在馬路上）
+  for (const veh of vehicles) drawVehicle(veh);
+
+  // 馬路面（薄薄一條柏油 + 中線）— 畫在車輪附近
+  ctx.fillStyle = 'rgba(40,40,46,.25)';
+  ctx.fillRect(0, H * ROAD, W, v * 0.012);
+  ctx.fillStyle = '#6fae3e'; ctx.fillRect(0, H * ROAD - v * 0.012, W, v * 0.014); // 草皮邊
+
+  // 工地台（挖土機站的高架平台）
+  const ly = H * LEDGE + v2() * 0.034;
+  ctx.fillStyle = '#8a7355';
+  ctx.fillRect(0, ly, W, v * 0.05);
+  ctx.fillStyle = '#6f5b42'; ctx.fillRect(0, ly + v * 0.05, W, v * 0.014);
+  ctx.fillStyle = '#7a6249';
+  ctx.fillRect(W * 0.08 - v * 0.016, ly + v * 0.05, v * 0.032, H * (ROAD - LEDGE) - v * 0.07);
+  ctx.fillRect(W * 0.92 - v * 0.016, ly + v * 0.05, v * 0.032, H * (ROAD - LEDGE) - v * 0.07);
+  // 警示條紋
+  for (let px = 0; px < W; px += v * 0.06) { ctx.fillStyle = (Math.floor(px / (v * 0.06)) % 2) ? '#ffcc33' : '#333'; ctx.fillRect(px, ly - v * 0.012, v * 0.06, v * 0.012); }
+
+  // 挖土機
+  drawDigger(state.diggerX * W, H * LEDGE);
+
+  // 瞄準輔助虛線（會挖/填在哪）
+  if (state.phase === 'play' && !state.paused) {
+    ctx.globalAlpha = 0.16 + Math.max(state.dig, state.fill) * 0.2;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = v * 0.004;
+    ctx.setLineDash([v * 0.015, v * 0.02]);
+    ctx.beginPath(); ctx.moveTo(state.diggerX * W, H * LEDGE); ctx.lineTo(state.diggerX * W, H * (ROAD + 0.3)); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+  }
+
+  // 粒子
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, p.life));
+    if (p.emoji) { ctx.font = p.size + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(p.emoji, p.x, p.y); }
+    else { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+
+  // 計數
+  if (state.phase === 'play') {
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold ' + Math.min(48, v * 0.062) + 'px "Microsoft JhengHei", sans-serif';
+    const label = '🕳️ ' + state.dropped + '   🪣 ' + state.rescued + '   ✨ ' + state.finds;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillText(label, 24 + 3, 50 + 3);
+    ctx.fillStyle = '#fff'; ctx.fillText(label, 24, 50);
+    ctx.textAlign = 'center';
+  }
+
+  // 動作提示
+  if (state.dig > 0.3 || state.fill > 0.3) {
+    const fillMode = state.fill > state.dig;
+    ctx.globalAlpha = Math.max(state.dig, state.fill);
+    ctx.font = 'bold ' + Math.min(40, v * 0.05) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(fillMode ? '🪣 填土！🪣' : '⛏️ 挖挖挖！⛏️', W / 2, H * 0.06);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+/* ================== 主迴圈 ================== */
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (state.phase !== 'menu') { update(dt, now); draw(now); }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -269,14 +269,24 @@ const state = {
 const items = [];     // { kind, lane, p, sub, hit, vy, spin } kind: coin|cone|hurt|magnet
 const particles = [];
 const clouds = [];
-const hills = [];
 let roadScroll = 0, spawnTimer = 0, sirenTimer = 0, magnetT = 0;
 
 const COIN_SUBS = ['🍬', '❤️', '🎈', '⭐', '🍭', '🧁'];
 const PRAISE = ['Great driving!', 'Super ambulance!', 'You saved them!', 'Wow, amazing!'];
 
-for (let i = 0; i < 6; i++) clouds.push({ x: Math.random(), y: 0.05 + Math.random() * 0.16, s: 0.05 + Math.random() * 0.05, sp: 0.003 + Math.random() * 0.006 });
-for (let i = 0; i < 10; i++) hills.push({ x: Math.random(), s: 0.5 + Math.random() * 0.9, tree: Math.random() < 0.5 });
+for (let i = 0; i < 5; i++) clouds.push({ x: Math.random(), y: 0.04 + Math.random() * 0.15, s: 0.04 + Math.random() * 0.04, sp: 0.002 + Math.random() * 0.004 });
+// 背景連綿丘陵（兩層，遠淡近濃）
+const hillLayers = [
+  { color: '#bfe3a0', shade: '#a9d589', y: 0.0, bumps: [] }, // 遠層（疊在地平線上方一點）
+  { color: '#9ed47a', shade: '#86c45f', y: 0.018, bumps: [] }, // 近層
+];
+for (const L of hillLayers) {
+  let x = -0.1;
+  while (x < 1.2) { L.bumps.push({ x, r: 0.10 + Math.random() * 0.16, h: 0.05 + Math.random() * 0.06 }); x += 0.10 + Math.random() * 0.12; }
+}
+// 路邊樹（沿著捲動週期擺放，兩側）
+const roadsideTrees = [];
+for (let i = 0; i < 9; i++) roadsideTrees.push({ off: i / 9, side: i % 2 === 0 ? -1 : 1, sz: 0.85 + Math.random() * 0.4, kind: Math.random() < 0.3 ? 'bush' : 'tree' });
 
 /* ================== 體感追蹤（MediaPipe Pose） ================== */
 const video = document.getElementById('cam');
@@ -648,44 +658,68 @@ function drawAmbulance(x, y, s, robot, tumble) {
   }
 
   // 車子形態（救護車，第三人稱車尾視角）
-  // 影子
-  ctx.fillStyle = 'rgba(0,0,0,.18)';
-  ctx.beginPath(); ctx.ellipse(0, 8 * s, 52 * s, 12 * s, 0, 0, Math.PI * 2); ctx.fill();
-  // 輪子
-  ctx.fillStyle = '#222';
-  ctx.beginPath(); ctx.roundRect(-50 * s, -10 * s, 16 * s, 22 * s, 5 * s); ctx.fill();
-  ctx.beginPath(); ctx.roundRect(34 * s, -10 * s, 16 * s, 22 * s, 5 * s); ctx.fill();
-  // 車身（白）
+  // 落地軟陰影
+  const sh = ctx.createRadialGradient(0, 10 * s, 0, 0, 10 * s, 56 * s);
+  sh.addColorStop(0, 'rgba(0,0,0,.28)'); sh.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = sh; ctx.beginPath(); ctx.ellipse(0, 10 * s, 56 * s, 14 * s, 0, 0, Math.PI * 2); ctx.fill();
+  // 輪子（胎 + 輪框）
+  for (const wx of [-42 * s, 42 * s]) {
+    ctx.fillStyle = '#1a1a1d';
+    ctx.beginPath(); ctx.roundRect(wx - 8 * s, -10 * s, 16 * s, 22 * s, 6 * s); ctx.fill();
+    ctx.fillStyle = '#3a3d44';
+    ctx.beginPath(); ctx.roundRect(wx - 5 * s, -4 * s, 10 * s, 12 * s, 3 * s); ctx.fill();
+  }
+  // 車身（白，立體漸層 + 邊緣陰影）
+  const body = ctx.createLinearGradient(0, -54 * s, 0, 2 * s);
+  body.addColorStop(0, '#ffffff'); body.addColorStop(0.6, '#f2f5f8'); body.addColorStop(1, '#d6dde4');
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.roundRect(-46 * s, -54 * s, 92 * s, 56 * s, 13 * s); ctx.fill();
+  // 側緣暗角（增加圓潤感）
+  ctx.strokeStyle = 'rgba(120,140,160,.35)'; ctx.lineWidth = 2 * s;
+  ctx.beginPath(); ctx.roundRect(-46 * s, -54 * s, 92 * s, 56 * s, 13 * s); ctx.stroke();
+  // 藍頂蓋（漸層）
+  const roof = ctx.createLinearGradient(0, -54 * s, 0, -34 * s);
+  roof.addColorStop(0, '#7fd3f0'); roof.addColorStop(1, '#3fa6d4');
+  ctx.fillStyle = roof;
+  ctx.beginPath(); ctx.roundRect(-46 * s, -54 * s, 92 * s, 20 * s, 13 * s); ctx.fill();
+  ctx.fillRect(-46 * s, -40 * s, 92 * s, 6 * s);
+  // 後窗（玻璃漸層 + 反光）
+  const glass = ctx.createLinearGradient(0, -34 * s, 0, -12 * s);
+  glass.addColorStop(0, '#d7f1ff'); glass.addColorStop(1, '#9cc7df');
+  ctx.fillStyle = glass;
+  ctx.beginPath(); ctx.roundRect(-32 * s, -33 * s, 64 * s, 22 * s, 7 * s); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.45)';
+  ctx.beginPath(); ctx.moveTo(-28 * s, -31 * s); ctx.lineTo(-8 * s, -31 * s); ctx.lineTo(-20 * s, -14 * s); ctx.lineTo(-30 * s, -14 * s); ctx.closePath(); ctx.fill();
+  // 笑臉（從後窗看到的可愛眼睛）
+  ctx.fillStyle = '#23303a';
+  ctx.beginPath(); ctx.arc(-12 * s, -24 * s, 4.2 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(12 * s, -24 * s, 4.2 * s, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#fff';
-  ctx.beginPath(); ctx.roundRect(-46 * s, -54 * s, 92 * s, 56 * s, 12 * s); ctx.fill();
-  // 藍頂蓋
-  ctx.fillStyle = '#5ec0e8';
-  ctx.beginPath(); ctx.roundRect(-46 * s, -54 * s, 92 * s, 18 * s, 12 * s); ctx.fill();
-  ctx.fillRect(-46 * s, -42 * s, 92 * s, 6 * s);
-  // 後窗
-  ctx.fillStyle = '#bde6ff';
-  ctx.beginPath(); ctx.roundRect(-32 * s, -34 * s, 64 * s, 22 * s, 6 * s); ctx.fill();
-  // 紅十字（車尾下方白色處）
+  ctx.beginPath(); ctx.arc(-13 * s, -25.5 * s, 1.4 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(11 * s, -25.5 * s, 1.4 * s, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#23303a'; ctx.lineWidth = 2.6 * s; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(0, -20 * s, 7 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
+  // 紅十字（車尾下方白色處，有底盤圓角）
   ctx.fillStyle = '#e23a5e';
   ctx.beginPath();
-  ctx.rect(-3 * s, -10 * s, 6 * s, 16 * s);  // 直
-  ctx.rect(-9 * s, -5 * s, 18 * s, 6 * s);   // 橫
+  ctx.roundRect(-3.2 * s, -10 * s, 6.4 * s, 16 * s, 1.5 * s);
+  ctx.roundRect(-9 * s, -5 * s, 18 * s, 6.4 * s, 1.5 * s);
   ctx.fill();
-  // 尾燈
-  ctx.fillStyle = '#ff5566';
-  ctx.beginPath(); ctx.arc(-38 * s, -6 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(38 * s, -6 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
-  // 笑臉（從後窗看到的可愛眼睛）
-  ctx.fillStyle = '#234';
-  ctx.beginPath(); ctx.arc(-12 * s, -24 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.arc(12 * s, -24 * s, 4 * s, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#234'; ctx.lineWidth = 2.5 * s; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(0, -20 * s, 7 * s, 0.15 * Math.PI, 0.85 * Math.PI); ctx.stroke();
-  // 頂上警示燈（紅藍閃）
-  ctx.fillStyle = blink ? '#ff3344' : 'rgba(255,51,68,.35)';
-  ctx.beginPath(); ctx.roundRect(-18 * s, -62 * s, 14 * s, 9 * s, 3 * s); ctx.fill();
-  ctx.fillStyle = blink ? 'rgba(51,102,255,.35)' : '#3366ff';
-  ctx.beginPath(); ctx.roundRect(4 * s, -62 * s, 14 * s, 9 * s, 3 * s); ctx.fill();
+  // 保險桿
+  ctx.fillStyle = '#c3ccd4';
+  ctx.beginPath(); ctx.roundRect(-44 * s, -2 * s, 88 * s, 5 * s, 2.5 * s); ctx.fill();
+  // 尾燈（發光）
+  for (const lx of [-38 * s, 38 * s]) {
+    const lg = ctx.createRadialGradient(lx, -6 * s, 0, lx, -6 * s, 6 * s);
+    lg.addColorStop(0, '#ff8090'); lg.addColorStop(1, '#d61f3a');
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.arc(lx, -6 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+  }
+  // 頂上警示燈（紅藍閃 + 發光暈）
+  const lampR = blink ? '#ff3344' : '#8a2230', lampB = blink ? '#2240aa' : '#3366ff';
+  if (blink) { ctx.fillStyle = 'rgba(255,60,80,.4)'; ctx.beginPath(); ctx.arc(-11 * s, -58 * s, 12 * s, 0, Math.PI * 2); ctx.fill(); }
+  else { ctx.fillStyle = 'rgba(60,110,255,.4)'; ctx.beginPath(); ctx.arc(11 * s, -58 * s, 12 * s, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = lampR; ctx.beginPath(); ctx.roundRect(-18 * s, -62 * s, 14 * s, 9 * s, 3 * s); ctx.fill();
+  ctx.fillStyle = lampB; ctx.beginPath(); ctx.roundRect(4 * s, -62 * s, 14 * s, 9 * s, 3 * s); ctx.fill();
   ctx.restore();
 }
 
@@ -696,6 +730,11 @@ function drawItem(it) {
   if (it.vy) y += it.vy * 4;          // 被撞飛
   ctx.save();
   ctx.globalAlpha = it.hit && !it.smashed ? 0 : 1;
+  // 地面軟陰影（讓物件踩在路上）
+  if (!it.smashed && it.p > 0.12) {
+    ctx.fillStyle = 'rgba(0,0,0,.20)';
+    ctx.beginPath(); ctx.ellipse(pr.x, pr.y, s * 0.7, s * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+  }
   if (it.kind === 'coin') {
     const fy = Math.sin((it.bob || 0)) * 4 * pr.scale;
     ctx.font = (s * 2.6) + 'px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -729,78 +768,176 @@ function drawItem(it) {
 
 const v2 = () => Math.min(W, H);
 
+function softCloud(cx, cy, r) {
+  const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.7, 'rgba(255,255,255,.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, r, r * 0.62, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx - r * 0.6, cy + r * 0.12, r * 0.6, r * 0.42, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx + r * 0.62, cy + r * 0.1, r * 0.62, r * 0.44, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+function drawTree(x, groundY, sz, kind) {
+  if (sz <= 0.001) return;
+  // 影子
+  ctx.fillStyle = 'rgba(30,60,20,.18)';
+  ctx.beginPath(); ctx.ellipse(x, groundY, sz * 0.55, sz * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+  if (kind === 'bush') {
+    const g = ctx.createRadialGradient(x - sz * 0.2, groundY - sz * 0.6, sz * 0.1, x, groundY - sz * 0.4, sz * 0.7);
+    g.addColorStop(0, '#9bd86a'); g.addColorStop(1, '#5fa436');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, groundY - sz * 0.35, sz * 0.55, sz * 0.4, 0, 0, Math.PI * 2); ctx.fill();
+    return;
+  }
+  // 樹幹
+  ctx.fillStyle = '#8a5a32';
+  ctx.beginPath(); ctx.roundRect(x - sz * 0.07, groundY - sz * 0.85, sz * 0.14, sz * 0.85, sz * 0.05); ctx.fill();
+  // 樹冠（三球疊出層次 + 立體漸層）
+  const cg = ctx.createRadialGradient(x - sz * 0.25, groundY - sz * 1.3, sz * 0.1, x, groundY - sz * 1.0, sz * 0.95);
+  cg.addColorStop(0, '#7fc94a'); cg.addColorStop(1, '#3f8c2c');
+  ctx.fillStyle = cg;
+  ctx.beginPath();
+  ctx.arc(x, groundY - sz * 1.25, sz * 0.5, 0, Math.PI * 2);
+  ctx.arc(x - sz * 0.42, groundY - sz * 0.95, sz * 0.42, 0, Math.PI * 2);
+  ctx.arc(x + sz * 0.42, groundY - sz * 0.95, sz * 0.42, 0, Math.PI * 2);
+  ctx.arc(x, groundY - sz * 0.8, sz * 0.5, 0, Math.PI * 2);
+  ctx.fill();
+}
+
 function draw(now) {
   const v = v2();
   const hy = H * HORIZON;
-  // 天空
-  const g = ctx.createLinearGradient(0, 0, 0, hy);
-  g.addColorStop(0, '#5ec0e8'); g.addColorStop(1, '#d4f0ff');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, hy);
+  // 天空（柔和漸層）
+  const g = ctx.createLinearGradient(0, 0, 0, hy + H * 0.05);
+  g.addColorStop(0, '#3aa6dc'); g.addColorStop(0.6, '#7fd0ef'); g.addColorStop(1, '#dff4ff');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, hy + 2);
 
   ctx.save();
   if (state.shake > 0) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
 
-  // 太陽 + 雲
-  ctx.font = v * 0.08 + 'px serif';
-  ctx.fillText('🌞', W * 0.88, H * 0.1);
-  for (const c of clouds) { ctx.font = c.s * 2 * v + 'px serif'; ctx.fillText('☁️', c.x * W, c.y * H); }
+  // 太陽（光暈 + 本體）
+  const sunX = W * 0.82, sunY = H * 0.12, sunR = v * 0.05;
+  const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR * 4);
+  halo.addColorStop(0, 'rgba(255,247,200,.55)'); halo.addColorStop(1, 'rgba(255,247,200,0)');
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(sunX, sunY, sunR * 4, 0, Math.PI * 2); ctx.fill();
+  const sun = ctx.createRadialGradient(sunX - sunR * 0.3, sunY - sunR * 0.3, sunR * 0.2, sunX, sunY, sunR);
+  sun.addColorStop(0, '#fffdf0'); sun.addColorStop(1, '#ffe27a');
+  ctx.fillStyle = sun; ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2); ctx.fill();
 
-  // 草地（地平線以下整片）
+  // 雲（柔邊）
+  for (const c of clouds) softCloud(c.x * W, c.y * H, c.s * v);
+
+  // 連綿丘陵（兩層，遠淡近濃）
+  for (const L of hillLayers) {
+    const baseY = hy + L.y * H;
+    ctx.fillStyle = L.color;
+    ctx.beginPath(); ctx.moveTo(-50, baseY + 4);
+    for (const b of L.bumps) {
+      ctx.quadraticCurveTo((b.x - b.r * 0.5) * W, baseY - b.h * H, b.x * W, baseY - b.h * H * 0.7);
+      ctx.quadraticCurveTo((b.x + b.r * 0.5) * W, baseY - b.h * H * 0.4, (b.x + b.r) * W, baseY + 4);
+    }
+    ctx.lineTo(W + 50, baseY + 4); ctx.lineTo(W + 50, baseY + H); ctx.lineTo(-50, baseY + H); ctx.closePath(); ctx.fill();
+  }
+
+  // 草地（地平線以下整片，立體漸層）
   const gg = ctx.createLinearGradient(0, hy, 0, H);
-  gg.addColorStop(0, '#8fd06a'); gg.addColorStop(1, '#5a9e36');
-  ctx.fillStyle = gg; ctx.fillRect(0, hy, W, H - hy);
+  gg.addColorStop(0, '#86c95f'); gg.addColorStop(0.5, '#6fb544'); gg.addColorStop(1, '#4f9233');
+  ctx.fillStyle = gg; ctx.fillRect(0, hy + H * 0.018, W, H - hy);
 
-  // 遠方丘陵/樹（沿地平線）
-  ctx.font = v * 0.05 + 'px serif';
-  for (const hl of hills) ctx.fillText(hl.tree ? '🌲' : '⛰️', hl.x * W, hy - v * 0.01);
+  // 地平線霧（景深）
+  const haze = ctx.createLinearGradient(0, hy - H * 0.02, 0, hy + H * 0.10);
+  haze.addColorStop(0, 'rgba(223,244,255,.0)'); haze.addColorStop(0.4, 'rgba(223,244,255,.55)'); haze.addColorStop(1, 'rgba(223,244,255,0)');
+  ctx.fillStyle = haze; ctx.fillRect(0, hy - H * 0.02, W, H * 0.12);
 
-  // 馬路（梯形：地平線中心 → 畫面下方張開）
-  const top = project(0, 0), botL = project(1, -1), botR = project(1, 1);
-  ctx.fillStyle = '#7a8088';
+  // ===== 馬路 =====
+  const top = project(0, 0), botL = project(1, -1.06), botR = project(1, 1.06);
+  // 路肩（深色土邊）
+  ctx.fillStyle = '#caa66a';
+  ctx.beginPath();
+  ctx.moveTo(W / 2 - top.half * 1.18, hy); ctx.lineTo(W / 2 + top.half * 1.18, hy);
+  ctx.lineTo(project(1, 1.22).x, botR.y); ctx.lineTo(project(1, -1.22).x, botL.y);
+  ctx.closePath(); ctx.fill();
+  // 柏油路面（梯形 + 漸層：遠淡近濃）
+  const roadGrad = ctx.createLinearGradient(0, hy, 0, H);
+  roadGrad.addColorStop(0, '#8b9199'); roadGrad.addColorStop(0.5, '#5c626b'); roadGrad.addColorStop(1, '#474d56');
+  ctx.fillStyle = roadGrad;
   ctx.beginPath();
   ctx.moveTo(W / 2 - top.half, hy);
   ctx.lineTo(W / 2 + top.half, hy);
   ctx.lineTo(botR.x, botR.y);
   ctx.lineTo(botL.x, botL.y);
   ctx.closePath(); ctx.fill();
+  // 路中央高光（路拱反光）— 裁切在路面內
+  ctx.save(); ctx.clip();
+  const cr = ctx.createRadialGradient(W / 2, H * 0.95, 0, W / 2, H * 0.95, W * 0.5);
+  cr.addColorStop(0, 'rgba(255,255,255,.10)'); cr.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = cr; ctx.fillRect(0, hy, W, H);
 
-  // 路面速度感橫條（明暗交替，跟著捲動）
-  for (let k = 0; k < 16; k++) {
-    const p = ((k / 16) + roadScroll) % 1;
-    const a = project(p, -1), b = project(p, 1);
-    if (Math.floor((k + roadScroll * 16)) % 2 === 0) {
-      const c = project(Math.min(1, p + 0.5 / 16), -1), d = project(Math.min(1, p + 0.5 / 16), 1);
-      ctx.fillStyle = 'rgba(255,255,255,.04)';
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
-    }
+  // 速度感橫條（柏油明暗交替）
+  for (let k = 0; k < 18; k++) {
+    const p = ((k / 18) + roadScroll) % 1;
+    if (Math.floor((k + roadScroll * 18)) % 2 !== 0) continue;
+    const a = project(p, -1.06), b = project(p, 1.06);
+    const p2 = Math.min(1, p + 0.5 / 18);
+    const c = project(p2, -1.06), d = project(p2, 1.06);
+    ctx.fillStyle = 'rgba(0,0,0,.06)';
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.lineTo(d.x, d.y); ctx.lineTo(c.x, c.y); ctx.closePath(); ctx.fill();
   }
+  ctx.restore();
 
-  // 車道分隔虛線（兩條內線）
-  for (const ln of [-0.33, 0.33]) {
-    for (let k = 0; k < 14; k++) {
-      const p = ((k / 14) + roadScroll) % 1;
-      if (p < 0.02) continue;
-      const a = project(p, ln), b = project(Math.min(1, p + 0.03), ln);
-      ctx.strokeStyle = 'rgba(255,255,255,.85)';
-      ctx.lineWidth = Math.max(1, a.scale * v * 0.012);
+  // 車道分隔虛線（兩條內線，近端較寬）
+  for (const ln of [-0.34, 0.34]) {
+    for (let k = 0; k < 16; k++) {
+      const p = ((k / 16) + roadScroll) % 1;
+      if (p < 0.03) continue;
+      const a = project(p, ln), b = project(Math.min(1, p + 0.035), ln);
+      ctx.strokeStyle = 'rgba(255,240,200,.9)';
+      ctx.lineCap = 'round'; ctx.lineWidth = Math.max(1, a.scale * v * 0.014);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
   }
-  // 路邊線
+  // 路邊白實線
   for (const ln of [-1, 1]) {
-    const a = project(0.02, ln), b = project(1, ln);
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = v * 0.006;
+    const a = project(0.03, ln), b = project(1, ln);
+    ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineCap = 'round'; ctx.lineWidth = v * 0.007;
     ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
   }
-  // 白柵欄（兩側）
-  for (const side of [-1.18, 1.18]) {
-    for (let k = 0; k < 12; k++) {
-      const p = ((k / 12) + roadScroll) % 1;
-      if (p < 0.04) continue;
+
+  // ===== 路邊樹（兩側，會由遠到近長大；近端先畫被後畫蓋住=正確遮擋）=====
+  const treeList = [];
+  for (const t of roadsideTrees) {
+    const p = ((t.off + roadScroll * 0.5) % 1);
+    if (p < 0.05) continue;
+    const pr = project(p, t.side * 1.42);
+    treeList.push({ x: pr.x, y: pr.y, sz: pr.scale * v * 0.09 * t.sz, kind: t.kind, p });
+  }
+  treeList.sort((a, b) => a.p - b.p);
+  for (const t of treeList) drawTree(t.x, t.y, t.sz, t.kind);
+
+  // ===== 白色柵欄（兩側，欄杆 + 立柱，有遠近）=====
+  for (const side of [-1.12, 1.12]) {
+    // 連續上下兩條欄杆
+    for (const railH of [0.045, 0.085]) {
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.lineWidth = Math.max(1, v * 0.006);
+      ctx.beginPath();
+      let started = false;
+      for (let k = 0; k <= 40; k++) {
+        const p = 0.04 + (k / 40) * 0.96;
+        const a = project(p, side);
+        const yy = a.y - a.scale * v * railH;
+        if (!started) { ctx.moveTo(a.x, yy); started = true; } else ctx.lineTo(a.x, yy);
+      }
+      ctx.stroke();
+    }
+    // 立柱
+    for (let k = 0; k < 14; k++) {
+      const p = ((k / 14) + roadScroll) % 1;
+      if (p < 0.05) continue;
       const a = project(p, side);
-      ctx.fillStyle = 'rgba(255,255,255,.9)';
-      const fw = a.scale * v * 0.02, fh = a.scale * v * 0.06;
+      ctx.fillStyle = 'rgba(255,255,255,.92)';
+      const fw = Math.max(1, a.scale * v * 0.012), fh = a.scale * v * 0.095;
       ctx.fillRect(a.x - fw / 2, a.y - fh, fw, fh);
     }
   }

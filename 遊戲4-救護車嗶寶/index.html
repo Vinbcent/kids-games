@@ -203,7 +203,8 @@ function sayT(key, text, gap = 2500) {
 }
 
 /* ================== 世界座標 ================== */
-const LANE_W = 2.4;            // 車道間距
+const LANE_W = 3.05;           // 車道間距（加寬）
+const ROAD_W = LANE_W * 3 + 2.0;
 const LANES = [-1, 0, 1];      // 車道索引
 const SPAWN_Z = -98;           // 物件生成的遠方 z
 const DESPAWN_Z = 10;          // 通過後移除
@@ -213,7 +214,7 @@ const PLAYER_Z = 0;
 const state = {
   phase: 'menu', mode: null,
   laneX: 0, targetLane: 0,
-  speed: 0.62, dist: 0,
+  speed: 0.5, dist: 0,
   score: 0, coins: 0, rescued: 0,
   charge: 0, robot: 0, invuln: 0, crash: 0, crashSpin: 0,
   bob: 0, t: 0, shake: 0, paused: false,
@@ -297,18 +298,18 @@ function makeRoadTex() {
   x.fillStyle = '#5b626c'; x.fillRect(0, 0, 128, 512);
   // 柏油雜點
   for (let i = 0; i < 700; i++) { x.fillStyle = `rgba(${Math.random()<.5?80:40},${Math.random()<.5?86:46},96,.25)`; x.fillRect(Math.random()*128, Math.random()*512, 2, 2); }
-  // 邊線（白實線）
+  const u = wx => (wx / ROAD_W + 0.5) * 128; // 世界 x → 貼圖像素
+  // 邊線（白實線，畫在最外側車道邊緣）
   x.fillStyle = 'rgba(255,255,255,.92)';
-  x.fillRect(12, 0, 4, 512); x.fillRect(112, 0, 4, 512);
-  // 車道虛線（黃）
+  x.fillRect(u(-LANE_W * 1.5) - 2, 0, 4, 512); x.fillRect(u(LANE_W * 1.5) - 2, 0, 4, 512);
+  // 車道虛線（黃，畫在三車道之間的兩條分隔）
   x.fillStyle = 'rgba(255,225,120,.95)';
-  for (const lx of [44, 84]) for (let y = 0; y < 512; y += 64) x.fillRect(lx - 2.5, y, 5, 36);
+  for (const lx of [-LANE_W * 0.5, LANE_W * 0.5]) for (let y = 0; y < 512; y += 64) x.fillRect(u(lx) - 2.5, y, 5, 36);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 26); t.anisotropy = 4;
   return t;
 }
 const roadTex = makeRoadTex();
-const ROAD_W = LANE_W * 3 + 1.8;
 const road = new THREE.Mesh(new THREE.PlaneGeometry(ROAD_W, 330), new THREE.MeshToonMaterial({ map: roadTex, gradientMap: gradMap }));
 road.rotation.x = -Math.PI / 2; road.position.set(0, 0, -145);
 scene.add(road);
@@ -543,7 +544,7 @@ function clearItems() { for (const it of items) scene.remove(it.obj); items.leng
 function startCountdown() {
   state.phase = 'countdown';
   clearItems();
-  state.laneX = 0; state.targetLane = 0; state.speed = 0.62; state.dist = 0;
+  state.laneX = 0; state.targetLane = 0; state.speed = 0.5; state.dist = 0;
   state.score = 0; state.coins = 0; state.rescued = 0; state.charge = 0;
   state.robot = 0; state.invuln = 0; state.crash = 0;
   document.getElementById('hud').style.display = 'block';
@@ -668,12 +669,12 @@ function update(dt, now) {
   if (magnetT > 0) magnetT -= dt;
   if (state.crash > 0) { state.crash -= dt; state.crashSpin += dt * 14; }
 
-  let targetSpeed = 0.62 + Math.min(0.5, state.dist * 0.004);
-  if (state.robot > 0) targetSpeed *= 1.6;
+  let targetSpeed = 0.5 + Math.min(0.38, state.dist * 0.0028);
+  if (state.robot > 0) targetSpeed *= 1.55;
   if (state.crash > 0) targetSpeed *= 0.25;
   state.speed += (targetSpeed - state.speed) * Math.min(1, dt * 3);
   state.dist += state.speed * dt * 2.2;
-  const moveSpeed = state.speed * 30;
+  const moveSpeed = state.speed * 23;
   roadScroll += moveSpeed * dt;
   roadTex.offset.y = -roadScroll * 0.0125;
   engineSfx.setFreq(220 + state.speed * 240);

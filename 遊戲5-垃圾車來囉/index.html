@@ -440,11 +440,39 @@ function buildCarBase(color, low) {
   addWheels(g, [[-0.8, -0.7], [0.8, -0.7], [-0.8, 0.7], [0.8, 0.7]], 0.32);
   return g;
 }
+function buildScooter() {
+  const g = new THREE.Group();
+  const col = pick([0xff5555, 0x33cccc, 0xffffff, 0xe0457a, 0x4a4a4a]);
+  const panel = toon(col), dark = toon(0x2a2d33), seatM = toon(0x1e2126), legM = toon(0x3b5ba0), shirt = toon(0x5a6b8c);
+  // 前後輪（前=+x）
+  const wg = new THREE.CylinderGeometry(0.32, 0.32, 0.16, 14);
+  for (const wx of [0.62, -0.62]) { const w = new THREE.Mesh(wg, dark); w.rotation.x = Math.PI / 2; w.position.set(wx, 0.32, 0); g.add(w); }
+  const floor = new THREE.Mesh(new RoundedBoxGeometry(0.7, 0.12, 0.42, 2, 0.05), panel); floor.position.set(-0.05, 0.42, 0); g.add(floor);
+  const cowl = new THREE.Mesh(new RoundedBoxGeometry(0.72, 0.5, 0.44, 3, 0.14), panel); cowl.position.set(-0.42, 0.72, 0); g.add(cowl);
+  const seat = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.16, 0.4, 2, 0.07), seatM); seat.position.set(-0.35, 1.0, 0); g.add(seat);
+  const shield = new THREE.Mesh(new RoundedBoxGeometry(0.16, 0.9, 0.44, 3, 0.08), panel); shield.position.set(0.5, 0.86, 0); shield.rotation.z = 0.3; g.add(shield);
+  const light = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), basic(0xfff3b0)); light.position.set(0.64, 0.72, 0); g.add(light);
+  const colm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 6), dark); colm.position.set(0.5, 1.25, 0); colm.rotation.z = 0.28; g.add(colm);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.62, 6), dark); bar.position.set(0.58, 1.5, 0); bar.rotation.x = Math.PI / 2; g.add(bar);
+  // 騎士
+  for (const sz of [-0.16, 0.16]) {
+    const thigh = new THREE.Mesh(new RoundedBoxGeometry(0.5, 0.15, 0.15, 2, 0.06), legM); thigh.position.set(-0.02, 0.62, sz); g.add(thigh);
+    const shin = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.3, 0.15, 2, 0.06), legM); shin.position.set(0.24, 0.5, sz); g.add(shin);
+  }
+  const torso = new THREE.Mesh(new RoundedBoxGeometry(0.44, 0.62, 0.38, 3, 0.12), shirt); torso.position.set(-0.26, 1.42, 0); torso.rotation.z = 0.28; g.add(torso);
+  for (const sz of [-0.19, 0.19]) { const arm = new THREE.Mesh(new RoundedBoxGeometry(0.52, 0.13, 0.13, 2, 0.05), shirt); arm.position.set(0.14, 1.52, sz); arm.rotation.z = 0.6; g.add(arm); }
+  const head = new THREE.Group();
+  const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 12), toon(pick([0xf2c94c, 0xe0457a, 0xffffff, 0x33cccc]))); head.add(helmet);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.13, 0.3), toon(0x22303a)); visor.position.set(0.2, -0.02, 0); head.add(visor);
+  head.position.set(-0.06, 1.78, 0); g.add(head);
+  g.userData.head = head;
+  return g;
+}
 const TRAFFIC = {
   car:    { build: () => buildCarBase(pick([0xff5555, 0x4488ff, 0x66cc66, 0xff9944, 0xcc66cc, 0xffffff]), false), sfx: sfxHonkCar,  face: '😤', act: 'wiper' },
   taxi:   { build: () => { const g = buildCarBase(0xffcc22, false); const s = makeLabelSprite('TAXI', '#333', 3); s.scale.set(1.1,0.37,1); s.position.set(0,1.6,0); g.add(s); return g; }, sfx: sfxHonkTaxi, face: '😠', act: 'blink' },
   bus:    { build: () => { const g = new THREE.Group(); const body = new THREE.Mesh(new RoundedBoxGeometry(4.4, 1.7, 1.8, 3, 0.2), toon(0x3a9bd6)); body.position.y = 1.1; g.add(body); for (let k=0;k<5;k++){ const w=new THREE.Mesh(new THREE.PlaneGeometry(0.55,0.6), toon(GLASS)); w.position.set(-1.7+k*0.8,1.3,0.91); g.add(w);} addWheels(g,[[-1.5,-0.8],[1.5,-0.8],[-1.5,0.8],[1.5,0.8]],0.4); return g; }, sfx: sfxHonkBus, face: '😮', act: 'smoke' },
-  scooter:{ build: () => { const g = new THREE.Group(); const body = new THREE.Mesh(new RoundedBoxGeometry(1.3, 0.35, 0.4, 2, 0.12), toon(pick([0xff5555,0x33cccc,0xffffff,0x888888]))); body.position.y = 0.55; g.add(body); const torso = new THREE.Mesh(new RoundedBoxGeometry(0.4,0.6,0.35,2,0.1), toon(0x5a6b8c)); torso.position.set(-0.15,1.05,0); g.add(torso); const head = new THREE.Mesh(new THREE.SphereGeometry(0.22,10,8), toon(0xf2c94c)); head.position.set(-0.15,1.5,0); g.add(head); g.userData.head = head; addWheels(g,[[0.5,0],[-0.5,0]],0.3); return g; }, sfx: sfxHonkScoot, face: '😵', act: 'wobble' },
+  scooter:{ build: buildScooter, sfx: sfxHonkScoot, face: '😵', act: 'wobble' },
   police: { build: () => { const g = buildCarBase(0xeef2f6, false); const bar = new THREE.Group(); const r=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.16,0.4), basic(0xff3344)); r.position.x=-0.25; const b=new THREE.Mesh(new THREE.BoxGeometry(0.4,0.16,0.4), basic(0x3366ff)); b.position.x=0.25; bar.add(r); bar.add(b); bar.position.set(-0.1,1.5,0); g.add(bar); g.userData.bar={r,b}; const s=makeLabelSprite('警','#2244aa',1); s.scale.set(0.6,0.6,1); s.position.set(0,0.7,0.81); g.add(s); return g; }, sfx: sfxSiren, face: '🚨', act: 'police' },
 };
 const TRAFFIC_KEYS = ['car', 'car', 'car', 'taxi', 'bus', 'scooter', 'scooter', 'police'];

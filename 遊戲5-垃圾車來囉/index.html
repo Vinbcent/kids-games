@@ -77,6 +77,16 @@
   #countdown { position: fixed; inset: 0; z-index: 28; display: none; align-items: center; justify-content: center; pointer-events: none; }
   #countdown span { font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffee44;
     text-shadow: 0 0 50px #ff8800, 0 4px 10px rgba(0,0,0,.5); }
+
+  /* 垃圾狂歡 disco 彩光 */
+  #frenzyFx { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity .25s; mix-blend-mode: screen;
+    background:
+      radial-gradient(circle at 18% 28%, rgba(255,80,80,.30), transparent 42%),
+      radial-gradient(circle at 82% 36%, rgba(80,170,255,.30), transparent 42%),
+      radial-gradient(circle at 50% 82%, rgba(120,255,120,.26), transparent 46%),
+      radial-gradient(circle at 50% 50%, rgba(255,220,80,.14), transparent 60%); }
+  #frenzyFx.on { opacity: 1; animation: disco .7s linear infinite; }
+  @keyframes disco { to { filter: hue-rotate(360deg); } }
 </style>
 <script type="importmap">
 {
@@ -89,6 +99,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="frenzyFx"></div>
 
 <div id="hud">
   <div id="hudL"><span id="hScore">✅ 0</span><span id="hCombo"></span><span id="hMis">😜 0</span></div>
@@ -117,7 +128,7 @@
   <h1>垃圾車來囉</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
-  <div class="hint">🎵《給愛麗絲》響起，垃圾車來囉！左右移動去追車，<b>用力揮手</b>把垃圾丟進對的車斗：<br>❤️ 一般垃圾 → 紅色垃圾車　💚 資源回收 → 綠色回收車<br>丟到路上的車車會有各種好笑反應 😆　集滿歡樂能量<b>雙手高舉</b>放「垃圾狂歡」！<br>影像只在裝置上運算，不會上傳。</div>
+  <div class="hint">🎵《給愛麗絲》響起，垃圾車來囉！左右移動去追車，<b>用力揮手</b>把垃圾丟進對的車斗：<br>❤️ 一般垃圾 → 紅色垃圾車　💚 資源回收 → 綠色回收車<br>丟到路上的車車會有各種好笑反應 😆　集滿歡樂能量<b>雙手高舉</b>變身垃圾桶機器人 ♻️🤖 放「垃圾狂歡」火力全開！<br>影像只在裝置上運算，不會上傳。</div>
 </div>
 
 <script type="module">
@@ -374,6 +385,34 @@ function makeItemMesh(item, scale = 1) {
   g.scale.setScalar(scale); return g;
 }
 
+/* ================== 變身：垃圾桶機器人（垃圾狂歡時登場） ================== */
+let hero = null, heroArmL = null, heroArmR = null, heroHalo = null;
+function buildHero() {
+  const g = new THREE.Group();
+  const steel = toon(0xbfc7cf), green = toon(RECY_COL), gold = toon(0xffcf3f), dark = toon(0x2a2d33);
+  for (const sx of [-0.28, 0.28]) {
+    const l = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.62, 0.34, 3, 0.12), dark); l.position.set(sx, 0.33, 0); g.add(l);
+    const f = new THREE.Mesh(new RoundedBoxGeometry(0.44, 0.2, 0.52, 2, 0.08), dark); f.position.set(sx, 0.1, 0.1); g.add(f);
+  }
+  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.56, 0.5, 1.25, 18), green); torso.position.y = 1.28; g.add(torso);
+  for (const yy of [0.95, 1.6]) { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.57, 0.05, 8, 22), steel); ring.position.y = yy; ring.rotation.x = Math.PI / 2; g.add(ring); }
+  const rec = emojiSprite('♻️', 0.62); rec.position.set(0, 1.25, 0.58); g.add(rec);
+  const head = new THREE.Mesh(new RoundedBoxGeometry(0.72, 0.5, 0.72, 3, 0.14), steel); head.position.y = 2.2; g.add(head);
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.16, 0.06), basic(0x33e0ff)); visor.position.set(0, 2.25, 0.37); g.add(visor);
+  const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.32, 6), steel); ant.position.set(0, 2.62, 0); g.add(ant);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 6), basic(0xffcc33)); bulb.position.set(0, 2.8, 0); g.add(bulb);
+  for (const [side, holder] of [[-1, 'L'], [1, 'R']]) {
+    const pivot = new THREE.Group(); pivot.position.set(side * 0.62, 1.75, 0);
+    const arm = new THREE.Mesh(new RoundedBoxGeometry(0.22, 0.72, 0.22, 3, 0.09), steel); arm.position.y = -0.3; pivot.add(arm);
+    const glove = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), gold); glove.position.y = -0.66; pivot.add(glove);
+    g.add(pivot);
+    if (holder === 'L') heroArmL = pivot; else heroArmR = pivot;
+  }
+  heroHalo = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.09, 10, 28), new THREE.MeshBasicMaterial({ color: 0xffcf3f })); heroHalo.position.y = 2.95; heroHalo.rotation.x = Math.PI / 2.3; g.add(heroHalo);
+  g.scale.setScalar(1.15); g.visible = false;
+  return g;
+}
+
 /* ================== 收集車：垃圾車(紅) / 回收車(綠) ================== */
 function addWheels(g, coords, r) {
   const wg = new THREE.CylinderGeometry(r, r, 0.42, 12);
@@ -594,6 +633,7 @@ document.getElementById('btnTouch').addEventListener('click', () => begin('touch
 document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
 
 if (!kid) { kid = buildKid(); scene.add(kid); }
+if (!hero) { hero = buildHero(); scene.add(hero); }
 function startCountdown() {
   state.phase = 'countdown';
   state.score = 0; state.combo = 0; state.mischief = 0; state.energy = 0; state.level = 0; state.frenzy = 0;
@@ -633,6 +673,17 @@ function doThrow(strength = 1) {
   projectiles.push(p);
   throwGlow = 1; kidThrowAnim = 1; sfxThrow();
   held = queue.shift(); queue.push(nextItem()); refreshHeld();
+}
+// 垃圾狂歡：機器人自動連發（一定命中最近車斗）
+function autoThrow() {
+  let best = null, bd = 1e9;
+  for (const tr of trucks) { const d = Math.abs(tr.binX - state.kidX); if (d < bd) { bd = d; best = tr; } }
+  if (!best) return;
+  const item = nextItem();
+  const obj = makeItemMesh(item, 1);
+  obj.position.set(state.kidX + (Math.random() - 0.5) * 0.8, 1.9, 0.2);
+  scene.add(obj);
+  projectiles.push({ item, target: { kind: 'truck', ref: best }, obj, st: 'fly', spin: 0, vx: 0, vy: 0, vz: 0 });
 }
 
 /* ================== 特效 ================== */
@@ -695,7 +746,7 @@ function compact(tr) {
 }
 
 /* ================== 更新 ================== */
-let kidThrowAnim = 0;
+let kidThrowAnim = 0, frenzyShootT = 0;
 function update(dt, now) {
   state.t += dt;
 
@@ -721,8 +772,13 @@ function update(dt, now) {
 
   // 放大絕：雙手高舉(體感) 或 點畫面上方(觸控)
   const wantFrenzy = (state.mode === 'body' ? armsUp : tapFrenzy); tapFrenzy = false;
-  if (wantFrenzy && state.energy >= 1 && state.frenzy <= 0) { state.frenzy = 7; state.energy = 0; sfxFrenzy(); fireworks3(); state.shake = 8; sayT('frenzy', 'Trash party! Woohoo!'); }
-  if (state.frenzy > 0) state.frenzy -= dt;
+  if (wantFrenzy && state.energy >= 1 && state.frenzy <= 0) { state.frenzy = 7; state.energy = 0; frenzyShootT = 0; sfxFrenzy(); fireworks3(); state.shake = 10; sayT('frenzy', 'Trash hero! Woohoo!'); }
+  if (state.frenzy > 0) {
+    state.frenzy -= dt;
+    frenzyShootT -= dt;
+    if (frenzyShootT <= 0 && !state.paused && state.phase === 'play') { autoThrow(); frenzyShootT = 0.14; }
+  }
+  document.getElementById('frenzyFx').classList.toggle('on', state.frenzy > 0);
 
   state.kidX += (state.kidTargetX - state.kidX) * Math.min(1, dt * 6);
   kidThrowAnim = Math.max(0, kidThrowAnim - dt * 3);
@@ -829,14 +885,28 @@ function recycleTraffic(v) {
 
 /* ================== 呈現 ================== */
 function syncVisual(dt) {
+  const frenzy = state.frenzy > 0;
+  kid.visible = !frenzy;
   kid.position.x = state.kidX;
   kid.position.y = Math.abs(Math.sin(state.t * 3)) * 0.03;
   kidArmPivot.rotation.z = -kidThrowAnim * 2.4;   // 揮手高舉
   kidArmPivot.rotation.x = -kidThrowAnim * 0.6;
-  // 相機跟隨
+  // 變身機器人
+  hero.visible = frenzy;
+  if (frenzy) {
+    hero.position.set(state.kidX, Math.abs(Math.sin(state.t * 6)) * 0.07, 0);
+    hero.rotation.y = Math.sin(state.t * 3) * 0.18;
+    hero.scale.setScalar(1.15 + Math.sin(state.t * 12) * 0.05);
+    const sw = Math.sin(state.t * 18);
+    if (heroArmL) heroArmL.rotation.z = 0.5 + sw * 0.9;
+    if (heroArmR) heroArmR.rotation.z = -0.5 - sw * 0.9;
+    if (heroHalo) heroHalo.rotation.z += dt * 4;
+  }
+  // 相機跟隨（狂歡時拉近）
   const cx = state.kidX * 0.32 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.04 : 0);
   camera.position.x += (cx - camera.position.x) * Math.min(1, dt * 6);
   camera.position.y = 4.6 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.03 : 0);
+  camera.position.z += ((frenzy ? 8.8 : 10.5) - camera.position.z) * Math.min(1, dt * 2.5);
   camera.lookAt(state.kidX * 0.2, 1.5, -6);
 }
 

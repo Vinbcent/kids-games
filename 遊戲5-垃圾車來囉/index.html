@@ -483,7 +483,7 @@ function spawnTraffic(x) {
   group.rotation.y = Math.PI; // 車頭朝 -x（往左開）
   group.position.set(x, 0, AMBIENT_Z);
   scene.add(group);
-  return { type, group, x, dir: -1, speed: 3.2 + Math.random() * 2.2, react: null, fleeT: 0 };
+  return { type, group, x, dir: -1, speed: 3.0 + Math.random() * 1.3, react: null, fleeT: 0 };
 }
 function resetTraffic() {
   for (const v of traffic) scene.remove(v.group); traffic.length = 0;
@@ -748,15 +748,19 @@ function update(dt, now) {
     if (tr.group.userData.beacon) tr.group.userData.beacon.material.color.setHex(Math.sin(state.t*8)>0 ? (tr.cls==='trash'?0xff5533:0x8be08b) : 0x664422);
     nearest = Math.min(nearest, Math.abs(tr.binX - state.kidX));
   }
+  keepSpacing(trucks, 5.2, 1);   // 兩台收集車不重疊
+  nearest = 1e9;
+  for (const tr of trucks) { tr.binX = tr.x + tr.group.userData.binLocal.x; tr.group.position.x = tr.x; nearest = Math.min(nearest, Math.abs(tr.binX - state.kidX)); }
   melodyVol = clamp(1 - nearest / (KID_X_MAX + 3), 0, 1);
   melodyRate = state.frenzy > 0 ? 1.6 : 1;
 
-  // 街景車流：移動 + 反應 + 繞回
-  for (const v of traffic) {
+  // 街景車流：移動 + 反應 + 繞回（倒序迭代，回收時才不會弄亂陣列）
+  for (let i = traffic.length - 1; i >= 0; i--) {
+    const v = traffic[i];
     const flee = v.fleeT > 0;
     if (flee) v.fleeT -= dt;
     v.x += v.dir * v.speed * (flee ? 2.2 : 1) * dt;
-    if (v.x < -TRAFFIC_WRAP) { recycleTraffic(v); }
+    if (v.x < -TRAFFIC_WRAP) { recycleTraffic(v); continue; }
     v.group.position.x = v.x;
     // 反應動畫
     if (v.react) {
@@ -770,6 +774,7 @@ function update(dt, now) {
       if (a.t <= 0) { v.react = null; v.group.rotation.z = 0; if (v._faceSp) v._faceSp.visible = false; }
     }
   }
+  keepSpacing(traffic, 3.4, -1);   // 防止車流重疊
 
   // 丟出去的垃圾
   const GRAV = 20;
@@ -807,6 +812,15 @@ function update(dt, now) {
   }
 }
 const TRAFFIC_WRAP = 15;
+function keepSpacing(list, gap, dir) {
+  // 同向車流不超車、保持最小間距；dir>0 前車=大x，dir<0 前車=小x
+  const s = [...list].sort((a, b) => dir > 0 ? b.x - a.x : a.x - b.x); // s[0] = 最前方
+  for (let i = 1; i < s.length; i++) {
+    const ahead = s[i - 1], cur = s[i];
+    const limit = ahead.x - dir * gap;            // 後車最多到這，保持 gap
+    if (dir > 0 ? cur.x > limit : cur.x < limit) { cur.x = limit; if (cur.group) cur.group.position.x = cur.x; }
+  }
+}
 function recycleTraffic(v) {
   scene.remove(v.group);
   const idx = traffic.indexOf(v); if (idx >= 0) traffic.splice(idx, 1);

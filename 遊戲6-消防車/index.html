@@ -366,7 +366,8 @@ function addFireLocal(prop, s) {
   const group = new THREE.Group(); group.position.set(s.lx, s.ly, s.lz); prop.group.add(group);
   const flames = [];
   const nfl = 2 + Math.floor(Math.random() * 3);
-  for (let i = 0; i < nfl; i++) { const fl = depthSprite('🔥', 0.8); fl.position.set((Math.random()-0.5)*0.4, 0.1 + Math.random()*0.25, (Math.random()-0.5)*0.15); fl.userData.ph = Math.random()*6; group.add(fl); flames.push(fl); }
+  const stack = rnd(0.14, 0.34);   // 火焰往上疊的間距 → 有的高聳、有的矮胖
+  for (let i = 0; i < nfl; i++) { const fl = depthSprite('🔥', 0.8); fl.position.set((Math.random()-0.5)*0.4, 0.05 + i * stack, (Math.random()-0.5)*0.15); fl.userData.ph = Math.random()*6; group.add(fl); flames.push(fl); }
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
   group.add(glow);
   const f = { group, prop, lx: s.lx, ly: s.ly, lz: s.lz, x: prop.x + s.lx, y: s.ly, z: prop.z + s.lz, size: 0.5, maxSize: s.max, state: 'burning', wet: 0, flames, glow, scorchT: 0, steamT: 0, steamSprite: null, critter: null };
@@ -399,12 +400,13 @@ function spawnProp(type, x) {
   let spots = [], forceBurn = false;
   if (type === 'house') {
     p.group.add(makeHouse(pick(HOUSE_COLS))); p.z = -6 - rnd(0, 1.6); p.width = 3.6;
-    spots = [{ lx: rnd(-0.4, 0.4), ly: 2.75, lz: 0.7, max: rnd(1.3, 1.8), crit: 0.35 }];
-    if (chance(0.4)) spots.push({ lx: rnd(-0.6, 0.6), ly: 1.3, lz: 1.25, max: rnd(1.0, 1.4) });
+    spots = [{ lx: rnd(-0.4, 0.4), ly: rnd(2.5, 3.4), lz: 0.7, max: rnd(1.3, 1.9), crit: 0.3 }];        // 屋頂/煙囪（高）
+    if (chance(0.5)) spots.push({ lx: rnd(-0.7, 0.7), ly: rnd(1.0, 1.5), lz: 1.25, max: rnd(1.0, 1.4) }); // 窗（中）
+    if (chance(0.35)) spots.push({ lx: rnd(-1.0, 1.0), ly: rnd(0.4, 0.7), lz: 1.4, max: rnd(0.9, 1.3), crit: 0.25 }); // 門口草叢（低）
     const hy = makeHydrantMaybe(); if (hy) p.group.add(hy);
   } else if (type === 'tree') {
     p.group.add(makeTree(rnd(1.0, 1.8))); p.z = -5 - rnd(0, 2.4); p.width = 2.6;
-    spots = [{ lx: 0, ly: 1.35, lz: 0.4, max: rnd(1.2, 1.8), crit: 0.3 }];
+    spots = [{ lx: 0, ly: rnd(0.9, 2.2), lz: 0.4, max: rnd(1.2, 1.8), crit: 0.3 }];                       // 樹幹～樹冠皆有可能
   } else if (type === 'barn') {
     const barn = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.6, 2.6), toon(0xc0392b)); barn.position.y = 1.3; p.group.add(barn);
     const roof = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 3.6, 16, 1, false, 0, Math.PI), toon(0x7b241c));
@@ -583,6 +585,7 @@ const particles = [];
 const TMP = new THREE.Vector3();
 const TMP2 = new THREE.Vector3();
 const DIR = new THREE.Vector3();
+const FDIR = new THREE.Vector3();
 function burst3(pos, n, emojis, opt = {}) {
   for (let i = 0; i < n; i++) {
     const s = emojiSprite(pick(emojis), opt.size || 0.8);
@@ -675,11 +678,30 @@ function doScorch(f) {
   if (f.prop && f.prop.group) { f.prop.group.rotation.z = (chance(0.5) ? 1 : -1) * 0.16; if (!tilts.includes(f.prop.group)) tilts.push(f.prop.group); }
   f.size = 0.4; f.wet = 0; f.scorchT = 0;
 }
-function autoDouse() {
+// 大絕：雲梯車射出會左右掃射的大水柱
+let frenzySweep = 0;
+function frenzyCannon(dt) {
+  ladderTruck.userData.cannon.getWorldPosition(TMP2);
+  const ox = TMP2.x, oy = TMP2.y, oz = TMP2.z;
+  frenzySweep = Math.sin(state.t * 2.4) * 1.05;        // 左右來回掃
+  const yaw = frenzySweep, pitch = -0.12;
+  FDIR.set(Math.sin(yaw), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)).normalize();
+  // 大水柱（又粗又猛）
+  const n = Math.max(2, Math.round(dt * 130));
+  for (let i = 0; i < n; i++) {
+    const s = emojiSprite(pick(['💦', '💧']), 0.5 + Math.random() * 0.35); s.position.set(ox, oy, oz);
+    particles.push({ sprite: s, vx: FDIR.x*18 + (Math.random()-0.5)*2.6, vy: FDIR.y*18 + (Math.random()-0.5)*2.6, vz: FDIR.z*18, life: 0.6, max: 0.6, grav: 10 });
+    scene.add(s);
+  }
+  // 只有被水柱掃到的火會熄
   for (const f of fires) {
     if (f.state !== 'burning') continue;
-    f.wet = 1; f.size -= 0.6;
-    if (Math.random() < 0.6) burst3(TMP.set(f.x, f.y, f.z), 2, ['💦', '💧'], { up: 2, life: 0.5 });
+    const dx = f.x - ox, dy = f.y - oy, dz = f.z - oz;
+    const dist = Math.hypot(dx, dy, dz) || 1;
+    if (dist > 22) continue;
+    if ((dx*FDIR.x + dy*FDIR.y + dz*FDIR.z) / dist < 0.9) continue;
+    f.wet = 1; f.size -= dt * 3.5;
+    if (Math.random() < 0.5) burst3(TMP.set(f.x, f.y, f.z), 2, ['💦', '💨'], { up: 2, life: 0.5 });
     if (f.size <= 0.03) fireOut(f);
   }
 }
@@ -732,13 +754,6 @@ document.getElementById('pipHide').addEventListener('click', () => pip.style.dis
 if (!kid) { kid = buildKid(); scene.add(kid); }
 if (!ladderTruck) { ladderTruck = buildLadderTruck(); scene.add(ladderTruck); }
 
-/* 圍觀路人（常駐） */
-const onlookers = [];
-for (const [ox, oz] of [[-6.0, 1.8], [-4.8, 2.4], [6.0, 1.8]]) {
-  const p = emojiSprite(pick(['🧍', '🧑', '👦', '👧', '🧓']), 0.95);
-  p.position.set(ox, 0.75, oz); scene.add(p);
-  onlookers.push({ sprite: p, ph: Math.random() * 6 });
-}
 const dangerFx = document.getElementById('dangerFx');
 
 function startCountdown() {
@@ -818,8 +833,8 @@ function update(dt, now) {
     sfxFrenzy(); fireworks3(); state.shake = 10; sayT('frenzy', 'Full power! Woohoo!');
   }
   if (state.frenzy > 0) {
-    state.frenzy -= dt; state.frenzyShoot -= dt;
-    if (state.frenzyShoot <= 0 && state.phase === 'play' && !state.paused) { autoDouse(); state.frenzyShoot = 0.06; }
+    state.frenzy -= dt;
+    if (state.phase === 'play' && !state.paused) frenzyCannon(dt);
   }
   document.getElementById('frenzyFx').classList.toggle('on', state.frenzy > 0);
 
@@ -892,10 +907,12 @@ function syncVisual(dt) {
   const L = ladderTruck.userData.ladder;
   if (frenzy) {
     ladderTruck.position.set(state.kidX - 2.6, 0, 0.4);
-    L.scale.y += (1.4 - L.scale.y) * Math.min(1, dt * 3);
-    L.rotation.z += (0.55 - L.rotation.z) * Math.min(1, dt * 3);
+    ladderTruck.rotation.y = frenzySweep * 0.5;             // 跟著水柱左右擺
+    L.scale.y += (1.5 - L.scale.y) * Math.min(1, dt * 3);
+    L.rotation.z += (0.35 - L.rotation.z) * Math.min(1, dt * 3);
     if (ladderTruck.userData.beacon) ladderTruck.userData.beacon.material.color.setHex(Math.sin(state.t*12) > 0 ? 0x33a0ff : 0x0a3a66);
   } else {
+    ladderTruck.rotation.y = 0;
     L.scale.y += (0.4 - L.scale.y) * Math.min(1, dt * 4);
   }
 
@@ -911,8 +928,6 @@ function syncVisual(dt) {
     if (Math.abs(p.rotation.z) < 0.01) { p.rotation.z = 0; tilts.splice(i, 1); }
   }
   for (const c of clouds) { c.sprite.position.x -= c.sp * dt; if (c.sprite.position.x < -14) c.sprite.position.x = 14; }
-  const hype = frenzy ? 9 : 4;
-  for (const o of onlookers) { o.sprite.position.y = 0.75 + Math.abs(Math.sin(state.t * hype + o.ph)) * (frenzy ? 0.22 : 0.12); }
 }
 
 /* ================== HUD ================== */

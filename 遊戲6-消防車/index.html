@@ -93,6 +93,10 @@
       radial-gradient(circle at 50% 50%, rgba(80,140,255,.16), transparent 60%); }
   #frenzyFx.on { opacity: 1; animation: disco .7s linear infinite; }
   @keyframes disco { to { filter: hue-rotate(360deg); } }
+
+  /* 危險紅暈（火勢越大越明顯） */
+  #dangerFx { position: fixed; inset: 0; z-index: 13; pointer-events: none; opacity: 0; transition: opacity .3s;
+    box-shadow: inset 0 0 22vmin 8vmin rgba(200,30,0,.55); }
 </style>
 <script type="importmap">
 {
@@ -105,6 +109,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<div id="dangerFx"></div>
 <div id="frenzyFx"></div>
 
 <div id="hud">
@@ -230,22 +235,25 @@ function toon(color) {
 }
 function basic(color) { return new THREE.MeshBasicMaterial({ color }); }
 
-/* 天空 */
-function makeSky() {
+/* 天空（每個場景不同色調，快取避免重複建） */
+const skyCache = new Map();
+function makeSky(top, mid, bot, sun = 'rgba(255,244,200,') {
+  const key = top + mid + bot + sun;
+  if (skyCache.has(key)) return skyCache.get(key);
   const c = document.createElement('canvas'); c.width = 256; c.height = 256;
   const x = c.getContext('2d');
   const g = x.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#39a6dd'); g.addColorStop(0.55, '#84d2f0'); g.addColorStop(1, '#dfeffb');
+  g.addColorStop(0, top); g.addColorStop(0.55, mid); g.addColorStop(1, bot);
   x.fillStyle = g; x.fillRect(0, 0, 256, 256);
-  const sg = x.createRadialGradient(56, 46, 4, 56, 46, 66);
-  sg.addColorStop(0, 'rgba(255,250,225,1)'); sg.addColorStop(0.4, 'rgba(255,244,200,.6)'); sg.addColorStop(1, 'rgba(255,244,200,0)');
-  x.fillStyle = sg; x.fillRect(0, 0, 140, 130);
-  x.fillStyle = 'rgba(255,255,255,.9)';
+  const sg = x.createRadialGradient(56, 46, 4, 56, 46, 72);
+  sg.addColorStop(0, sun + '1)'); sg.addColorStop(0.4, sun + '.55)'); sg.addColorStop(1, sun + '0)');
+  x.fillStyle = sg; x.fillRect(0, 0, 150, 140);
+  x.fillStyle = 'rgba(255,255,255,.85)';
   const puff = (cx, cy, r) => { for (const [dx, dy, rr] of [[0,0,1],[-r*.7,r*.15,.7],[r*.7,r*.12,.72],[-r*.3,-r*.25,.6],[r*.32,-r*.2,.58]]) { x.beginPath(); x.ellipse(cx+dx, cy+dy, rr*r, rr*r*0.7, 0, 0, 7); x.fill(); } };
   puff(150, 55, 16); puff(205, 96, 13); puff(95, 108, 15);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; skyCache.set(key, t); return t;
 }
-scene.background = makeSky();
+scene.background = makeSky('#39a6dd', '#84d2f0', '#dfeffb');
 
 /* 遠山 */
 const HILL_GEO = new THREE.SphereGeometry(1, 14, 10);
@@ -341,53 +349,80 @@ const tilts = [];   // 燒焦後歪掉、慢慢扶正的道具
 function addFire(root, x, y, z, maxSize, prop) {
   const group = new THREE.Group(); group.position.set(x, y, z);
   const flames = [];
-  for (let i = 0; i < 3; i++) { const f = emojiSprite('🔥', 0.8); f.position.set((Math.random()-0.5)*0.3, 0.15 + Math.random()*0.2, 0); group.add(f); flames.push(f); }
+  const nfl = 2 + Math.floor(Math.random() * 3);   // 2~4 團，形狀不一
+  for (let i = 0; i < nfl; i++) { const f = emojiSprite('🔥', 0.8); f.position.set((Math.random()-0.5)*0.4, 0.1 + Math.random()*0.25, (Math.random()-0.5)*0.15); f.userData.ph = Math.random() * 6; group.add(f); flames.push(f); }
   const glow = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff7a1a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }));
   group.add(glow);
   root.add(group);
-  const f = { group, x, y, z, size: 0.5, maxSize, state: 'burning', wet: 0, prop, flames, glow, scorchT: 0, steamT: 0, steamSprite: null };
+  const f = { group, x, y, z, size: 0.5, maxSize, state: 'burning', wet: 0, prop, flames, glow, scorchT: 0, steamT: 0, steamSprite: null, critter: null };
   fires.push(f); return f;
 }
 const firesBurning = () => fires.filter(f => f.state === 'burning').length;
+const rnd = (a, b) => a + Math.random() * (b - a);
+const chance = p => Math.random() < p;
 
-/* ================== 六場景工廠 ================== */
+/* 火旁邊的小動物：滅掉旁邊的火就跳走（可愛救援） */
+const CRITTERS = ['🐱', '🐶', '🐰', '🐥', '🐹', '🐤'];
+function addCritter(root, fire) {
+  const side = chance(0.5) ? -1 : 1;
+  const s = emojiSprite(pick(CRITTERS), 0.7);
+  s.position.set(fire.x + side * rnd(0.7, 1.2), 0.5, fire.z + 0.7);
+  root.add(s);
+  fire.critter = { sprite: s, side, saved: false };
+}
+
+/* ================== 六場景工廠（每次玩隨機、叢聚、不平均） ================== */
 function buildStreet(root) {
   ground.material = toon(0x77807a);
-  for (const hx of [-6, -2, 2, 6]) {
-    const house = makeHouse(pick([0xe8d6b0, 0xf0e2c0, 0xdcc7a0, 0xcbb892]));
-    house.position.set(hx, 0, -6.2); root.add(house);
-    addFire(root, hx + (Math.random()-0.5)*0.6, 2.75, -5.5, 1.6, house);
+  const spots = [-7, -4.5, -2, 1, 3.5, 6.5];
+  let lit = spots.filter(() => chance(0.65));               // 有些房子沒著火
+  if (lit.length < 3) lit = [spots[0], spots[2], spots[4], spots[5]];
+  for (const hx of spots) {
+    const house = makeHouse(pick([0xe8d6b0, 0xf0e2c0, 0xdcc7a0, 0xcbb892, 0xd9b3a0]));
+    const z = -6.2 - rnd(0, 1.8); house.position.set(hx, 0, z); house.rotation.y = rnd(-0.14, 0.14); root.add(house);
+    if (!lit.includes(hx)) continue;
+    const roofFire = addFire(root, hx + rnd(-0.5, 0.5), 2.75, z + 0.7, rnd(1.3, 1.8), house);
+    if (chance(0.4)) addFire(root, hx + rnd(-0.7, 0.7), 1.3, z + 1.25, rnd(1.0, 1.4), house);   // 叢聚：同屋多一團
+    if (chance(0.4)) addCritter(root, roofFire);
   }
-  const hyd = makeHydrant(); hyd.position.set(-4, 0, -3.4); root.add(hyd);
-  const hyd2 = makeHydrant(); hyd2.position.set(4, 0, -3.4); root.add(hyd2);
+  for (const hx of [-5, 5]) if (chance(0.7)) { const h = makeHydrant(); h.position.set(hx, 0, -3.2); root.add(h); }
 }
 function buildForest(root) {
   ground.material = toon(0x4f8f3a);
-  for (const tx of [-7.5, -3.5, 0.5, 4, 7.5]) {
-    const t = makeTree(1.2 + Math.random()*0.5); const tz = -5.2 - Math.random()*2.4;
-    t.position.set(tx, 0, tz); root.add(t);
-    addFire(root, tx, 1.3, tz + 0.4, 1.6, t);
+  const hot = [rnd(-6, -1), rnd(1, 7)];                     // 1~2 個火勢熱區
+  const n = 4 + Math.floor(Math.random() * 4);
+  for (let i = 0; i < n; i++) {
+    const tx = clamp(pick(hot) + rnd(-2.6, 2.6), -8.5, 8.5), tz = -4.6 - Math.random() * 3.4;
+    const t = makeTree(rnd(1.0, 1.9)); t.position.set(tx, 0, tz); root.add(t);
+    const f = addFire(root, tx + rnd(-0.3, 0.3), rnd(1.1, 1.7), tz + 0.4, rnd(1.2, 1.9), t);
+    if (chance(0.28)) addCritter(root, f);
   }
+  for (let i = 0; i < 4; i++) { const t = makeTree(rnd(0.8, 1.4)); t.position.set(rnd(-9.5, 9.5), 0, -2.8 - Math.random() * 6); root.add(t); }   // 沒著火的樹點綴縱深
 }
 function buildCar(root) {
   ground.material = toon(0x5b626c);
-  const car = buildCarBase(pick([0x4488ff, 0xff5555, 0x66cc66, 0xcc66cc]), false);
-  car.scale.setScalar(1.7); car.position.set(0, 0, -5.2); root.add(car);
-  addFire(root, -1.8, 0.7, -4.6, 1.4, car);
-  addFire(root, 1.8, 0.7, -4.6, 1.4, car);
-  addFire(root, 0, 1.6, -5.0, 1.6, car);
-  const hyd = makeHydrant(); hyd.position.set(-4.5, 0, -3.4); root.add(hyd);
+  const cars = chance(0.5) ? 2 : 1;
+  for (let ci = 0; ci < cars; ci++) {
+    const cxp = cars === 1 ? rnd(-1.5, 1.5) : (ci === 0 ? -3.2 : 3.2);
+    const car = buildCarBase(pick([0x4488ff, 0xff5555, 0x66cc66, 0xcc66cc, 0xffcc22, 0xffffff]), false);
+    const cz = -5.2 - rnd(0, 1.2); car.scale.setScalar(1.6); car.position.set(cxp, 0, cz); car.rotation.y = rnd(-0.25, 0.25); root.add(car);
+    addFire(root, cxp + rnd(-0.4, 0.4), 1.5, cz + 0.4, rnd(1.3, 1.8), car);
+    if (chance(0.7)) addFire(root, cxp + (chance(0.5) ? -1.7 : 1.7), 0.7, cz + 0.6, rnd(1.0, 1.4), car);   // 引擎/輪胎火
+  }
+  const runner = emojiSprite('🧍', 0.85); runner.position.set(rnd(-6, 6), 0.75, -3); root.add(runner);   // 逃出來的駕駛
+  const hyd = makeHydrant(); hyd.position.set(chance(0.5) ? -4.5 : 4.5, 0, -3.4); root.add(hyd);
 }
 function buildTower(root) {
   ground.material = toon(0x7a7f88);
-  const tower = new THREE.Mesh(new THREE.BoxGeometry(3, 8, 3), toon(0xb0bec5)); tower.position.set(0, 4, -7); root.add(tower);
-  for (let fy = 1.2; fy < 7.5; fy += 1.3) for (const fx of [-0.9, 0, 0.9]) {
-    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.8), basic(Math.random()<0.5 ? 0xfff2b0 : 0x6d99b8)); w.position.set(fx, fy, -5.49); root.add(w);
+  const tw = rnd(2.6, 3.4), th = rnd(7, 9.2);
+  const tower = new THREE.Mesh(new THREE.BoxGeometry(tw, th, 3), toon(pick([0xb0bec5, 0xc7ccd2, 0xa8b6c0]))); tower.position.set(0, th/2, -7); root.add(tower);
+  for (let fy = 1.2; fy < th - 0.6; fy += 1.3) for (const fx of [-0.9, 0, 0.9]) {
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.8), basic(chance(0.5) ? 0xfff2b0 : 0x6d99b8)); w.position.set(fx * (tw/3), fy, -5.49); root.add(w);
   }
   const door = new THREE.Mesh(new THREE.BoxGeometry(1, 1.4, 0.1), toon(0x455a64)); door.position.set(0, 0.7, -5.49); root.add(door);
-  addFire(root, -0.7, 5.4, -5.4, 1.3, tower);
-  addFire(root, 0.8, 3.8, -5.4, 1.3, tower);
-  addFire(root, 0, 6.6, -5.4, 1.2, tower);
+  const n = 3 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < n; i++) addFire(root, rnd(-1, 1), rnd(3.4, th - 0.7), -5.4, rnd(1.1, 1.5), tower);   // 高處疊火，位置隨機
+  const help = emojiSprite('🙋', 0.75); help.position.set(rnd(-0.9, 0.9), rnd(2, th - 1.5), -5.35); root.add(help);   // 窗邊求救
 }
 function buildFarm(root) {
   ground.material = toon(0x8a6a3a);
@@ -395,12 +430,16 @@ function buildFarm(root) {
   const roof = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 3.6, 16, 1, false, 0, Math.PI), toon(0x7b241c));
   roof.rotation.z = Math.PI / 2; roof.rotation.y = Math.PI / 2; roof.position.set(-1.5, 2.6, -6.2); root.add(roof);
   const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.6, 0.1), toon(0xf5deb3)); door.position.set(-1.5, 0.8, -4.9); root.add(door);
-  for (const hx of [2.5, 4.4]) {
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.85, 1.0, 14), toon(0xd4ac0d)); h.position.set(hx, 0.5, -4.6); root.add(h);
-    addFire(root, hx, 1.1, -4.3, 1.5, h);
+  if (chance(0.85)) { const bf = addFire(root, -1.5 + rnd(-0.3, 0.3), 2.7, -5.4, rnd(1.4, 1.9), barn); if (chance(0.5)) addCritter(root, bf); }
+  if (chance(0.7)) addFire(root, -2.5 + rnd(-0.3, 0.3), 1.1, -5.1, rnd(1.2, 1.5), barn);
+  const hn = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < hn; i++) {
+    const hx = rnd(1.3, 5.2), hz = -4.4 - rnd(0, 1.2);
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.85, 1.0, 14), toon(0xd4ac0d)); h.position.set(hx, 0.5, hz); root.add(h);
+    const f = addFire(root, hx, 1.1, hz + 0.3, rnd(1.2, 1.6), h);
+    if (chance(0.35)) addCritter(root, f);
   }
-  addFire(root, -1.5, 2.7, -5.4, 1.6, barn);
-  addFire(root, -2.6, 1.1, -5.2, 1.4, barn);
+  const animal = emojiSprite(pick(['🐄', '🐖', '🐔', '🐑']), 0.75); animal.position.set(rnd(2, 5), 0.65, -3.4); root.add(animal);
 }
 function buildPark(root) {
   ground.material = toon(0x63a545);
@@ -409,22 +448,34 @@ function buildPark(root) {
   for (const sx of [4.5, 6.5]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 8), toon(0x8d6e63)); p.position.set(sx, 1.2, -5); p.rotation.z = (sx < 5.5 ? 0.2 : -0.2); root.add(p); }
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.2, 8), toon(0x8d6e63)); bar.rotation.z = Math.PI / 2; bar.position.set(5.5, 2.3, -5); root.add(bar);
   const bench = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.16, 0.5), toon(0x8d6e63)); bench.position.set(0, 0.5, -3.5); root.add(bench);
-  for (const sx of [-6, -2.5, 1, 4.5, 6.8]) addFire(root, sx, 0.7, -4.4 - Math.random()*1.2, 1.3, null);
+  const hot = rnd(-3, 3);
+  const n = 4 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < n; i++) {
+    const fx = clamp((chance(0.55) ? hot + rnd(-2.5, 2.5) : rnd(-7, 7)), -7, 7);
+    const f = addFire(root, fx, 0.7, -4.2 - Math.random() * 1.8, rnd(1.1, 1.5), null);
+    if (chance(0.3)) addCritter(root, f);
+  }
 }
 const SCENES = [
-  { name: '住宅街道',   build: buildStreet, tip: 'Call one-one-nine!',      tipZh: '失火要打 119 電話！' },
-  { name: '森林大火',   build: buildForest, tip: 'Stop, drop, and roll!',   tipZh: '衣服著火要「停、躺、滾」！' },
-  { name: '路邊汽車',   build: buildCar,    tip: 'Never touch a fire!',     tipZh: '不可以用手去碰火喔！' },
-  { name: '高樓大廈',   build: buildTower,  tip: 'Aim up high!',            tipZh: '火在高處，把手舉高噴！' },
-  { name: '農場穀倉',   build: buildFarm,   tip: 'Smoke means fire!',       tipZh: '看到濃煙就是有火，快逃！' },
-  { name: '公園遊樂場', build: buildPark,   tip: 'Great job, firefighter!', tipZh: '你是最棒的小小消防員！' },
+  { name: '住宅街道',   build: buildStreet, tip: 'Call one-one-nine!',      tipZh: '失火要打 119 電話！',        sky: ['#39a6dd', '#84d2f0', '#dfeffb'], fog: 0xdfeffb },
+  { name: '森林大火',   build: buildForest, tip: 'Stop, drop, and roll!',   tipZh: '衣服著火要「停、躺、滾」！',  sky: ['#7fae72', '#b7d69a', '#e9e6bf'], fog: 0xd6dcae },
+  { name: '路邊汽車',   build: buildCar,    tip: 'Never touch a fire!',     tipZh: '不可以用手去碰火喔！',        sky: ['#62768f', '#9fb0c0', '#d7dee6'], fog: 0xcdd6df },
+  { name: '高樓大廈',   build: buildTower,  tip: 'Aim up high!',            tipZh: '火在高處，把手舉高噴！',      sky: ['#37407a', '#8a6bb0', '#f2a878'], fog: 0xcaa088, sun: 'rgba(255,150,90,' },
+  { name: '農場穀倉',   build: buildFarm,   tip: 'Smoke means fire!',       tipZh: '看到濃煙就是有火，快逃！',    sky: ['#3f9fd6', '#bfe0b0', '#f6e6b0'], fog: 0xeadfb0 },
+  { name: '公園遊樂場', build: buildPark,   tip: 'Great job, firefighter!', tipZh: '你是最棒的小小消防員！',      sky: ['#ff9a6a', '#ffc48a', '#ffe6c0'], fog: 0xffd9b0, sun: 'rgba(255,180,120,' },
 ];
 let sceneRoot = null;
 function clearScene() {
   if (sceneRoot) { sceneRoot.traverse(o => { if (o.geometry) o.geometry.dispose(); }); scene.remove(sceneRoot); }
   sceneRoot = null; fires.length = 0; tilts.length = 0;
 }
-function buildScene(idx) { clearScene(); sceneRoot = new THREE.Group(); scene.add(sceneRoot); SCENES[idx].build(sceneRoot); }
+function buildScene(idx) {
+  clearScene(); sceneRoot = new THREE.Group(); scene.add(sceneRoot);
+  const S = SCENES[idx];
+  scene.background = makeSky(S.sky[0], S.sky[1], S.sky[2], S.sun);
+  scene.fog.color.setHex(S.fog);
+  S.build(sceneRoot);
+}
 
 /* ================== 變身：消防雲梯車（水砲全開時登場） ================== */
 let ladderTruck = null;
@@ -548,6 +599,33 @@ function spawnCat(pos) {
   const s = emojiSprite('🐈‍⬛', 0.9); s.position.copy(pos); scene.add(s);
   particles.push({ sprite: s, vx: (Math.random()<0.5?-1:1)*5, vy: 2.5, vz: 2, life: 1.6, max: 1.6, grav: 3 });
 }
+/* 浮動文字（GOOD! / +1） */
+const textCache = new Map();
+function textTex(text, color) {
+  const key = text + color;
+  if (textCache.has(key)) return textCache.get(key);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x = c.getContext('2d'); x.font = 'bold 66px "Microsoft JhengHei", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 9; x.strokeStyle = 'rgba(0,0,0,.55)'; x.strokeText(text, 128, 66);
+  x.fillStyle = color; x.fillText(text, 128, 66);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; textCache.set(key, t); return t;
+}
+function popText(pos, text, color = '#ffe14d') {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex(text, color), transparent: true, depthWrite: false, depthTest: false }));
+  s.scale.set(1.7, 0.85, 1); s.position.copy(pos); scene.add(s);
+  particles.push({ sprite: s, vx: 0, vy: 1.9, vz: 0, life: 1.0, max: 1.0, grav: -1 });
+}
+/* 被救的小動物：跳走 + 愛心 */
+function rescueCritter(f) {
+  if (!f.critter || f.critter.saved) return;
+  f.critter.saved = true;
+  const cs = f.critter.sprite;
+  if (sceneRoot) sceneRoot.remove(cs);
+  scene.add(cs);
+  particles.push({ sprite: cs, vx: f.critter.side * 3, vy: 4.6, vz: 2.4, life: 1.5, max: 1.5, grav: 6 });
+  burst3(TMP.set(cs.position.x, cs.position.y + 0.5, cs.position.z), 6, ['❤️', '💕', '✨'], { up: 4 });
+  sayT('rescue', pick(['You saved it! Yay!', 'Rescued! Woohoo!', 'Good job, hero!']), 900);
+}
 
 /* ================== 水柱 / 滅火 ================== */
 function aimDir() { return DIR.set(Math.sin(aimYaw), Math.sin(aimPitch), -Math.cos(aimYaw) * Math.cos(aimPitch)).normalize(); }
@@ -590,6 +668,8 @@ function fireOut(f) {
   state.energy = Math.min(1, state.energy + 0.10);
   sfxCheer();
   burst3(TMP.set(f.x, f.y + 0.2, f.z), 7, ['💧', '✨'], { up: 3 });
+  popText(TMP.set(f.x, f.y + 0.7, f.z), pick(['GOOD!', 'NICE!', '+1', 'YES!']), state.combo >= 3 ? '#ff7ad2' : '#ffe14d');
+  rescueCritter(f);
   const remain = firesBurning();
   sayT('count', remain > 0 ? (NUMW[Math.min(remain, 8)] + ' ' + (remain === 1 ? 'fire' : 'fires') + ' left!') : 'All fires out! Great job!', 700);
 }
@@ -660,6 +740,22 @@ document.getElementById('pipHide').addEventListener('click', () => pip.style.dis
 
 if (!kid) { kid = buildKid(); scene.add(kid); }
 if (!ladderTruck) { ladderTruck = buildLadderTruck(); scene.add(ladderTruck); }
+
+/* ================== 環境氛圍：飄雲 + 圍觀路人（常駐，不隨場景清除） ================== */
+const clouds = [];
+for (let i = 0; i < 3; i++) {
+  const cl = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex('☁️'), transparent: true, opacity: 0.9, depthWrite: false, depthTest: true }));
+  const sz = 2.4 + Math.random() * 1.4; cl.scale.set(sz, sz * 0.7, 1);
+  cl.position.set(rnd(-13, 13), 7 + Math.random() * 2.5, -17 - Math.random() * 6); scene.add(cl);
+  clouds.push({ sprite: cl, sp: 0.25 + Math.random() * 0.35 });
+}
+const onlookers = [];
+for (const [ox, oz] of [[-6.0, 1.8], [-4.8, 2.4], [6.0, 1.8]]) {
+  const p = emojiSprite(pick(['🧍', '🧑', '👦', '👧', '🧓']), 0.95);
+  p.position.set(ox, 0.75, oz); scene.add(p);
+  onlookers.push({ sprite: p, ph: Math.random() * 6 });
+}
+const dangerFx = document.getElementById('dangerFx');
 function startCountdown() {
   state.phase = 'countdown';
   state.firesOut = 0; state.combo = 0; state.mischief = 0; state.energy = 0; state.sceneIdx = 0; state.frenzy = 0;
@@ -744,8 +840,13 @@ function update(dt, now) {
         if (f.size >= f.maxSize * 0.98) { f.scorchT += dt; if (f.scorchT > SCORCH_TIME) doScorch(f); } else f.scorchT = 0;
       }
       const sc = 0.45 + f.size * 0.9;
-      f.flames.forEach((fl, k) => fl.scale.setScalar(sc * (0.82 + 0.18 * Math.sin(state.t*18 + k*1.7))));
+      f.flames.forEach((fl, k) => fl.scale.setScalar(sc * (0.8 + 0.2 * Math.sin(state.t*18 + fl.userData.ph + k))));
       if (f.glow) { f.glow.scale.setScalar(0.45 + f.size * 0.7); f.glow.material.opacity = 0.22 * Math.min(1, f.size); }
+      // 竄升火星 + 越大越濃的煙（限總量，手機也順）
+      if (state.phase === 'play' && particles.length < 210) {
+        if (Math.random() < dt * 7 * f.size) { const e = emojiSprite(pick(['✨', '🔸', '⭐']), 0.2 + Math.random()*0.14); e.position.set(f.x + (Math.random()-0.5)*0.5, f.y + 0.3, f.z); scene.add(e); particles.push({ sprite: e, vx: (Math.random()-0.5)*0.7, vy: 1.3 + Math.random(), vz: 0, life: 0.9, max: 0.9, grav: -1.6 }); }
+        if (Math.random() < dt * 4 * f.size) { const sm = emojiSprite('💨', 0.5 + f.size*0.6); sm.position.set(f.x + (Math.random()-0.5)*0.3, f.y + 0.45, f.z - 0.1); scene.add(sm); particles.push({ sprite: sm, vx: (Math.random()-0.5)*0.35, vy: 1.0 + Math.random()*0.6, vz: -0.2, life: 1.7, max: 1.7, grav: -0.5 }); }
+      }
     } else if (f.state === 'steam') {
       f.steamT -= dt;
       if (f.steamSprite) { f.steamSprite.position.y += dt * 0.6; f.steamSprite.material.opacity = Math.max(0, f.steamT / 0.8); }
@@ -760,6 +861,10 @@ function update(dt, now) {
 
   // 清場判定
   if (state.phase === 'play' && fires.length > 0 && fires.every(f => f.state === 'out')) startClear();
+
+  // 危險紅暈：火勢越大畫面邊緣越紅
+  let dsum = 0; for (const f of fires) if (f.state === 'burning') dsum += f.size;
+  dangerFx.style.opacity = Math.min(0.5, dsum * 0.045);
 
   updateParticles(dt);
 }
@@ -804,6 +909,12 @@ function syncVisual(dt) {
     p.rotation.z += (0 - p.rotation.z) * Math.min(1, dt * 3);
     if (Math.abs(p.rotation.z) < 0.01) { p.rotation.z = 0; tilts.splice(i, 1); }
   }
+
+  // 飄雲
+  for (const c of clouds) { c.sprite.position.x += c.sp * dt; if (c.sprite.position.x > 14) c.sprite.position.x = -14; }
+  // 圍觀路人跳動（火大或狂歡時更激動）
+  const hype = frenzy ? 9 : 4;
+  for (const o of onlookers) { o.sprite.position.y = 0.75 + Math.abs(Math.sin(state.t * hype + o.ph)) * (frenzy ? 0.22 : 0.12); }
 }
 
 /* ================== HUD ================== */

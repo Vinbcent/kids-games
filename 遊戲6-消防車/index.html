@@ -139,7 +139,7 @@
   <h1>消防車救火隊</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
-  <div class="hint">🔥 出動！你是打火英雄，消防車一路往前開。街景不斷經過，<b>雙手握在一起</b>當水管噴水，把經過的房子、樹、車上的火通通滅掉 💦！<br>手<b>舉高</b>噴更遠更高、<b>左右移動</b>對準火；沒滅到的火會燒焦跑掉小動物 😹。<br>一路開過住宅→森林→農場→城市→公園，集滿能量<b>雙手高舉</b>召喚雲梯車<b>水砲全開</b> 🚒<br>影像只在裝置上運算，不會上傳。</div>
+  <div class="hint">🔥 出動！你是打火英雄，消防車一路往前開。<b>左右移動</b>站到火旁邊，<b>雙手握在一起</b>就會自動朝最近的火噴水，屋頂高的、草叢低的<b>不管高低都打得到</b> 💦！<br>沒滅到的火會燒焦跑掉小動物 😹。一路開過住宅→森林→農場→城市→公園，集滿能量<b>雙手高舉</b>召喚雲梯車<b>水砲全開</b>左右掃射 🚒<br>影像只在裝置上運算，不會上傳。</div>
 </div>
 
 <script type="module">
@@ -511,10 +511,11 @@ let lastVideoTime = -1, lastSeen = 0;
 let personX = 0.5, shoulderW = 0, armsUp = false;
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
 
-const JOIN_K = 0.60, RELEASE_K = 1.0, HOLD_MS = 200;
+const JOIN_K = 0.72, RELEASE_K = 1.05, HOLD_MS = 140;
 let handsNear = false, handsNearSince = 0, spraying = false;
 let aimYaw = 0, aimPitch = 0.5, aimUp = 0.3;
 let aimYawT = 0, aimPitchT = 0.5, aimUpT = 0.3;
+let sprayDX = 0, sprayDY = 0.3, sprayDZ = -1, sprayActive = false;
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
@@ -548,7 +549,7 @@ function trackFrame() {
   const wmx = (lm[15].x + lm[16].x) / 2, wmy = (lm[15].y + lm[16].y) / 2;
   const wristGap = Math.hypot(lm[15].x - lm[16].x, lm[15].y - lm[16].y);
   handsNear = wristGap < sw * 1.1;
-  const near = wristGap < sw * (spraying ? RELEASE_K : JOIN_K) && ((scy - wmy) > -sw * 0.5);
+  const near = wristGap < sw * (spraying ? RELEASE_K : JOIN_K) && ((scy - wmy) > -sw * 1.4);
   if (near) { if (!handsNearSince) handsNearSince = now; } else handsNearSince = 0;
   const held = near && (now - handsNearSince > HOLD_MS);
   if (held) spraying = true;
@@ -628,29 +629,44 @@ function rescueCritter(f) {
 
 /* ================== 水柱 / 滅火 ================== */
 function aimDir() { return DIR.set(Math.sin(aimYaw), Math.sin(aimPitch), -Math.cos(aimYaw) * Math.cos(aimPitch)).normalize(); }
-function sprayReach() { return REACH_BASE + clamp(aimUp, 0, 1.6) * REACH_UP; }
-function emitWater(dt) {
-  const dir = aimDir();
+// 自動鎖定：前方左右附近、最靠近你的那團火（不管高低，水柱自己朝它）
+function currentTarget() {
+  const ox = state.kidX + EMIT.x;
+  let best = null, bd = 1e9;
+  for (const f of fires) {
+    if (f.state !== 'burning') continue;
+    const dxh = f.x - ox;
+    if (dxh < -4.8 || dxh > 5.8) continue;      // 只鎖前方左右附近 → 保留左右移動的走位
+    const d = Math.abs(dxh);
+    if (d < bd) { bd = d; best = f; }
+  }
+  return best;
+}
+function sprayTick(dt) {
   const ox = state.kidX + EMIT.x, oy = EMIT.y, oz = EMIT.z;
+  const tgt = currentTarget();
+  let dx, dy, dz;
+  if (tgt) { dx = tgt.x - ox; dy = tgt.y - oy; dz = tgt.z - oz; }
+  else { const d = aimDir(); dx = d.x; dy = d.y; dz = d.z; }     // 沒火時朝手勢方向噴（純視覺）
+  const L = Math.hypot(dx, dy, dz) || 1;
+  const ux = dx / L, uy = dy / L, uz = dz / L;
+  sprayDX = ux; sprayDY = uy; sprayDZ = uz; sprayActive = true;
+  const speed = clamp(6 + L * 1.7, 12, 26);                      // 遠一點噴快一點，射得到
+  const life = clamp(L / speed + 0.18, 0.3, 0.95);
   const n = Math.max(1, Math.round(dt * 90));
   for (let i = 0; i < n; i++) {
     const s = emojiSprite(pick(['💧', '💦']), 0.34); s.position.set(ox + (Math.random()-0.5)*0.2, oy, oz);
-    particles.push({ sprite: s, vx: dir.x*WATER_SPEED + (Math.random()-0.5)*1.6, vy: dir.y*WATER_SPEED + (Math.random()-0.5)*1.6, vz: dir.z*WATER_SPEED, life: 0.5, max: 0.5, grav: 14 });
+    particles.push({ sprite: s, vx: ux*speed + (Math.random()-0.5)*1.4, vy: uy*speed + 0.12*speed + (Math.random()-0.5)*1.4, vz: uz*speed, life, max: life, grav: 8 });
     scene.add(s);
   }
-}
-function sprayCollide(dt) {
-  const reach = sprayReach();
-  const dir = aimDir();
-  const ox = state.kidX + EMIT.x, oy = EMIT.y, oz = EMIT.z;
   for (const f of fires) {
     if (f.state !== 'burning') continue;
-    const dx = f.x - ox, dy = f.y - oy, dz = f.z - oz;
-    const dist = Math.hypot(dx, dy, dz) || 1;
-    if (dist > reach) continue;
-    if ((dx*dir.x + dy*dir.y + dz*dir.z) / dist < 0.80) continue;
-    f.wet = Math.min(1, f.wet + dt * 1.0);
-    f.size = Math.max(0, f.size - dt * 0.55 * f.wet);
+    const fx = f.x - ox, fy = f.y - oy, fz = f.z - oz;
+    const dist = Math.hypot(fx, fy, fz) || 1;
+    if (dist > 14) continue;
+    if ((fx*ux + fy*uy + fz*uz) / dist < 0.86) continue;         // 沿水柱方向的火才會滅
+    f.wet = Math.min(1, f.wet + dt * 1.1);
+    f.size = Math.max(0, f.size - dt * 0.6 * f.wet);
     state.energy = Math.min(1, state.energy + dt * 0.04);
     if (Math.random() < dt * 22) { const s = emojiSprite('💨', 0.5); s.position.set(f.x, f.y, f.z); particles.push({ sprite: s, vx: 0, vy: 1.6, vz: 0, life: 0.5, max: 0.5, grav: -1 }); scene.add(s); }
     if (f.size <= 0.03) fireOut(f);
@@ -847,9 +863,10 @@ function update(dt, now) {
 
   if (state.phase === 'play') updateWorld(dt);
 
+  sprayActive = false;
   const doSpray = (state.mode === 'body' ? spraying : touchSpraying) && state.phase === 'play';
   if (doSpray) {
-    emitWater(dt); sprayCollide(dt);
+    sprayTick(dt);
     if (Math.random() < dt * 9) tone(180 + Math.random()*120, 0.07, 'sawtooth', 0.03);
   }
 
@@ -900,8 +917,13 @@ function syncVisual(dt) {
   const frenzy = state.frenzy > 0;
   kid.position.x = state.kidX;
   kid.position.y = Math.abs(Math.sin(state.t * 3)) * 0.03;
-  kidArmPivot.rotation.y = aimYaw;
-  kidArmPivot.rotation.x = -aimPitch * 0.5;
+  if (sprayActive) {                                   // 噴水時噴嘴指向鎖定的火（會隨火的高低擺動）
+    kidArmPivot.rotation.y = Math.atan2(sprayDX, -sprayDZ);
+    kidArmPivot.rotation.x = -Math.asin(clamp(sprayDY, -1, 1));
+  } else {
+    kidArmPivot.rotation.y = aimYaw;
+    kidArmPivot.rotation.x = -aimPitch * 0.5;
+  }
 
   ladderTruck.visible = frenzy;
   const L = ladderTruck.userData.ladder;

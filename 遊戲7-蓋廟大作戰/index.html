@@ -1,0 +1,1347 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#c0392b">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🛕 蓋廟大作戰</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #f0d9a0; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #hud { position: fixed; inset: 0; z-index: 15; pointer-events: none; display: none;
+         color: #fff; text-shadow: 0 2px 6px rgba(80,30,0,.6); font-weight: bold; }
+  #hudL { position: absolute; top: 2.2vmin; left: 2.4vmin; font-size: clamp(16px, 4.6vmin, 42px); }
+  #hudBarWrap { position: absolute; top: 1.8vmin; left: 50%; transform: translateX(-50%);
+                width: min(56vw, 420px); height: clamp(20px, 3.4vmin, 30px);
+                background: rgba(0,0,0,.28); border-radius: 999px; overflow: hidden; }
+  #hudBarFill { height: 100%; width: 0%; border-radius: 999px;
+                background: linear-gradient(90deg, #ffd24a, #ff8a1a); transition: width .12s linear; }
+  #hudBarText { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                font-size: clamp(12px, 2.6vmin, 20px); }
+  #stepTip { position: absolute; top: 6.6vmin; left: 50%; transform: translateX(-50%);
+             font-size: clamp(15px, 4.2vmin, 34px); white-space: nowrap; text-align: center; }
+
+  #pip { position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000; }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear, top .1s linear, background .1s linear; }
+  #pipHide { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px; }
+
+  .overlay { position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff; }
+  #startOverlay { background: linear-gradient(180deg, #d94f3a 0%, #e88a4a 40%, #f4c95a 72%, #f7e4a8 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(120,20,0,.45); }
+  #startOverlay .big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: sway 1.6s ease-in-out infinite; }
+  @keyframes sway { 0%,100% { transform: translateY(0) rotate(-3deg) } 50% { transform: translateY(-1.6vmin) rotate(3deg) } }
+  .btn { margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer; box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35); }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff6a3d, #d3322a); }
+  #btnTouch { background: linear-gradient(180deg, #ffb300, #e08800); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #fff8f0; max-width: 94%; line-height: 1.6; text-shadow: 0 1px 4px rgba(120,20,0,.5); }
+
+  #rotateHint { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.7); color: #ffee66; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin; pointer-events: none; }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(150,50,20,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer { position: fixed; inset: auto 0 18% 0; z-index: 25; display: none; text-align: center; pointer-events: none; }
+  #findPlayer .bubble { display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold; padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite; }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  #tooClose { position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none; background: rgba(180, 40, 0, .3); }
+  #tooClose .bubble { background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold; padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite; }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  #countdown { position: fixed; inset: 0; z-index: 28; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  #countdown span { font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffee44;
+    text-shadow: 0 0 50px #ff8800, 0 4px 10px rgba(0,0,0,.5); }
+
+  #zoneToast { position: fixed; top: 12vmin; left: 50%; transform: translateX(-50%); z-index: 27; pointer-events: none;
+    background: rgba(120,30,10,.62); color: #fff; font-weight: bold; padding: 1.3vmin 3.6vmin; border-radius: 999px;
+    font-size: clamp(15px, 3.8vmin, 32px); opacity: 0; transition: opacity .3s; white-space: nowrap;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4); }
+
+  #partyFx { position: fixed; inset: 0; z-index: 14; pointer-events: none; opacity: 0; transition: opacity .3s; mix-blend-mode: screen;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(255,80,60,.30), transparent 42%),
+      radial-gradient(circle at 80% 34%, rgba(255,210,70,.30), transparent 42%),
+      radial-gradient(circle at 50% 82%, rgba(255,150,40,.24), transparent 46%); }
+  #partyFx.on { opacity: 1; animation: disco .8s linear infinite; }
+  @keyframes disco { to { filter: hue-rotate(360deg); } }
+
+  #smashBtn { position: fixed; right: 3vmin; bottom: 3vmin; z-index: 22; display: none;
+    width: clamp(60px, 15vmin, 110px); height: clamp(60px, 15vmin, 110px); border-radius: 50%;
+    font-size: clamp(30px, 8vmin, 60px); border: none; color: #fff;
+    background: radial-gradient(circle at 40% 35%, #ff8a5a, #c0392b);
+    box-shadow: 0 0.8vmin 0 rgba(0,0,0,.4), 0 0 3vmin rgba(255,120,60,.6); cursor: pointer; }
+  #smashBtn:active { transform: translateY(0.4vmin) scale(.94); }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="partyFx"></div>
+<button id="smashBtn">💥</button>
+
+<div id="hud">
+  <div id="hudL"><span id="hCount">🛕 蓋好 0</span></div>
+  <div id="hudBarWrap"><div id="hudBarFill"></div><div id="hudBarText"></div></div>
+  <div id="stepTip"></div>
+</div>
+
+<div id="rotateHint">📱 把手機轉橫的蓋廟更好玩喔！</div>
+<div id="zoneToast"></div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🛕</div>
+  <p id="loadingText">正在準備工地…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="big">🛕</div>
+  <h1>蓋廟大作戰</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">🧱 你是小小建廟師傅！一起蓋一座媽祖廟：<b>蹲下</b>挖地基 → <b>雙手高舉</b>倒水泥 → <b>左右移動</b>把水泥壓平 → 把建材<b>移到發光的位置</b>吊上鷹架，蓋起紅柱和屋頂 → 請上千里眼、順風耳和媽祖 → 舞龍舞獅慶祝落成！🐉🦁<br>放錯地方？破壞車會開來「碰！」把它砸掉重來，超好笑 💥。<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+let W = window.innerWidth, H = window.innerHeight;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const rnd = (a, b) => a + Math.random() * (b - a);
+const chance = p => Math.random() < p;
+
+/* ================== 音效 ================== */
+let AC = null;
+function audioInit() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); }
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!AC || freq <= 0) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweep(f0, f1, dur, type, vol) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur + 0.05);
+  o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + dur + 0.1);
+}
+function sfxCheer()  { [660, 880, 1047, 1319].forEach((f, i) => tone(f, 0.16, 'triangle', 0.16, i * 0.05)); }
+function sfxDig()    { sweep(300, 120, 0.2, 'sawtooth', 0.14); tone(90, 0.14, 'square', 0.14, 0.02); }
+function sfxPour()   { sweep(500, 260, 0.18, 'sine', 0.07); }
+function sfxRoll()   { tone(70, 0.18, 'sawtooth', 0.06); }
+function sfxPlace()  { [523, 784, 1047].forEach((f, i) => tone(f, 0.14, 'triangle', 0.16, i * 0.05)); tone(160, 0.12, 'square', 0.12, 0.02); }
+function sfxSmash()  { sweep(400, 70, 0.35, 'square', 0.22); [220,160,110].forEach((f,i)=>tone(f,0.16,'sawtooth',0.16,i*0.05)); }
+function sfxGong()   { tone(196, 1.4, 'sine', 0.3); tone(294, 1.2, 'sine', 0.18, 0.02); tone(392, 1.0, 'sine', 0.12, 0.04); }
+function sfxFirecracker() { for (let i=0;i<6;i++) tone(rnd(400,1200), 0.05, 'square', 0.12, i*0.06); }
+function sfxParty()  { [523,659,784,1047,1319].forEach((f,i)=>tone(f,0.24,'triangle',0.14,i*0.1)); }
+function sfxAlarm()  { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); }); }
+
+const lastSay = {};
+function say(text) {
+  try { const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 0.95; u.pitch = 1.2; speechSynthesis.speak(u); } catch (e) {}
+}
+function sayT(key, text, gap = 2500) {
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n; say(text);
+}
+
+/* ================== 世界參數 ================== */
+const KID_X_MAX = 2.9;
+const PLOT_Z = -6;            // 工地/廟宇在此
+const SLAB_TOP = 0.35;        // 水泥板頂面（廟宇 local y 基準）
+
+const state = {
+  phase: 'menu', mode: null,
+  kidX: 0, kidTargetX: 0,
+  built: 0, step: 'dig', prog: 0,
+  toastT: 0, party: 0,
+  t: 0, shake: 0, paused: false,
+};
+
+/* ================== Three.js 場景 ================== */
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(W, H, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x9fd0ea);
+scene.fog = new THREE.Fog(0xd6e6ea, 26, 80);
+const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 300);
+camera.position.set(0, 4.4, 10.5);
+
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcaa870, 1.15); scene.add(hemiLight);
+const sunLight = new THREE.DirectionalLight(0xfff2cc, 1.0);
+sunLight.position.set(-8, 16, 10); scene.add(sunLight);
+
+const toneArr = new Uint8Array([100, 165, 220, 255]);
+const gradMap = new THREE.DataTexture(toneArr, toneArr.length, 1, THREE.RedFormat);
+gradMap.needsUpdate = true;
+const matCache = new Map();
+function toon(color) {
+  if (!matCache.has(color)) matCache.set(color, new THREE.MeshToonMaterial({ color, gradientMap: gradMap }));
+  return matCache.get(color);
+}
+function basic(color) { return new THREE.MeshBasicMaterial({ color }); }
+
+/* 地面 */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshToonMaterial({ color: 0x9c8f66, gradientMap: gradMap }));
+ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -28); scene.add(ground);
+/* 工地泥土地台 */
+const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
+yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
+
+/* 遠山 */
+const HILL_GEO = new THREE.SphereGeometry(1, 14, 10);
+function addHill(x, z, r, color) {
+  const h = new THREE.Mesh(HILL_GEO, toon(color));
+  h.position.set(x, -r * 0.45, z); h.scale.set(r * 1.4, r * 0.7, r * 1.4); scene.add(h);
+}
+for (let i = 0; i < 6; i++) { const z = -34 - i * 6; addHill(-24 - Math.random()*20, z, 8 + Math.random()*6, i%2?0x7bbf54:0x8fce63); addHill(24 + Math.random()*20, z, 8 + Math.random()*6, i%2?0x8fce63:0x7bbf54); }
+
+/* ================== emoji / canvas 貼圖 ================== */
+const emojiTexCache = new Map();
+function emojiTex(e) {
+  if (!emojiTexCache.has(e)) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'); x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '96px serif';
+    x.fillText(e, 64, 72);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; emojiTexCache.set(e, t);
+  }
+  return emojiTexCache.get(e);
+}
+function emojiSprite(e, size) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex(e), transparent: true, depthWrite: false, depthTest: false }));
+  s.scale.set(size, size, 1); return s;
+}
+/* 用 canvas 畫出來的原創立牌貼圖 */
+function drawTex(S, fn) {
+  const c = document.createElement('canvas'); c.width = c.height = S;
+  const x = c.getContext('2d'); fn(x, S);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+function pic(tex, w, h, depthTest = true) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest }));
+  s.scale.set(w, h, 1); return s;
+}
+const textCache = new Map();
+function textTex(text, color) {
+  const key = text + color;
+  if (textCache.has(key)) return textCache.get(key);
+  const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+  const x = c.getContext('2d'); x.font = 'bold 66px "Microsoft JhengHei", sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.lineWidth = 9; x.strokeStyle = 'rgba(0,0,0,.55)'; x.strokeText(text, 128, 66);
+  x.fillStyle = color; x.fillText(text, 128, 66);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; textCache.set(key, t); return t;
+}
+
+/* 太陽 + 雲 */
+function makeSunTex() {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const x = c.getContext('2d'); const g = x.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,250,220,1)'); g.addColorStop(0.4, 'rgba(255,240,190,.5)'); g.addColorStop(1, 'rgba(255,240,190,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const sun = new THREE.Sprite(new THREE.SpriteMaterial({ map: makeSunTex(), transparent: true, depthWrite: false, depthTest: false }));
+sun.scale.set(9, 9, 1); sun.position.set(-11, 10, -30); scene.add(sun);
+const clouds = [];
+for (let i = 0; i < 3; i++) {
+  const cl = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTex('☁️'), transparent: true, opacity: 0.9, depthWrite: false, depthTest: true }));
+  const sz = 2.4 + Math.random() * 1.4; cl.scale.set(sz, sz * 0.7, 1);
+  cl.position.set(rnd(-13, 13), 7 + Math.random() * 2.5, -18 - Math.random() * 6); scene.add(cl);
+  clouds.push({ sprite: cl, sp: 0.25 + Math.random() * 0.35 });
+}
+
+/* ================== 原創手繪：媽祖 / 千里眼 / 順風耳 / 龍 / 獅 ================== */
+// 共用小工具
+function ellipse(x, cx, cy, rx, ry, fill) { x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, 7); x.fillStyle = fill; x.fill(); }
+function bigEye(x, cx, cy, r, look = 0) {
+  x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fillStyle = '#fff'; x.fill(); x.lineWidth = r * 0.18; x.strokeStyle = '#3a2a20'; x.stroke();
+  x.beginPath(); x.arc(cx + look, cy + r * 0.12, r * 0.5, 0, 7); x.fillStyle = '#20140c'; x.fill();
+  x.beginPath(); x.arc(cx + look - r * 0.18, cy - r * 0.1, r * 0.16, 0, 7); x.fillStyle = '#fff'; x.fill();
+}
+// 媽祖：鳳冠珠簾、紅金袍、慈祥
+let TEX_MAZU = null;
+function texMazu() { return TEX_MAZU || (TEX_MAZU = drawTex(256, (x, S) => {
+  // 金色光暈
+  const g = x.createRadialGradient(128, 120, 20, 128, 120, 130);
+  g.addColorStop(0, 'rgba(255,236,150,.9)'); g.addColorStop(0.6, 'rgba(255,210,90,.35)'); g.addColorStop(1, 'rgba(255,210,90,0)');
+  x.fillStyle = g; x.fillRect(0, 0, S, S);
+  // 袍身（紅金）
+  x.beginPath(); x.moveTo(128, 96); x.lineTo(210, 246); x.lineTo(46, 246); x.closePath();
+  x.fillStyle = '#c0392b'; x.fill();
+  x.strokeStyle = '#f4c430'; x.lineWidth = 7; x.stroke();
+  // 領口 / 前襟金飾
+  x.beginPath(); x.moveTo(128, 108); x.lineTo(150, 150); x.lineTo(128, 200); x.lineTo(106, 150); x.closePath();
+  x.fillStyle = '#f4c430'; x.fill();
+  // 雙手合十 + 玉笏
+  x.fillStyle = '#f3d3b5'; ellipse(x, 118, 168, 12, 16, '#f3d3b5'); ellipse(x, 138, 168, 12, 16, '#f3d3b5');
+  x.fillStyle = '#2e7d5b'; x.fillRect(122, 132, 12, 44);
+  // 臉
+  ellipse(x, 128, 90, 34, 40, '#f6dcc0');
+  // 頭髮
+  x.fillStyle = '#241a16'; x.beginPath(); x.arc(128, 74, 40, Math.PI, 0); x.fill();
+  // 鳳冠（金）
+  x.fillStyle = '#f4c430'; x.fillRect(92, 44, 72, 20);
+  x.beginPath(); x.moveTo(92, 44); x.lineTo(128, 26); x.lineTo(164, 44); x.closePath(); x.fill();
+  x.beginPath(); x.arc(128, 30, 7, 0, 7); x.fillStyle = '#e5352b'; x.fill();
+  // 冕旒珠簾（垂在額前）
+  for (let i = -2; i <= 2; i++) { const px = 128 + i * 15; x.strokeStyle = '#f4c430'; x.lineWidth = 2; x.beginPath(); x.moveTo(px, 62); x.lineTo(px, 84); x.stroke();
+    for (let j = 0; j < 3; j++) { x.beginPath(); x.arc(px, 66 + j * 7, 3, 0, 7); x.fillStyle = j % 2 ? '#e5352b' : '#7ec8e3'; x.fill(); } }
+  // 慈祥五官
+  x.strokeStyle = '#4a352a'; x.lineWidth = 3; x.lineCap = 'round';
+  x.beginPath(); x.arc(116, 92, 7, 0.15, Math.PI - 0.15); x.stroke();
+  x.beginPath(); x.arc(140, 92, 7, 0.15, Math.PI - 0.15); x.stroke();
+  x.beginPath(); x.arc(128, 104, 8, 0.15, Math.PI - 0.15); x.strokeStyle = '#c0392b'; x.stroke();
+  // 臉頰腮紅
+  ellipse(x, 108, 100, 6, 4, 'rgba(230,120,110,.5)'); ellipse(x, 148, 100, 6, 4, 'rgba(230,120,110,.5)');
+})); }
+// 護法將軍共用臉譜
+function drawGeneral(x, S, faceCol, hairCol, armorCol, pose) {
+  // 盔甲身
+  x.beginPath(); x.moveTo(128, 108); x.lineTo(206, 246); x.lineTo(50, 246); x.closePath();
+  x.fillStyle = armorCol; x.fill(); x.strokeStyle = '#f4c430'; x.lineWidth = 6; x.stroke();
+  // 甲片
+  x.fillStyle = 'rgba(255,220,120,.85)';
+  for (let r = 0; r < 3; r++) for (let c = -1; c <= 1; c++) { x.beginPath(); x.arc(128 + c * 30, 168 + r * 24, 11, Math.PI, 0); x.fill(); }
+  // 臉
+  ellipse(x, 128, 88, 38, 42, faceCol);
+  // 火焰鬚髮
+  x.fillStyle = hairCol;
+  for (let i = 0; i < 9; i++) { const a = Math.PI + i * (Math.PI / 8); const r1 = 40, r2 = 54;
+    x.beginPath(); x.moveTo(128 + Math.cos(a) * r1, 88 + Math.sin(a) * r1);
+    x.lineTo(128 + Math.cos(a + 0.12) * r2, 88 + Math.sin(a + 0.12) * r2);
+    x.lineTo(128 + Math.cos(a + 0.24) * r1, 88 + Math.sin(a + 0.24) * r1); x.closePath(); x.fill(); }
+  // 角
+  x.fillStyle = '#e8d089';
+  x.beginPath(); x.moveTo(104, 54); x.lineTo(96, 34); x.lineTo(114, 50); x.closePath(); x.fill();
+  x.beginPath(); x.moveTo(152, 54); x.lineTo(160, 34); x.lineTo(142, 50); x.closePath(); x.fill();
+  // 兇中帶萌的眉眼
+  x.fillStyle = faceCol; ellipse(x, 128, 88, 38, 42, faceCol); // 蓋回臉蓋掉鬚根
+  bigEye(x, 112, 84, 12, 2); bigEye(x, 144, 84, 12, 2);
+  x.strokeStyle = '#20140c'; x.lineWidth = 6; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(98, 66); x.lineTo(122, 78); x.stroke();
+  x.beginPath(); x.moveTo(158, 66); x.lineTo(134, 78); x.stroke();
+  // 嘴 + 小獠牙
+  x.beginPath(); x.arc(128, 108, 12, 0.1, Math.PI - 0.1); x.strokeStyle = '#7a2018'; x.lineWidth = 4; x.stroke();
+  x.fillStyle = '#fff'; x.beginPath(); x.moveTo(120, 112); x.lineTo(124, 122); x.lineTo(128, 112); x.fill();
+  x.beginPath(); x.moveTo(136, 112); x.lineTo(132, 122); x.lineTo(128, 112); x.fill();
+  // 手勢
+  x.fillStyle = faceCol;
+  if (pose === 'eye') { // 手遮額望遠
+    x.save(); x.strokeStyle = armorCol; x.lineWidth = 16; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(180, 150); x.lineTo(150, 70); x.stroke(); x.restore();
+    ellipse(x, 150, 64, 18, 12, faceCol);
+  } else { // 手貼耳傾聽
+    x.save(); x.strokeStyle = armorCol; x.lineWidth = 16; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(76, 150); x.lineTo(100, 92); x.stroke(); x.restore();
+    x.beginPath(); x.arc(104, 90, 15, -0.6, 2.2); x.strokeStyle = faceCol; x.lineWidth = 9; x.stroke();
+  }
+}
+let TEX_QIAN = null, TEX_SHUN = null;
+function texQian() { return TEX_QIAN || (TEX_QIAN = drawTex(256, (x, S) => drawGeneral(x, S, '#4e9a55', '#2f6d38', '#264d33', 'eye'))); }
+function texShun() { return TEX_SHUN || (TEX_SHUN = drawTex(256, (x, S) => drawGeneral(x, S, '#cf4436', '#8a2318', '#2a4a5c', 'ear'))); }
+// 龍頭
+let TEX_DHEAD = null;
+function texDragonHead() { return TEX_DHEAD || (TEX_DHEAD = drawTex(256, (x, S) => {
+  x.fillStyle = '#3fae5a'; // 頭
+  x.beginPath(); x.moveTo(60, 150); x.quadraticCurveTo(70, 60, 150, 70); x.quadraticCurveTo(210, 80, 220, 140);
+  x.quadraticCurveTo(220, 170, 180, 170); x.lineTo(120, 175); x.quadraticCurveTo(60, 190, 60, 150); x.fill();
+  // 鬃毛
+  x.fillStyle = '#e5352b'; for (let i = 0; i < 6; i++) { x.beginPath(); x.moveTo(70 + i * 8, 78 - i * 2); x.lineTo(55 + i * 8, 40); x.lineTo(88 + i * 8, 74); x.fill(); }
+  // 角
+  x.strokeStyle = '#e8d089'; x.lineWidth = 9; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(120, 66); x.lineTo(108, 26); x.moveTo(120, 66); x.lineTo(140, 30); x.stroke();
+  // 上顎
+  x.fillStyle = '#7bd08c'; x.beginPath(); x.moveTo(150, 150); x.quadraticCurveTo(230, 150, 236, 176); x.quadraticCurveTo(200, 172, 150, 168); x.fill();
+  // 嘴 / 牙
+  x.fillStyle = '#7a1f18'; x.beginPath(); x.moveTo(150, 168); x.quadraticCurveTo(210, 176, 232, 190); x.quadraticCurveTo(190, 208, 150, 196); x.fill();
+  x.fillStyle = '#fff'; x.beginPath(); x.moveTo(158, 170); x.lineTo(164, 186); x.lineTo(170, 170); x.fill();
+  // 眼
+  bigEye(x, 138, 118, 15, 3);
+  // 鬍鬚
+  x.strokeStyle = '#e5c04a'; x.lineWidth = 4; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(150, 176); x.quadraticCurveTo(210, 220, 250, 205); x.stroke();
+  x.beginPath(); x.moveTo(150, 182); x.quadraticCurveTo(200, 240, 246, 240); x.stroke();
+  // 鼻
+  x.fillStyle = '#20140c'; x.beginPath(); x.arc(150, 150, 5, 0, 7); x.fill();
+})); }
+// 龍身節
+let TEX_DSEG = null;
+function texDragonSeg() { return TEX_DSEG || (TEX_DSEG = drawTex(128, (x, S) => {
+  ellipse(x, 64, 64, 46, 40, '#3fae5a');
+  x.fillStyle = '#ffd24a'; ellipse(x, 64, 66, 30, 24, '#ffe08a');
+  x.fillStyle = '#e5352b'; for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(30 + i * 16, 26); x.lineTo(24 + i * 16, 6); x.lineTo(44 + i * 16, 24); x.fill(); }
+  x.strokeStyle = '#2f8a45'; x.lineWidth = 3; x.beginPath(); x.arc(64, 66, 30, 0.2, Math.PI - 0.2); x.stroke();
+})); }
+// 舞獅頭
+let TEX_LION = null;
+function texLion() { return TEX_LION || (TEX_LION = drawTex(256, (x, S) => {
+  // 鬃毛花瓣（紅金綠交錯）
+  const cols = ['#e5352b', '#f4c430', '#2f9e57', '#ff8a1a'];
+  for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; const r = 92;
+    ellipse(x, 128 + Math.cos(a) * r, 132 + Math.sin(a) * r, 26, 26, cols[i % 4]); }
+  // 臉
+  ellipse(x, 128, 132, 76, 72, '#f6d872');
+  // 額金 + 角
+  x.fillStyle = '#f4c430'; x.beginPath(); x.moveTo(128, 70); x.lineTo(112, 40); x.lineTo(144, 40); x.closePath(); x.fill();
+  ellipse(x, 128, 92, 22, 14, '#e5352b');
+  // 大眼
+  bigEye(x, 100, 122, 24, 3); bigEye(x, 156, 122, 24, 3);
+  // 眉
+  x.strokeStyle = '#7a2018'; x.lineWidth = 8; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(78, 100); x.quadraticCurveTo(100, 92, 120, 104); x.stroke();
+  x.beginPath(); x.moveTo(178, 100); x.quadraticCurveTo(156, 92, 136, 104); x.stroke();
+  // 鼻 + 嘴
+  ellipse(x, 128, 158, 20, 14, '#e5352b');
+  x.strokeStyle = '#7a2018'; x.lineWidth = 6; x.beginPath(); x.arc(128, 176, 26, 0.15, Math.PI - 0.15); x.stroke();
+  x.fillStyle = '#fff'; x.fillRect(112, 188, 10, 10); x.fillRect(134, 188, 10, 10);
+  // 絨球
+  ellipse(x, 128, 46, 12, 12, '#7ec8e3');
+})); }
+
+/* ================== 小師傅（吉祥物，會跟著做動作） ================== */
+let kid, kidArmPivot;
+function buildKid() {
+  const g = new THREE.Group();
+  const skin = toon(0xf7cfa6), vest = toon(0xff8a1a), pants = toon(0x37474f), boot = toon(0x263238), hat = toon(0xffd24a);
+  for (const sx of [-0.15, 0.15]) {
+    const l = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.48, 0.26, 3, 0.09), pants); l.position.set(sx, 0.38, 0); g.add(l);
+    const b = new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.18, 0.32, 2, 0.07), boot); b.position.set(sx, 0.1, 0.03); g.add(b);
+  }
+  const body = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.68, 0.4, 3, 0.14), vest); body.position.y = 0.94; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 14), skin); head.position.y = 1.5; g.add(head);
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.33, 16, 12, 0, Math.PI*2, 0, Math.PI*0.55), hat); helm.position.y = 1.56; g.add(helm);
+  const brim = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.07, 0.34), hat); brim.position.set(0, 1.48, 0.05); g.add(brim);
+  const face = emojiSprite('😀', 0.4); face.position.set(0, 1.48, 0.3); g.add(face);
+  kidArmPivot = new THREE.Group(); kidArmPivot.position.set(0, 1.08, 0); g.add(kidArmPivot);
+  for (const sx of [-0.3, 0.3]) { const arm = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.15, 0.5, 3, 0.06), vest); arm.position.set(sx, 0.0, -0.05); kidArmPivot.add(arm); }
+  g.scale.setScalar(0.9);
+  return g;
+}
+
+/* ================== 工地機具 ================== */
+function addWheels(g, coords, r) {
+  const wg = new THREE.CylinderGeometry(r, r, 0.34, 12);
+  for (const [wx, wz] of coords) { const w = new THREE.Mesh(wg, toon(0x1e2126)); w.rotation.x = Math.PI / 2; w.position.set(wx, r, wz); g.add(w); }
+}
+// 挖土機（含可動手臂）
+let excavator, exArm;
+function buildExcavator() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new RoundedBoxGeometry(1.5, 0.9, 1.2, 3, 0.16), toon(0xffcc22)); body.position.y = 0.75; g.add(body);
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.8, 0.7, 0.9, 3, 0.12), toon(0xbfe6ff)); cab.position.set(-0.3, 1.4, 0); g.add(cab);
+  addWheels(g, [[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5],[0.5,0.5]], 0.3);
+  exArm = new THREE.Group(); exArm.position.set(0.5, 1.1, 0); g.add(exArm);
+  const a1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.18), toon(0xff8a1a)); a1.position.set(0.55, 0, 0); exArm.add(a1);
+  const a2 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), toon(0xff8a1a)); a2.position.set(1.05, -0.35, 0); exArm.add(a2);
+  const scoop = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), toon(0x9aa0a6)); scoop.position.set(1.05, -0.75, 0); exArm.add(scoop);
+  g.rotation.y = -0.5;
+  return g;
+}
+// 水泥車
+let cementTruck, cementDrum;
+function buildCementTruck() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new RoundedBoxGeometry(2.4, 0.6, 1.2, 3, 0.14), toon(0x2f9e57)); base.position.y = 0.66; g.add(base);
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.8, 1.1, 3, 0.14), toon(0x2f9e57)); cab.position.set(-0.8, 1.05, 0); g.add(cab);
+  const win = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.5, 0.9, 2, 0.06), toon(0xbfe6ff)); win.position.set(-1.28, 1.15, 0); g.add(win);
+  cementDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 1.3, 16), toon(0xf0e2c0)); cementDrum.rotation.z = Math.PI/2 - 0.3; cementDrum.position.set(0.55, 1.15, 0); g.add(cementDrum);
+  const chute = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.4), toon(0x9aa0a6)); chute.position.set(1.4, 0.7, 0); chute.rotation.z = -0.4; g.add(chute);
+  addWheels(g, [[-0.8,-0.6],[0.4,-0.6],[-0.8,0.6],[0.4,0.6]], 0.3);
+  g.rotation.y = 0.4;
+  return g;
+}
+// 壓路機（滾筒）
+let roller, rollerDrum;
+function buildRoller() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new RoundedBoxGeometry(1.0, 0.6, 1.0, 3, 0.12), toon(0xff5555)); body.position.set(-0.2, 0.7, 0); g.add(body);
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.55, 0.7, 3, 0.1), toon(0xbfe6ff)); cab.position.set(-0.3, 1.2, 0); g.add(cab);
+  rollerDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.3, 18), toon(0xc9ccd2)); rollerDrum.rotation.x = Math.PI/2; rollerDrum.position.set(0.55, 0.5, 0); g.add(rollerDrum);
+  addWheels(g, [[-0.6,-0.45],[-0.6,0.45]], 0.28);
+  return g;
+}
+// 吊車
+let crane, craneHook, cranePivot;
+function buildCrane() {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.4, 1.0), toon(0xff8a1a)); base.position.y = 0.2; g.add(base);
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.3, 5.2, 0.3), toon(0xffcc22)); mast.position.y = 2.8; g.add(mast);
+  const jib = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.24, 0.24), toon(0xffcc22)); jib.position.set(1.2, 5.3, 0); g.add(jib);
+  cranePivot = new THREE.Group(); cranePivot.position.set(0, 5.18, 0); g.add(cranePivot);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 4, 6), toon(0x333333)); cable.position.y = -2; cranePivot.add(cable);
+  craneHook = new THREE.Group(); craneHook.position.y = -4; cranePivot.add(craneHook);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 6, 12), toon(0x9aa0a6)); hook.position.y = -0.1; craneHook.add(hook);
+  return g;
+}
+// 破壞車（含擺動鐵球）
+let wrecker, wreckBallPivot;
+function buildWrecker() {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new RoundedBoxGeometry(2.2, 0.9, 1.3, 3, 0.16), toon(0x455a64)); body.position.y = 0.8; g.add(body);
+  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.9, 1.2, 3, 0.14), toon(0x37474f)); cab.position.set(-0.7, 1.2, 0); g.add(cab);
+  const win = new THREE.Mesh(new RoundedBoxGeometry(0.18, 0.55, 1.0, 2, 0.06), toon(0xffab40)); win.position.set(-1.15, 1.3, 0); g.add(win);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.2, 0.2), toon(0xffcc22)); arm.position.set(0.7, 2.0, 0); arm.rotation.z = 0.5; g.add(arm);
+  wreckBallPivot = new THREE.Group(); wreckBallPivot.position.set(1.7, 2.7, 0); g.add(wreckBallPivot);
+  const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6), toon(0x222222)); chain.position.y = -0.7; wreckBallPivot.add(chain);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), toon(0x2b2b2b)); ball.position.y = -1.5; wreckBallPivot.add(ball);
+  addWheels(g, [[-0.6,-0.65],[0.6,-0.65],[-0.6,0.65],[0.6,0.65]], 0.32);
+  g.visible = false;
+  return g;
+}
+
+/* ================== 廟宇（分件組裝） ================== */
+let templeGrp, parts = {}, deities = {}, scaffoldGrp;
+function buildSwallowRoof() {
+  const g = new THREE.Group();
+  // 主脊
+  const main = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.5, 1.9), toon(0xc0392b)); main.position.y = 0; g.add(main);
+  // 屋簷斜面
+  const eaveG = new THREE.BoxGeometry(4.4, 0.16, 1.0);
+  for (const dz of [0.95, -0.95]) { const e = new THREE.Mesh(eaveG, toon(0xd94f3a)); e.position.set(0, -0.2, dz); e.rotation.x = dz > 0 ? -0.5 : 0.5; g.add(e); }
+  // 燕尾翹脊
+  const tipG = new THREE.BoxGeometry(0.7, 0.22, 2.0);
+  for (const dx of [2.0, -2.0]) { const t = new THREE.Mesh(tipG, toon(0xe5352b)); t.position.set(dx, 0.28, 0); t.rotation.z = dx > 0 ? -0.6 : 0.6; g.add(t); }
+  // 金脊飾
+  const ridge = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.14, 0.2), toon(0xf4c430)); ridge.position.y = 0.28; g.add(ridge);
+  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), toon(0xf4c430)); orb.position.set(0, 0.42, 0); g.add(orb);
+  // 上層小脊
+  const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.34, 1.2), toon(0xc0392b)); top.position.set(0, 0.5, 0); g.add(top);
+  return g;
+}
+function buildTemple() {
+  const G = new THREE.Group(); G.position.set(0, 0, PLOT_Z);
+  const wood = 0x8a5a32, red = 0xc0392b, gold = 0xf4c430, stone = 0xcbb892;
+  // 台基（壓平水泥後才出現）
+  parts.base = new THREE.Mesh(new RoundedBoxGeometry(4.6, 0.5, 2.8, 3, 0.1), toon(stone)); parts.base.position.y = SLAB_TOP - 0.1; parts.base.visible = false; G.add(parts.base);
+  const steps = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, 0.5), toon(0xe0d0a8)); steps.position.set(0, SLAB_TOP - 0.05, 1.3); steps.visible = false; parts.steps = steps; G.add(steps);
+  // 後牆
+  parts.backWall = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 0.3), toon(wood)); parts.backWall.position.set(0, SLAB_TOP + 1.35, -1.0); parts.backWall.visible = false; G.add(parts.backWall);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.05), toon(0x7a1f18)); board.position.set(0, SLAB_TOP + 2.5, -0.84); board.visible = false; parts.plaque = board; G.add(board);
+  const plaqueTxt = pic(textTex('媽祖廟', '#f4c430'), 1.2, 0.45, true); plaqueTxt.position.set(0, SLAB_TOP + 2.5, -0.8); plaqueTxt.visible = false; parts.plaqueTxt = plaqueTxt; G.add(plaqueTxt);
+  // 紅柱
+  const pillarG = new THREE.CylinderGeometry(0.22, 0.24, 2.2, 14);
+  parts.leftPillar = new THREE.Mesh(pillarG, toon(red)); parts.leftPillar.position.set(-1.5, SLAB_TOP + 1.1, 0.6); parts.leftPillar.visible = false; G.add(parts.leftPillar);
+  parts.rightPillar = new THREE.Mesh(pillarG, toon(red)); parts.rightPillar.position.set(1.5, SLAB_TOP + 1.1, 0.6); parts.rightPillar.visible = false; G.add(parts.rightPillar);
+  // 橫樑
+  parts.beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.42, 0.5), toon(0x9b3226)); parts.beam.position.set(0, SLAB_TOP + 2.35, 0.6); parts.beam.visible = false; G.add(parts.beam);
+  const beamGold = new THREE.Mesh(new THREE.BoxGeometry(3.62, 0.12, 0.52), toon(gold)); beamGold.position.set(0, SLAB_TOP + 2.15, 0.6); beamGold.visible = false; parts.beamGold = beamGold; G.add(beamGold);
+  // 屋頂
+  parts.roof = buildSwallowRoof(); parts.roof.position.set(0, SLAB_TOP + 3.0, 0.1); parts.roof.visible = false; G.add(parts.roof);
+  // 神龕台座
+  const ped = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.7), toon(0xe0c060)); ped.position.set(0, SLAB_TOP + 0.55, -0.5); ped.visible = false; parts.pedestal = ped; G.add(ped);
+  // 燈籠
+  for (const dx of [-1.5, 1.5]) { const lan = emojiSprite('🏮', 0.7); lan.position.set(dx, SLAB_TOP + 1.9, 0.75); lan.visible = false; G.add(lan); parts['lan' + dx] = lan; }
+  // 神像（立牌）
+  deities.mazu = pic(texMazu(), 1.5, 1.5); deities.mazu.position.set(0, SLAB_TOP + 1.35, -0.35); deities.mazu.visible = false; G.add(deities.mazu);
+  deities.qian = pic(texQian(), 1.3, 1.3); deities.qian.position.set(-1.5, SLAB_TOP + 0.75, 0.9); deities.qian.visible = false; G.add(deities.qian);
+  deities.shun = pic(texShun(), 1.3, 1.3); deities.shun.position.set(1.5, SLAB_TOP + 0.75, 0.9); deities.shun.visible = false; G.add(deities.shun);
+  scene.add(G);
+  // 鷹架
+  scaffoldGrp = new THREE.Group(); scaffoldGrp.position.set(0, 0, PLOT_Z); scaffoldGrp.visible = false;
+  const bamboo = toon(0xcB9b5a);
+  for (const dx of [-2.4, 2.4]) for (const dz of [-1.3, 1.3]) {
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 8), bamboo); pole.position.set(dx, SLAB_TOP + 2.1, dz); scaffoldGrp.add(pole);
+  }
+  for (let ly = 1; ly <= 3; ly++) for (const dz of [-1.3, 1.3]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.08, 0.08), bamboo); rail.position.set(0, SLAB_TOP + ly * 1.1, dz); scaffoldGrp.add(rail);
+    const plank = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.06, 0.3), toon(0xb5854a)); plank.position.set(0, SLAB_TOP + ly * 1.1 + 0.06, dz); scaffoldGrp.add(plank);
+  }
+  for (let ly = 1; ly <= 3; ly++) for (const dx of [-2.4, 2.4]) {
+    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.6), bamboo); rail.position.set(dx, SLAB_TOP + ly * 1.1, 0); scaffoldGrp.add(rail);
+  }
+  scene.add(scaffoldGrp);
+  return G;
+}
+
+/* 已蓋好的小廟（背景聚落，展示累積成果） */
+const villageRoot = new THREE.Group(); scene.add(villageRoot);
+function addVillageTemple(n) {
+  const g = new THREE.Group();
+  const b = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.1, 1.2), toon(0xcbb892)); b.position.y = 0.55; g.add(b);
+  const roof = buildSwallowRoof(); roof.scale.setScalar(0.42); roof.position.y = 1.4; g.add(roof);
+  const side = n % 2 ? 1 : -1;
+  g.position.set(side * (7 + Math.floor(n / 2) * 3.2), 0.2, -15 - Math.floor(n / 2) * 1.5);
+  g.scale.setScalar(0.9); villageRoot.add(g);
+}
+
+/* ================== 特效 ================== */
+const particles = [];
+const TMP = new THREE.Vector3();
+function burst3(pos, n, emojis, opt = {}) {
+  for (let i = 0; i < n; i++) {
+    const s = emojiSprite(pick(emojis), opt.size || 0.7);
+    s.position.copy(pos);
+    const a = Math.random() * Math.PI * 2, sp = (opt.sp || 4) * (0.4 + Math.random());
+    particles.push({ sprite: s, vx: Math.cos(a)*sp, vy: (opt.up||4)+Math.random()*3, vz: Math.sin(a)*sp, life: opt.life||1, max: opt.life||1, grav: opt.grav ?? 9 });
+    scene.add(s);
+  }
+}
+function fireworks3() { for (let k = 0; k < 4; k++) setTimeout(() => burst3(TMP.set((Math.random()-0.5)*10, 5+Math.random()*3, -7-Math.random()*8), 12, ['✨','⭐','🎉','🧧'], { up: 5, sp: 5, life: 1.1 }), k * 150); }
+function popText(pos, text, color = '#ffe14d') {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex(text, color), transparent: true, depthWrite: false, depthTest: false }));
+  s.scale.set(1.7, 0.85, 1); s.position.copy(pos); scene.add(s);
+  particles.push({ sprite: s, vx: 0, vy: 1.9, vz: 0, life: 1.1, max: 1.1, grav: -1 });
+}
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.sprite.position.x += p.vx*dt; p.sprite.position.y += p.vy*dt; p.sprite.position.z += p.vz*dt;
+    p.vy -= p.grav*dt; p.life -= dt; p.sprite.material.opacity = Math.max(0, p.life / p.max);
+    if (p.rot) p.sprite.material.rotation += p.rot * dt;
+    if (p.life <= 0) { scene.remove(p.sprite); particles.splice(i, 1); }
+  }
+}
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1, lastSeen = 0;
+let personX = 0.5, shoulderW = 0, armsUp = false, squatting = false;
+let bodyRatioBase = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
+    runningMode: 'VIDEO', numPoses: 1,
+  });
+  pip.style.display = 'block';
+}
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  let result;
+  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  if (!lm) return;
+  const now = performance.now(); lastSeen = now;
+  const scx = (lm[11].x + lm[12].x) / 2, scy = (lm[11].y + lm[12].y) / 2;
+  personX = 1 - scx;
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  const sw = Math.max(0.05, shoulderW);
+  // 雙手高舉
+  const wmy = (lm[15].y + lm[16].y) / 2;
+  const band = sw * 0.5;
+  armsUp = (scy - lm[15].y) > band && (scy - lm[16].y) > band;
+  // 蹲下：以「腳踝~肩」的身高（除肩寬正規化）低於站姿基準 → 蹲
+  const ankY = (lm[27].y + lm[28].y) / 2;
+  const ratio = (ankY - scy) / sw;
+  if (ratio > 0.5 && ratio < 12) {
+    if (ratio > bodyRatioBase) bodyRatioBase += (ratio - bodyRatioBase) * 0.06;
+    else bodyRatioBase += (ratio - bodyRatioBase) * 0.01;
+    const thr = squatting ? 0.90 : 0.80;
+    squatting = bodyRatioBase > 1 && ratio < bodyRatioBase * thr;
+  }
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.top = (squatting ? 74 : armsUp ? 20 : 50) + '%';
+  pipDot.style.background = squatting ? '#a86a3a' : armsUp ? '#ff66cc' : '#00ff88';
+}
+
+/* ================== 觸控模式 ================== */
+let touchDown = false, touchX = 0.5, touchTap = false;
+canvas.addEventListener('pointerdown', e => {
+  if (state.phase !== 'play') return;
+  touchDown = true; touchTap = true; touchX = e.clientX / W;   // 每次點＝一個動作；按住＝持續
+});
+canvas.addEventListener('pointermove', e => { if (touchDown) touchX = e.clientX / W; });
+window.addEventListener('pointerup', () => { touchDown = false; });
+
+/* ================== 蓋廟：階段狀態機 ================== */
+const HOIST_PIECES = [
+  { key: 'leftPillar',  slot: -1.5, label: '紅柱', carry: 'pillar' },
+  { key: 'rightPillar', slot:  1.5, label: '紅柱', carry: 'pillar' },
+  { key: 'beam',        slot:  0.0, label: '橫樑', carry: 'beam' },
+  { key: 'roof',        slot:  0.0, label: '屋頂', carry: 'roof' },
+];
+const INSTALL_PIECES = [
+  { key: 'qian', slot: -1.5, label: '千里眼', carry: 'qian' },
+  { key: 'shun', slot:  1.5, label: '順風耳', carry: 'shun' },
+  { key: 'mazu', slot:  0.0, label: '媽祖',   carry: 'mazu' },
+];
+let carried = null, carryMesh = null, alignT = 0, farT = 0, pieceIdx = 0, placeLock = 0;
+const TREASURES = ['💎', '🦴', '🏺', '🪙', '🔧', '🪨'];
+
+const stepTip = document.getElementById('stepTip');
+const zoneToast = document.getElementById('zoneToast');
+function toast(txt, secs = 2.4) { zoneToast.textContent = txt; state.toastT = secs; }
+
+function setCarryMesh(kind) {
+  if (carryMesh) { craneHook.remove(carryMesh); carryMesh = null; }
+  let m;
+  if (kind === 'pillar') m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 1.6, 12), toon(0xc0392b));
+  else if (kind === 'beam') m = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.4, 0.5), toon(0x9b3226));
+  else if (kind === 'roof') { m = buildSwallowRoof(); m.scale.setScalar(0.6); }
+  else if (kind === 'mazu') m = pic(texMazu(), 1.3, 1.3);
+  else if (kind === 'qian') m = pic(texQian(), 1.1, 1.1);
+  else if (kind === 'shun') m = pic(texShun(), 1.1, 1.1);
+  else m = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.24, 0.6), toon(0x8a5a32)); // 木板
+  m.position.y = -0.5; craneHook.add(m); carryMesh = m;
+}
+
+function enterStep(step) {
+  state.step = step; state.prog = 0; alignT = 0; farT = 0; placeLock = 0;
+  excavator.visible = cementTruck.visible = roller.visible = crane.visible = false;
+  if (carryMesh) { craneHook.remove(carryMesh); carryMesh = null; }
+  if (step === 'dig') {
+    excavator.visible = true; digCount = 0; digTarget = 5; treasureGiven = false;
+    toast('① 挖地基！' + (state.mode === 'body' ? '蹲下～挖！' : '點畫面挖！')); sayT('dig', 'Dig the ground! Squat down!', 800);
+  } else if (step === 'pour') {
+    cementTruck.visible = true;
+    toast('② 倒水泥！' + (state.mode === 'body' ? '雙手高舉～' : '按住畫面～')); sayT('pour', 'Arms up! Pour the cement!', 800);
+    parts.base.visible = true; parts.base.scale.y = 0.02;
+  } else if (step === 'flatten') {
+    roller.visible = true; parts.base.scale.y = 1; parts.steps.visible = true;
+    for (const b of bumps) { b.mesh.visible = true; b.flat = false; b.mesh.scale.y = 1; }
+    frog.mesh.visible = true; frog.squished = false; frog.cell = Math.floor(rnd(0, bumps.length));
+    frog.mesh.position.copy(bumps[frog.cell].mesh.position); frog.mesh.position.y += 0.2;
+    toast('③ 壓水泥！左右移動壓平～'); sayT('flat', 'Move side to side! Flatten it!', 800);
+  } else if (step === 'hoist' || step === 'install') {
+    crane.visible = true; scaffoldGrp.visible = true; scaffoldGrp.scale.y = 1;
+    pieceIdx = 0; startPiece();
+    if (step === 'hoist') { toast('④ 吊建材！移到發光的地方～'); sayT('hoist', 'Move the beam to the glowing spot!', 800); }
+    else { toast('⑤ 請神像！千里眼、順風耳、媽祖～'); sayT('inst', 'Place the gods on the glowing spots!', 800); }
+  } else if (step === 'celebrate') {
+    scaffoldGrp.visible = true; startCelebrate();
+    toast('🎉 落成大典！舞龍舞獅～'); say('The temple is done! Hooray!');
+  }
+  // 天色隨進度變化；開新廟換配色；每完成一步媽祖給福 + 小煙火
+  dayNightT = STEP_TOD[step] ?? 0;
+  if (step === 'dig') applyPalette();
+  else if (step !== 'celebrate') stepBless('bless', pick(['Well done! Keep going!', 'Mazu blesses you!', 'Beautiful! Next one!', 'So good!']));
+}
+let digCount = 0, digTarget = 5, treasureGiven = false;
+const glowRing = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.08, 8, 24), new THREE.MeshBasicMaterial({ color: 0xffe14d, transparent: true, opacity: 0.9 }));
+glowRing.rotation.x = -Math.PI / 2; glowRing.visible = false; scene.add(glowRing);
+
+function currentPieces() { return state.step === 'hoist' ? HOIST_PIECES : INSTALL_PIECES; }
+function startPiece() {
+  const list = currentPieces();
+  if (pieceIdx >= list.length) { // 本階段完成
+    glowRing.visible = false;
+    if (state.step === 'hoist') enterStep('install');
+    else enterStep('celebrate');
+    return;
+  }
+  carried = list[pieceIdx]; setCarryMesh(carried.carry); alignT = 0; farT = 0;
+  glowRing.visible = true;
+  sayT('go', pick(['Move to the glow!', 'Take it to the light!', 'Line it up!']), 1400);
+}
+function placePiece() {
+  const list = currentPieces(); const pc = list[pieceIdx];
+  sfxPlace(); sfxCheer();
+  if (state.step === 'hoist') {
+    parts[pc.key].visible = true;
+    if (pc.key === 'beam') { parts.beamGold.visible = true; parts.backWall.visible = true; parts.plaque.visible = true; parts.plaqueTxt.visible = true; }
+    if (pc.key === 'roof') { parts['lan-1.5'].visible = true; parts['lan1.5'].visible = true; }
+  } else {
+    if (pc.key === 'mazu') { deities.mazu.visible = true; parts.pedestal.visible = true; }
+    else deities[pc.key].visible = true;
+  }
+  const wp = new THREE.Vector3(); templeGrp.getWorldPosition(wp);
+  burst3(TMP.set(pc.slot + wp.x, SLAB_TOP + 2, PLOT_Z + 0.5), 8, ['✨', '🎉', '⭐'], { up: 4 });
+  popText(TMP.set(pc.slot, SLAB_TOP + 2.6, PLOT_Z + 1), pick(['GOOD!', 'NICE!', 'YES!']), '#ffe14d');
+  if (carryMesh) { craneHook.remove(carryMesh); carryMesh = null; }
+  const placed = state.step === 'hoist' ? parts[pc.key] : deities[pc.key];
+  if (placed) popScale(placed, 1.4);   // 放上去彈一下
+  pieceIdx++; placeLock = 0.5; carried = null;
+  setTimeout(startPiece, 550);
+}
+// 破壞車：砸掉放錯的建材（wrong）／隨時召喚砸整座廟（free，只是好玩、不改進度）
+let wreck = { active: false, t: 0, x: 0, hit: false, free: false };
+function summonWrecker(atX) {
+  wreck.active = true; wreck.t = 0; wreck.hit = false; wreck.free = false; wreck.x = atX;
+  wrecker.visible = true; wrecker.position.set(atX - 6, 0, PLOT_Z + 1.2);
+  shunShake = 1.2;   // 順風耳「聽到」了，嚇一跳
+  popText(new THREE.Vector3(shunHelper.position.x, shunHelper.position.y + 1.0, shunHelper.position.z), '？！', '#ffcc33');
+  sayT('wreck', pick(['Oops! Wrong spot! Boom!', 'Uh oh! Knock it down!', 'Crash! Try again!']), 500);
+}
+function freeSmash() {
+  wreck.active = true; wreck.t = 0; wreck.hit = false; wreck.free = true; wreck.x = 0;
+  wrecker.visible = true; wrecker.position.set(-6, 0, PLOT_Z + 1.2);
+  shunShake = 1.2;
+  say(pick(['Wrecking ball! Boom!', 'Smash it! Ha ha!', 'Here it comes! Crash!']));
+}
+function wreckerTick(dt) {
+  wreck.t += dt;
+  const p = wrecker.position;
+  const targetX = wreck.x - 1.6;
+  p.x += (targetX - p.x) * Math.min(1, dt * 3);
+  wreckBallPivot.rotation.z = Math.sin(wreck.t * 6) * 0.9;
+  // 撞擊瞬間
+  if (wreck.t > 0.9 && !wreck.hit && Math.abs(p.x - targetX) < 0.8) {
+    wreck.hit = true; sfxSmash(); state.shake = 14; templeWobble = 1;   // 整座廟果凍般晃
+    burst3(TMP.set(wreck.x, SLAB_TOP + 1.2, PLOT_Z + 0.6), 16, ['🧱', '💥', '💨', '🪨'], { up: 5, sp: 6, life: 1.2 });
+    burst3(TMP.set(wreck.x, SLAB_TOP + 1.0, PLOT_Z + 0.6), 3, ['😹', '🙀'], { up: 4, sp: 3, life: 1.3 });
+    launchCat();
+    popText(TMP.set(wreck.x, SLAB_TOP + 2.2, PLOT_Z + 1), '碰！', '#ff5533');
+    smashX = wreck.x; smashHold = 0.4;   // 附近的小動物也一起被震飛
+    if (wreck.free) {   // 砸整座廟：已放的部件全部彈跳一下，但不改進度
+      for (const k in parts) if (parts[k] && parts[k].visible) popScale(parts[k], 1.35);
+      for (const k in deities) if (deities[k] && deities[k].visible) popScale(deities[k], 1.35);
+    } else if (carryMesh) carryMesh.visible = false;
+  }
+  if (wreck.t > 2.4) {
+    wreck.active = false; wreck.hit = false; wreck.free = false; wrecker.visible = false;
+    if (carryMesh) carryMesh.visible = true;   // 重新吊一個來
+    alignT = 0; farT = 0;
+  }
+}
+
+/* 壓水泥的凹凸 + 青蛙 */
+const bumps = [];
+const frog = { mesh: emojiSprite('🐸', 0.7), squished: false, cell: 0 };
+function buildBumps() {
+  const n = 6;
+  for (let i = 0; i < n; i++) {
+    const bx = -1.9 + i * (3.8 / (n - 1));
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8, 0, Math.PI*2, 0, Math.PI/2), toon(0x9a9086));
+    m.position.set(bx, SLAB_TOP + 0.14, PLOT_Z + rnd(-0.6, 0.6)); m.visible = false; scene.add(m);
+    bumps.push({ mesh: m, bx, flat: false });
+  }
+  frog.mesh.visible = false; scene.add(frog.mesh);
+}
+
+/* 慶典（舞龍舞獅位置由 updateParade 統一控制，全程都在畫面上遊走） */
+let celebrateT = 0;
+function startCelebrate() {
+  celebrateT = 0; state.party = 8;
+  sfxGong(); setTimeout(sfxFirecracker, 400); setTimeout(sfxParty, 800);
+}
+function celebrateTick(dt) {
+  celebrateT += dt;
+  // 拆鷹架：往下縮 + 淡出
+  scaffoldGrp.scale.y = Math.max(0, 1 - celebrateT * 0.8);
+  if (scaffoldGrp.scale.y <= 0.02) scaffoldGrp.visible = false;
+  const boost = (state.mode === 'body' ? armsUp : touchDown);
+  if (Math.random() < dt * (boost ? 12 : 5)) fireworks3();
+  if (Math.random() < dt * 3) burst3(TMP.set(rnd(-5, 5), rnd(1, 5), -5), 4, ['🧧', '🎊', '✨', '🏮'], { up: 4, life: 1.3 });
+  if (Math.random() < dt * 4) sfxFirecracker();
+  const glow = 0.6 + 0.4 * Math.sin(celebrateT * 4);
+  if (deities.mazu.visible) deities.mazu.material.opacity = 0.85 + 0.15 * glow;
+  if (celebrateT > 7) finishTemple();
+}
+function finishTemple() {
+  state.built++;
+  addVillageTemple(state.built - 1);
+  state.party = 0;
+  // 重置廟宇分件，開始下一座
+  for (const k in parts) if (parts[k]) parts[k].visible = false;
+  for (const k in deities) deities[k].visible = false;
+  parts.base.scale.y = 1;
+  say(pick(['Amazing! Let us build another temple!', 'So beautiful! One more temple!', 'You are a master builder!']));
+  enterStep('dig');
+}
+
+/* 蓋廟主更新 */
+function buildTick(dt) {
+  const kx = state.kidX;
+  if (state.step === 'dig') {
+    excavator.position.set(clamp(kx, -2, 2), 0.02, PLOT_Z + 1.4);
+    // 挖的動作：偵測「蹲下」的下降緣（body）或點擊（touch）
+    const dig = (state.mode === 'body' ? squatEdge() : touchTap);
+    if (dig && digCount < digTarget) doDig();
+    // 挖土機手臂動畫
+    exArm.rotation.z += ((digAnim > 0 ? -0.9 : -0.2) - exArm.rotation.z) * Math.min(1, dt * 8);
+    if (digAnim > 0) digAnim -= dt;
+    state.prog = digCount / digTarget;
+    if (digCount >= digTarget) enterStep('pour');
+  } else if (state.step === 'pour') {
+    cementTruck.position.set(clamp(kx, -1.5, 2.5), 0.02, PLOT_Z + 1.6);
+    cementDrum.rotation.y += dt * 3;
+    const pouring = (state.mode === 'body' ? armsUp : touchDown);
+    if (pouring && state.prog < 1) {
+      state.prog = Math.min(1, state.prog + dt * 0.4);
+      parts.base.scale.y = Math.max(0.02, state.prog);
+      if (Math.random() < dt * 30) { const s = emojiSprite('⬜', 0.3); s.position.set(cementTruck.position.x + 1.4, 1.2, PLOT_Z + 0.6); scene.add(s); particles.push({ sprite: s, vx: 0.4, vy: -0.5, vz: 0, life: 0.6, max: 0.6, grav: 6 }); }
+      if (Math.random() < dt * 8) sfxPour();
+    }
+    if (state.prog >= 1) { sfxCheer(); popText(TMP.set(0, SLAB_TOP + 1, PLOT_Z + 1), 'YES!', '#c9ccd2'); enterStep('flatten'); }
+  } else if (state.step === 'flatten') {
+    roller.position.set(clamp(kx, -2, 2), 0.02, PLOT_Z);
+    rollerDrum.rotation.x += dt * 6 * Math.sign(kx - lastRollX + 0.0001);
+    lastRollX = kx;
+    for (const b of bumps) {
+      if (!b.flat && Math.abs(roller.position.x - b.bx) < 0.5) {
+        b.flat = true; b.mesh.scale.y = 0.05; sfxRoll();
+        burst3(TMP.set(b.bx, SLAB_TOP + 0.2, b.mesh.position.z), 3, ['💨'], { up: 1.5, life: 0.5 });
+      }
+    }
+    // 青蛙被壓扁
+    if (!frog.squished && Math.abs(roller.position.x - bumps[frog.cell].bx) < 0.5) {
+      frog.squished = true; frog.mesh.scale.set(1.3, 0.15, 1); sfxRoll();
+      popText(TMP.set(bumps[frog.cell].bx, SLAB_TOP + 0.8, PLOT_Z), '呱！', '#7ec86a');
+      sayT('frog', 'Ribbit! Flat frog!', 500);
+      setTimeout(() => { if (frog.mesh) { frog.mesh.scale.set(1, 1, 1); frog.mesh.position.y += 0.4; particles.push({ sprite: frog.mesh, vx: 3, vy: 4, vz: 2, life: 1.4, max: 1.4, grav: 6 }); const nf = emojiSprite('🐸', 0.7); nf.visible = false; frog.mesh = nf; scene.add(nf); } }, 400);
+    }
+    const flatN = bumps.filter(b => b.flat).length;
+    state.prog = flatN / bumps.length;
+    if (flatN >= bumps.length) { sfxCheer(); popText(TMP.set(0, SLAB_TOP + 1, PLOT_Z + 1), 'SMOOTH!', '#c9ccd2'); enterStep('hoist'); }
+  } else if (state.step === 'hoist' || state.step === 'install') {
+    // 吊車水平跟隨、繩勾擺動
+    cranePivot.position.x += (clamp(kx, -2.2, 2.2) - cranePivot.position.x) * Math.min(1, dt * 5);
+    crane.position.set(0, 0.02, PLOT_Z + 2.2);
+    if (placeLock > 0) placeLock -= dt;
+    if (!wreck.active && carried && placeLock <= 0) {
+      // 發光圈跟著目標槽位（大幅放寬，不讓 4 歲挫折）
+      const wp = new THREE.Vector3(); templeGrp.getWorldPosition(wp);
+      glowRing.position.set(carried.slot + wp.x, SLAB_TOP + 0.25, PLOT_Z + 0.6);
+      glowRing.material.opacity = 0.5 + 0.4 * Math.abs(Math.sin(state.t * 4));
+      glowRing.scale.setScalar(1 + 0.08 * Math.sin(state.t * 4));
+      const hookX = cranePivot.position.x;
+      const d = Math.abs(hookX - carried.slot);
+      if (d < 0.85) { alignT += dt; farT = 0; if (alignT > 0.3) placePiece(); }      // 大範圍、放一下就好
+      else if (d > 1.5) { farT += dt; alignT = 0; if (farT > 1.7) summonWrecker(hookX); }  // 刻意停很遠才會招來破壞車
+      else { alignT = 0; farT = 0; }
+      state.prog = (pieceIdx + Math.min(1, alignT / 0.3)) / currentPieces().length;
+    }
+  } else if (state.step === 'celebrate') {
+    celebrateTick(dt);
+    state.prog = Math.min(1, celebrateT / 7);
+  }
+}
+let digAnim = 0, lastRollX = 0;
+// 蹲下下降緣（一次蹲＝挖一次）
+let prevSquat = false, squatCooldown = 0;
+function squatEdge() {
+  if (squatCooldown > 0) return false;
+  const edge = squatting && !prevSquat;
+  prevSquat = squatting;
+  if (edge) { squatCooldown = 0.5; return true; }
+  return false;
+}
+function doDig() {
+  digCount++; digAnim = 0.35; sfxDig(); state.shake = Math.max(state.shake, 5);
+  const dx = excavator.position.x;
+  burst3(TMP.set(dx + 0.6, 0.4, PLOT_Z + 0.6), 6, ['🟫', '💨'], { up: 3, sp: 3, life: 0.7 });
+  // 挖到反應式驚喜（每座廟隨機不同）
+  if (!treasureGiven && digCount >= 2 && chance(0.7)) {
+    treasureGiven = true;
+    const su = pick(SURPRISES);
+    const s = emojiSprite(su.e, 1.0); s.position.set(dx + 0.6, 0.6, PLOT_Z + 0.6); scene.add(s);
+    particles.push({ sprite: s, vx: rnd(-0.6, 0.6), vy: 5, vz: 1.2, life: 2.0, max: 2.0, grav: 5, rot: rnd(-2, 2) });
+    popText(TMP.set(dx + 0.6, 1.6, PLOT_Z + 0.6), su.t, '#ffe14d');
+    sayT('surprise', su.v, 400); sfxCheer();
+    if (su.e === '🚰') burst3(TMP.set(dx + 0.6, 0.8, PLOT_Z + 0.6), 12, ['💧', '💦'], { up: 6, sp: 3, life: 1.2 });   // 水管噴水
+  }
+}
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+async function begin(mode) {
+  goFullscreen(); audioInit(); state.mode = mode; musicOn = true;
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try { await setupBodyTracking(); }
+    catch (e) { loadingOverlay.style.display = 'none'; alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')'); state.mode = 'touch'; }
+    loadingOverlay.style.display = 'none';
+  }
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+// 初始化世界
+kid = buildKid(); scene.add(kid);
+excavator = buildExcavator(); scene.add(excavator);
+cementTruck = buildCementTruck(); scene.add(cementTruck);
+roller = buildRoller(); scene.add(roller);
+crane = buildCrane(); scene.add(crane);
+wrecker = buildWrecker(); scene.add(wrecker);
+templeGrp = buildTemple();
+buildBumps();
+excavator.visible = cementTruck.visible = roller.visible = crane.visible = false;
+
+/* ================== 更好玩系統：搞笑破壞 / 神明個性 / 熱鬧氛圍 / 每次不同 ================== */
+
+/* --- 果凍晃動 + 放上去彈跳 --- */
+let templeWobble = 0;
+const pops = [];
+function popScale(obj, f = 1.35) { pops.push({ obj, base: obj.scale.clone(), f }); }
+function updatePops(dt) {
+  for (let i = pops.length - 1; i >= 0; i--) {
+    const p = pops[i]; p.f += (1 - p.f) * Math.min(1, dt * 9);
+    p.obj.scale.set(p.base.x * p.f, p.base.y * p.f, p.base.z * p.f);
+    if (Math.abs(p.f - 1) < 0.02) { p.obj.scale.copy(p.base); pops.splice(i, 1); }
+  }
+}
+function launchCat() {
+  const c = emojiSprite(pick(['🐈', '🐈‍⬛', '🐱']), 0.9); c.position.set(rnd(-1, 1), SLAB_TOP + 1.5, PLOT_Z + 0.6); scene.add(c);
+  particles.push({ sprite: c, vx: rnd(-4, 4), vy: 9, vz: 2, life: 1.9, max: 1.9, grav: 6, rot: rnd(-6, 6) });
+  sayT('catfly', 'Meoooow!', 400);
+}
+
+/* --- 到處亂入、被壓扁又彈回的小動物（可無限重複） --- */
+const critters = [];
+let smashX = null, smashHold = 0;
+function spawnCritter() {
+  if (critters.length > 4) return;
+  const s = emojiSprite(pick(['🐱', '🐶', '🦆', '🐭', '🐸', '🐤', '🐰']), 0.6);
+  const side = chance(0.5) ? -1 : 1;
+  s.position.set(side * 5.5, 0.35, PLOT_Z + rnd(-0.4, 1.6)); scene.add(s);
+  critters.push({ sprite: s, vx: -side * rnd(0.5, 1.1), squish: 0, hop: Math.random() * 6, baseY: 0.35 });
+}
+function updateCritters(dt) {
+  if (state.phase === 'play' && !state.paused && Math.random() < dt * 0.7) spawnCritter();
+  let dangerX = null;
+  if (state.step === 'flatten' && roller.visible) dangerX = roller.position.x;
+  if (smashHold > 0) { dangerX = smashX; smashHold -= dt; }
+  for (let i = critters.length - 1; i >= 0; i--) {
+    const c = critters[i]; const p = c.sprite.position;
+    if (c.squish > 0) {
+      c.squish -= dt;
+      if (c.squish <= 0) { c.sprite.scale.set(0.6, 0.6, 1); c.vx = (p.x < 0 ? 1 : -1) * 2.4; }   // 彈回原狀、快跑
+      p.x += c.vx * dt; p.y = c.baseY + Math.abs(Math.sin(state.t * 16)) * 0.4;
+    } else {
+      p.x += c.vx * dt; p.y = c.baseY + Math.abs(Math.sin(state.t * 6 + c.hop)) * 0.18;
+      if (dangerX !== null && Math.abs(p.x - dangerX) < 0.55 && Math.abs(p.z - PLOT_Z) < 2.2) {
+        c.squish = 0.5; c.sprite.scale.set(1.25, 0.14, 1); sfxRoll();
+        popText(TMP.set(p.x, c.baseY + 0.7, p.z), pick(['呱！', '喵！', '啾！', '咦！']), '#7ec86a');
+        sayT('squish', pick(['Squish!', 'Oopsie!', 'Boing!']), 350);
+      }
+    }
+    if (p.x < -6.5 || p.x > 6.5) { scene.remove(c.sprite); critters.splice(i, 1); }
+  }
+}
+
+/* --- 舞龍舞獅：全程在畫面遊走，慶典時衝到前景放大變快 --- */
+const dragon = { head: pic(texDragonHead(), 1.6, 1.6, false), segs: [] };
+dragon.head.material.depthTest = false; scene.add(dragon.head);
+for (let i = 0; i < 7; i++) { const s = pic(texDragonSeg(), 0.85, 0.85, false); s.material.depthTest = false; scene.add(s); dragon.segs.push(s); }
+const lion = pic(texLion(), 1.5, 1.5, false); lion.material.depthTest = false; scene.add(lion);
+let paradeFg = 0;
+function updateParade(dt) {
+  const target = (state.step === 'celebrate') ? 1 : 0;
+  paradeFg += (target - paradeFg) * Math.min(1, dt * 1.2);
+  const t = state.t, sp = 0.3 * (1.6 + paradeFg * 2.2);
+  const z = -13 + 10 * paradeFg, span = 9 - paradeFg * 3, yBase = 2.2 + paradeFg * 0.4;
+  const wave = k => yBase + Math.sin(t * (1.2 + paradeFg) - k) * (0.8 + paradeFg * 0.6);
+  const dir = Math.cos(t * sp);
+  const dscl = 1.5 + paradeFg * 0.4;
+  dragon.head.position.set(Math.sin(t * sp) * span, wave(0), z);
+  dragon.head.scale.set((dir >= 0 ? 1 : -1) * dscl, dscl, 1);
+  dragon.head.material.rotation = Math.sin(t * 3) * 0.06;
+  dragon.segs.forEach((s, i) => { const k = (i + 1) * 0.55; s.position.set(Math.sin(t * sp - k) * span, wave(k), z - 0.05); });
+  const lscl = 1.4 + paradeFg * 0.5;
+  lion.position.set(Math.sin(t * 0.9) * (5 - paradeFg * 2), (0.9 + paradeFg * 0.4) + Math.abs(Math.sin(t * 5)) * (0.3 + paradeFg * 0.3), z + 1.6 + paradeFg * 1.5);
+  lion.scale.set(lscl, lscl, 1); lion.material.rotation = Math.sin(t * 5) * 0.12;
+}
+updateParade(0);   // 先擺到背景，避免倒數時閃現在畫面中央
+
+/* --- 神明助手：千里眼指路光束、順風耳預警、媽祖祝福閃光 --- */
+const qianHelper = pic(texQian(), 1.1, 1.1, false); qianHelper.material.depthTest = false; qianHelper.position.set(-4.7, 3.0, -1.5); scene.add(qianHelper);
+const shunHelper = pic(texShun(), 1.1, 1.1, false); shunHelper.material.depthTest = false; shunHelper.position.set(4.7, 3.0, -1.5); scene.add(shunHelper);
+const mazuHelper = pic(texMazu(), 1.3, 1.3, false); mazuHelper.material.depthTest = false; mazuHelper.position.set(0, 4.7, -3); mazuHelper.material.opacity = 0; scene.add(mazuHelper);
+let shunShake = 0, mazuBless = 0;
+const eyeBeam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1, 6), new THREE.MeshBasicMaterial({ color: 0x66ffcc, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false }));
+eyeBeam.visible = false; scene.add(eyeBeam);
+const _UP = new THREE.Vector3(0, 1, 0), _V1 = new THREE.Vector3(), _V2 = new THREE.Vector3(), _VD = new THREE.Vector3();
+function updateHelpers(dt) {
+  qianHelper.position.y = 3.0 + Math.sin(state.t * 2) * 0.12;
+  shunHelper.position.y = 3.0 + Math.cos(state.t * 2) * 0.12 + (shunShake > 0 ? Math.sin(state.t * 40) * 0.12 : 0);
+  if (shunShake > 0) shunShake -= dt;
+  if (glowRing.visible && !wreck.active && (state.step === 'hoist' || state.step === 'install')) {
+    eyeBeam.visible = true;
+    _V1.copy(qianHelper.position); _V2.copy(glowRing.position);
+    _VD.subVectors(_V2, _V1); const len = _VD.length() || 1;
+    eyeBeam.position.copy(_V1).addScaledVector(_VD, 0.5);
+    eyeBeam.scale.set(1, len, 1);
+    eyeBeam.quaternion.setFromUnitVectors(_UP, _VD.normalize());
+    eyeBeam.material.opacity = 0.25 + 0.2 * Math.abs(Math.sin(state.t * 6));
+  } else eyeBeam.visible = false;
+  if (mazuBless > 0) { mazuBless -= dt; mazuHelper.material.opacity = Math.min(0.95, mazuBless * 1.3); const s = 1.3 + (1.2 - mazuBless) * 0.35; mazuHelper.scale.set(s, s, 1); }
+  else mazuHelper.material.opacity += (0 - mazuHelper.material.opacity) * Math.min(1, dt * 3);
+}
+function stepBless(key, voice) {
+  mazuBless = 1.2;
+  burst3(TMP.set(0, SLAB_TOP + 2.6, PLOT_Z), 8, ['✨', '🌟', '🧧'], { up: 3, life: 1.2 });
+  fireworks3(); sfxGong();
+  if (voice) sayT(key, voice, 1200);
+}
+
+/* --- 免費召喚破壞車（隨時砸，純好玩） --- */
+let armsUpSince = 0, freeCool = 0;
+function maybeFreeSmash(dt) {
+  if (freeCool > 0) freeCool -= dt;
+  const canFree = (state.step === 'flatten' || state.step === 'hoist' || state.step === 'install');
+  if (!canFree || wreck.active || freeCool > 0) { if (!armsUp) armsUpSince = 0; return; }
+  let trigger = false;
+  if (state.mode === 'body') {
+    if (armsUp) { if (!armsUpSince) armsUpSince = performance.now(); if (performance.now() - armsUpSince > 1100) trigger = true; }
+    else armsUpSince = 0;
+  } else if (smashBtnPressed) { trigger = true; }
+  smashBtnPressed = false;
+  if (trigger) { armsUpSince = 0; freeCool = 2.5; freeSmash(); }
+}
+
+/* --- 熱鬧氛圍：音樂 / 日夜 / 飛鳥 / 燈籠搖曳 --- */
+let musicOn = false, musicNextT = 0, musicStep = 0;
+const MEL = [523, 659, 784, 659, 587, 784, 880, 784, 523, 659, 784, 1047, 880, 784, 659, 587];
+function musicTick(now) {
+  if (!AC || !musicOn || state.phase === 'menu') return;
+  if (now < musicNextT) return; musicNextT = now + 330;
+  const n = MEL[musicStep % MEL.length];
+  tone(n, 0.18, 'triangle', 0.04);
+  if (musicStep % 4 === 0) tone(n / 2, 0.4, 'sine', 0.05);
+  if (musicStep % 8 === 0) tone(196, 0.6, 'sine', 0.05);
+  musicStep++;
+}
+const DAY = { sky: 0x9fd0ea, fog: 0xd6e6ea, hemi: 1.15, sun: 1.0 };
+const NIGHT = { sky: 0x24304f, fog: 0x323f5e, hemi: 0.75, sun: 0.35 };
+const STEP_TOD = { dig: 0, pour: 0.12, flatten: 0.28, hoist: 0.5, install: 0.78, celebrate: 1 };
+let dayNight = 0, dayNightT = 0;
+const _cA = new THREE.Color(), _cB = new THREE.Color();
+function updateDayNight(dt) {
+  dayNight += (dayNightT - dayNight) * Math.min(1, dt * 0.8);
+  _cA.setHex(DAY.sky).lerp(_cB.setHex(NIGHT.sky), dayNight); scene.background.copy(_cA);
+  _cA.setHex(DAY.fog).lerp(_cB.setHex(NIGHT.fog), dayNight); scene.fog.color.copy(_cA);
+  hemiLight.intensity = DAY.hemi + (NIGHT.hemi - DAY.hemi) * dayNight;
+  sunLight.intensity = DAY.sun + (NIGHT.sun - DAY.sun) * dayNight;
+  sun.material.opacity = 1 - dayNight * 0.9; sun.position.y = 10 - dayNight * 5;
+}
+const birds = [];
+for (let i = 0; i < 3; i++) { const b = emojiSprite('🐦', 0.5); b.position.set(rnd(-12, 12), rnd(5, 8), -14 - rnd(0, 6)); scene.add(b); birds.push({ s: b, sp: rnd(0.8, 1.6) * (chance(0.5) ? 1 : -1) }); }
+function updateAmbient(dt) {
+  for (const b of birds) { b.s.position.x += b.sp * dt; if (b.s.position.x > 13) b.s.position.x = -13; if (b.s.position.x < -13) b.s.position.x = 13; }
+  for (const k of ['lan-1.5', 'lan1.5']) if (parts[k] && parts[k].visible) parts[k].material.rotation = Math.sin(state.t * 2 + (k.indexOf('-') >= 4 ? 0 : 1)) * 0.15;
+}
+
+/* --- 每次不同：廟宇配色 + 反應式挖掘驚喜 --- */
+const PALETTES = [
+  { pillar: 0xc0392b, base: 0xcbb892 }, { pillar: 0x1f6f8b, base: 0xd9c9a0 },
+  { pillar: 0x2e7d32, base: 0xd6c48a }, { pillar: 0x8e44ad, base: 0xe0cfa0 }, { pillar: 0xd35400, base: 0xe8d3a0 },
+];
+function applyPalette() {
+  const p = pick(PALETTES);
+  parts.leftPillar.material = toon(p.pillar); parts.rightPillar.material = toon(p.pillar);
+  parts.base.material = toon(p.base);
+}
+const SURPRISES = [
+  { e: '🦕', t: '挖到恐龍！', v: 'A dinosaur! Rawr!' },
+  { e: '🦖', t: '恐龍寶寶！', v: 'A baby dino! Rawr!' },
+  { e: '🐭', t: '鼴鼠哈囉～', v: 'Hello, little mole!' },
+  { e: '🦴', t: '恐龍骨頭！', v: 'Dino bones! Cool!' },
+  { e: '💎', t: '閃亮寶石！', v: 'A shiny gem!' },
+  { e: '🏺', t: '古董花瓶！', v: 'An ancient vase!' },
+  { e: '🐱', t: '吵醒睡貓了！', v: 'Oops! A sleepy cat!' },
+  { e: '🪙', t: '一堆金幣！', v: 'Lots of gold coins!' },
+  { e: '🚰', t: '挖到水管！噴水啦', v: 'A water pipe! Splash!' },
+];
+
+const smashBtn = document.getElementById('smashBtn');
+let smashBtnPressed = false;
+smashBtn.addEventListener('pointerdown', e => { e.stopPropagation(); smashBtnPressed = true; });
+
+function startCountdown() {
+  state.phase = 'countdown';
+  state.built = 0; state.kidX = 0; state.kidTargetX = 0;
+  for (const p of particles) scene.remove(p.sprite); particles.length = 0;
+  for (const k in parts) if (parts[k]) parts[k].visible = false;
+  for (const k in deities) deities[k].visible = false;
+  document.getElementById('hud').style.display = 'block';
+  const el = document.getElementById('countdown'), num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '開工！'];
+  say("Three, two, one, let's build a temple!");
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) { num.textContent = seq[i]; num.style.animation = 'none'; void num.offsetWidth; tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2); i++; setTimeout(step, 900); }
+    else { el.style.display = 'none'; state.phase = 'play'; state.t = 0; enterStep('dig'); }
+  };
+  step();
+}
+
+/* ================== 更新 ================== */
+function update(dt) {
+  state.t += dt;
+  if (squatCooldown > 0) squatCooldown -= dt;
+
+  if (state.mode === 'body') {
+    trackFrame();
+    state.kidTargetX = clamp((personX - 0.5) * 2 * KID_X_MAX * 1.15, -KID_X_MAX, KID_X_MAX);
+    const nowMs = performance.now();
+    const lost = poseLandmarker && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'play') ? 'block' : 'none';
+    if (shoulderW > 0.28 && nowMs - lastSeen < 500) { if (!tooCloseSince) tooCloseSince = nowMs; }
+    else if (shoulderW < 0.23 || lost) { tooCloseSince = 0; }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'play') {
+      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('Too close! Step back, please!'); }
+      state.paused = nowMs < pauseUntil;
+    } else state.paused = false;
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) { const remain = Math.ceil((pauseUntil - nowMs) / 1000); document.getElementById('pauseCount').textContent = remain > 0 ? remain : ''; }
+    if (wasPaused && !state.paused) say("OK! Let's build!");
+    wasPaused = state.paused;
+  } else {
+    if (touchDown) state.kidTargetX = clamp((touchX - 0.5) * 2 * KID_X_MAX, -KID_X_MAX, KID_X_MAX);
+  }
+
+  if (state.toastT > 0) { state.toastT -= dt; zoneToast.style.opacity = state.toastT > 0 ? 1 : 0; }
+  const prevKidX = state.kidX;
+  state.kidX += (state.kidTargetX - state.kidX) * Math.min(1, dt * 6);
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 16);
+
+  if (state.phase === 'play' && !state.paused) {
+    if (wreck.active) wreckerTick(dt);
+    buildTick(dt);
+    maybeFreeSmash(dt);
+    updateParade(dt);
+    updateCritters(dt);
+    updateHelpers(dt);
+    updateDayNight(dt);
+    updateAmbient(dt);
+  }
+
+  document.getElementById('partyFx').classList.toggle('on', state.party > 0);
+  smashBtn.style.display = (state.mode === 'touch' && state.phase === 'play') ? 'block' : 'none';
+  touchTap = false;
+  updatePops(dt);
+  updateParticles(dt);
+}
+
+/* ================== 呈現 ================== */
+function syncVisual(dt) {
+  kid.position.set(clamp(state.kidX * 0.7, -2.4, 2.4), Math.abs(Math.sin(state.t * 3)) * 0.03, 2.6);
+  // 小師傅跟著做動作
+  let armAng = 0.2;
+  if (state.step === 'pour' && (state.mode === 'body' ? armsUp : touchDown)) armAng = -2.4;
+  else if (state.step === 'dig' && (state.mode === 'body' ? squatting : false)) armAng = 1.0;
+  else if (state.step === 'celebrate') armAng = -2.0 + Math.sin(state.t * 8) * 0.5;
+  kidArmPivot.rotation.x += (armAng - kidArmPivot.rotation.x) * Math.min(1, dt * 8);
+  const targetSY = (state.step === 'dig' && state.mode === 'body' && squatting) ? 0.62 : 0.9;
+  kid.scale.y += (targetSY - kid.scale.y) * Math.min(1, dt * 10);
+
+  // 相機
+  const cx = state.kidX * 0.28 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.04 : 0);
+  camera.position.x += (cx - camera.position.x) * Math.min(1, dt * 6);
+  camera.position.y = 4.4 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.03 : 0);
+  camera.lookAt(state.kidX * 0.15, 2.0, PLOT_Z);
+
+  for (const c of clouds) { c.sprite.position.x -= c.sp * dt; if (c.sprite.position.x < -14) c.sprite.position.x = 14; }
+  glowRing.rotation.z += dt * 1.2;
+
+  // 破壞後整座廟果凍般晃動
+  if (templeWobble > 0.001) {
+    templeWobble = Math.max(0, templeWobble - dt * 1.6);
+    templeGrp.rotation.z = Math.sin(state.t * 34) * templeWobble * 0.14;
+    templeGrp.position.y = Math.sin(state.t * 44) * templeWobble * 0.12;
+  } else { templeGrp.rotation.z = 0; templeGrp.position.y = 0; }
+}
+
+/* ================== HUD ================== */
+const hCount = document.getElementById('hCount');
+const hBarFill = document.getElementById('hudBarFill'), hBarText = document.getElementById('hudBarText');
+const STEP_NAME = { dig: '① 挖地基', pour: '② 倒水泥', flatten: '③ 壓水泥', hoist: '④ 吊建材', install: '⑤ 請神像', celebrate: '🎉 落成慶典' };
+const STEP_TIP = {
+  dig:      s => s === 'body' ? '🧎 蹲下～挖地基！' : '👆 點畫面挖地基！',
+  pour:     s => s === 'body' ? '🙌 雙手高舉～倒水泥！' : '👆 按住畫面倒水泥！',
+  flatten:  s => '🚶 左右移動～把水泥壓平！',
+  hoist:    s => s === 'body' ? '➡️ 移到發光處放建材（雙手舉高召破壞車💥）' : '➡️ 移到發光處放建材（按💥砸掉重來）',
+  install:  s => s === 'body' ? '🛕 神像請到發光處（雙手舉高召破壞車💥）' : '🛕 神像請到發光處（按💥砸掉重來）',
+  celebrate:s => s === 'body' ? '🙌 舉手放更多煙火！' : '👆 一直點放更多煙火！',
+};
+function syncHUD() {
+  if (state.phase === 'menu') return;
+  hCount.textContent = '🛕 蓋好 ' + state.built;
+  hBarFill.style.width = (state.prog * 100) + '%';
+  hBarText.textContent = STEP_NAME[state.step] || '';
+  stepTip.textContent = state.phase === 'play' && STEP_TIP[state.step] ? STEP_TIP[state.step](state.mode) : '';
+}
+
+/* ================== 主迴圈 ================== */
+function onResize() { W = window.innerWidth; H = window.innerHeight; renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix(); }
+window.addEventListener('resize', onResize); onResize();
+
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (state.phase !== 'menu') update(dt);
+  musicTick(now);
+  syncVisual(dt); syncHUD();
+  renderer.render(scene, camera);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

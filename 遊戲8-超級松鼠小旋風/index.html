@@ -200,7 +200,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const chance = p => Math.random() < p;
-const GAME_VER = 1;
+const GAME_VER = 2;
 
 /* ================== 音效（WebAudio 合成） ================== */
 let AC = null;
@@ -273,8 +273,8 @@ function sayT(key, text, gap = 2500, pri = 1) {
 const IMG = {};
 const IMG_LIST = ['BG001.jpg','BG002.png','CHAR001.png','CHAR002.png','CHAR003.png','CHAR004.png','CHAR005.png',
   'CHAR006.png','CHAR007.png','CHAR008.png','CHAR009.png','CHAR010.png','CHAR011.png','CHAR012.png',
-  'CHAR013.png','CHAR101.png','CHAR102.png','CHAR201.png','CHAR202.png'];
-// CHAR013 = 換腳跑步影格（之後補圖就會自動啟用；沒有也沒關係）
+  'RUN1.png','RUN2.png','RUN3.png','RUN4.png','CHAR101.png','CHAR102.png','CHAR201.png','CHAR202.png'];
+// RUN1~4 = 跑步改善四影格（576x384 橫幅，含尾巴）
 const has = im => im && im.complete && im.naturalWidth > 0;
 let imgsReady = false;
 function loadImages(onProgress) {
@@ -953,18 +953,22 @@ function update(dt) {
 function drawImageFit(img, x, y, w, h) { ctx.drawImage(img, x, y, w, h); }
 function currentSprite() {
   const s = state.run, t = state.stT;
-  if (state.phase === 'victory') return IMG.CHAR012;
-  if (s === 'jump') return IMG.CHAR004;
-  if (s === 'crouch') return IMG.CHAR005;
-  if (s === 'hit') return IMG.CHAR006;
-  if (s === 'roll') return IMG.CHAR007;
-  if (s === 'dizzy') return IMG.CHAR008;
-  if (s === 'standup') return IMG.CHAR009;
-  if (s === 'heroPose') return IMG.CHAR010;
-  // 換腳跑步：有 CHAR013（換腳版）就用它，沒有先用 CHAR011（右腳前）
-  const alt = has(IMG.CHAR013) ? IMG.CHAR013 : IMG.CHAR011;
-  if (state.hero > 0) return Math.floor(t * 12) % 2 ? IMG.CHAR011 : IMG.CHAR009;
-  return Math.floor(t * 9) % 2 ? alt : IMG.CHAR002;
+  if (state.phase === 'victory') return { img: IMG.CHAR012 };
+  if (s === 'jump') return { img: IMG.CHAR004 };
+  if (s === 'crouch') return { img: IMG.CHAR005 };
+  if (s === 'hit') return { img: IMG.CHAR006 };
+  if (s === 'roll') return { img: IMG.CHAR007 };
+  if (s === 'dizzy') return { img: IMG.CHAR008 };
+  if (s === 'standup') return { img: IMG.CHAR009 };
+  if (s === 'heroPose') return { img: IMG.CHAR010 };
+  // 四影格跑步循環（跑步改善）：左觸地 → 過渡 → 右觸地 → 飛撲
+  if (has(IMG.RUN1)) {
+    const seq = [IMG.RUN1, IMG.RUN2, IMG.RUN4, IMG.RUN3];
+    const fps = state.hero > 0 ? 14 : 11;
+    return { img: seq[Math.floor(t * fps) % 4], wide: true };
+  }
+  if (state.hero > 0) return { img: Math.floor(t * 12) % 2 ? IMG.CHAR011 : IMG.CHAR009 };
+  return { img: Math.floor(t * 9) % 2 ? IMG.CHAR011 : IMG.CHAR002 };
 }
 function drawPlayer() {
   const sq = SQ;
@@ -974,16 +978,19 @@ function drawPlayer() {
   ell(ctx, px, groundY() + H * 0.015, H * 0.09 * shScale, H * 0.022 * shScale, 'rgba(60,40,20,.30)');
   // 英雄模式光暈 + 殘影
   if (state.hero > 0 || state.run === 'heroPose') {
+    const tImg = has(IMG.RUN3) ? IMG.RUN3 : IMG.CHAR011;
+    const th = has(IMG.RUN3) ? sq * 0.86 : sq;
+    const tw = has(IMG.RUN3) ? th * 1.5 : sq, tax = has(IMG.RUN3) ? 0.62 : 0.5;
     for (const tr of trail) {
       ctx.globalAlpha = tr.life * 0.5;
-      ctx.drawImage(IMG.CHAR011, tr.x - sq / 2 - (0.35 - tr.life) * H * 0.5, groundY() - tr.y + H * 0.02 - sq, sq, sq);
+      ctx.drawImage(tImg, tr.x - tw * tax - (0.35 - tr.life) * H * 0.5, groundY() - tr.y + H * 0.02 - th, tw, th);
     }
     ctx.globalAlpha = 1;
     const g = ctx.createRadialGradient(px, bottom - sq * 0.45, sq * 0.1, px, bottom - sq * 0.45, sq * 0.75);
     g.addColorStop(0, 'rgba(255,225,100,.55)'); g.addColorStop(1, 'rgba(255,225,100,0)');
     ctx.fillStyle = g; ctx.fillRect(px - sq, bottom - sq * 1.6, sq * 2, sq * 2);
   }
-  const img = currentSprite();
+  const spr = currentSprite(), img = spr && spr.img;
   if (!img) return;
   ctx.save();
   // 無敵閃爍
@@ -993,8 +1000,12 @@ function drawPlayer() {
     ctx.rotate(state.stT / 0.75 * Math.PI * 2 * 1.5);
     ctx.drawImage(img, -sq / 2, -sq * 0.5, sq, sq);
   } else {
+    // 跑步影格是 3:2 橫幅（尾巴在左），身體約在 62% 位置，錨點對齊 px
+    // 內容佔比比方形影格高，縮 0.86 讓身體大小跟跳/蹲影格一致
+    const hh = spr.wide ? sq * 0.86 : sq;
+    const w = spr.wide ? hh * 1.5 : sq, ax = spr.wide ? 0.62 : 0.5;
     const bob = ['run', 'crouch'].includes(state.run) && state.py === 0 ? Math.abs(Math.sin(state.t * 11)) * H * 0.008 : 0;
-    ctx.drawImage(img, px - sq / 2, bottom - sq - bob, sq, sq);
+    ctx.drawImage(img, px - w * ax, bottom - hh - bob, w, hh);
   }
   ctx.restore();
   // 暈眩星星

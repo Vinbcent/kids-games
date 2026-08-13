@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>超級松鼠小旋風｜遊戲製作計畫</title>
+  <style>
+    :root{
+      --bg:#f7fbff;
+      --card:#ffffff;
+      --text:#18323f;
+      --muted:#607785;
+      --accent:#11a9b8;
+      --accent2:#ff8a34;
+      --line:#dfeaf0;
+      --good:#2f9e44;
+      --warn:#d97706;
+      --shadow:0 10px 28px rgba(30,60,80,.08);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+      background:linear-gradient(180deg,#effaff 0%,var(--bg) 320px);
+      color:var(--text);
+      line-height:1.7;
+    }
+    .wrap{max-width:1180px;margin:0 auto;padding:28px 22px 64px}
+    .hero{
+      background:linear-gradient(135deg,#0fa8b6 0%,#63d3dc 100%);
+      color:white;
+      border-radius:28px;
+      padding:34px 36px;
+      box-shadow:var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+    .hero:after{
+      content:"";
+      position:absolute;
+      width:220px;height:220px;
+      border-radius:50%;
+      background:rgba(255,255,255,.12);
+      right:-60px;top:-70px;
+    }
+    h1{margin:0 0 8px;font-size:34px}
+    .hero p{margin:0;max-width:820px;font-size:17px}
+    .chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+    .chip{background:rgba(255,255,255,.18);padding:7px 12px;border-radius:999px;font-size:14px}
+    h2{font-size:24px;margin:34px 0 14px}
+    h3{font-size:19px;margin:22px 0 10px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+    .card{
+      background:var(--card);
+      border:1px solid var(--line);
+      border-radius:18px;
+      padding:18px;
+      box-shadow:var(--shadow);
+    }
+    .card strong{color:#0c7d88}
+    table{width:100%;border-collapse:collapse;background:white;border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+    th,td{padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}
+    th{background:#eef9fb;font-weight:700}
+    tr:last-child td{border-bottom:0}
+    code,pre{font-family:"Cascadia Code","Consolas",monospace}
+    pre{
+      background:#102631;
+      color:#dff8fb;
+      padding:16px;
+      border-radius:14px;
+      overflow:auto;
+      font-size:14px;
+    }
+    .flow{
+      background:#fff;
+      border:1px dashed #b9dce2;
+      border-radius:16px;
+      padding:18px;
+    }
+    .note{
+      border-left:5px solid var(--accent2);
+      background:#fff8f2;
+      padding:14px 16px;
+      border-radius:12px;
+    }
+    .ok{
+      border-left:5px solid var(--good);
+      background:#f2fbf4;
+      padding:14px 16px;
+      border-radius:12px;
+    }
+    .small{font-size:14px;color:var(--muted)}
+    ul{padding-left:22px}
+    .asset-id{font-weight:800;color:#0c7d88;white-space:nowrap}
+    .footer{margin-top:36px;color:var(--muted);font-size:13px;text-align:center}
+    @media (max-width:800px){
+      .grid,.grid3{grid-template-columns:1fr}
+      h1{font-size:28px}
+      .hero{padding:26px 24px}
+      table{font-size:14px}
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>超級松鼠小旋風｜遊戲製作計畫</h1>
+      <p>四歲幼兒向的 2D 橫向體感跑酷遊戲。手機開啟 HTML5 遊戲並以鏡頭辨識「跳、蹲、雙手高舉」，畫面再投影到電視；主角會自動向右跑，小朋友用身體動作幫助超級松鼠小旋風前進。</p>
+      <div class="chips">
+        <span class="chip">HTML5</span>
+        <span class="chip">Phaser 3</span>
+        <span class="chip">MediaPipe Pose</span>
+        <span class="chip">橫向 16:9</span>
+        <span class="chip">3–6 歲</span>
+        <span class="chip">手機鏡頭體感</span>
+      </div>
+    </section>
+
+    <h2>1. 核心遊戲概念</h2>
+    <div class="grid3">
+      <div class="card"><strong>跳</strong><br>小朋友跳起來，角色同步跳過石頭、木樁、倒木。</div>
+      <div class="card"><strong>蹲</strong><br>小朋友蹲下，角色同步壓低身體，躲過蜜蜂、樹枝、飛鳥。</div>
+      <div class="card"><strong>英雄模式</strong><br>能量滿後，小朋友雙手高舉約 1 秒，進入英雄模式。</div>
+    </div>
+
+    <h2>2. 角色與玩法定位</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>超級松鼠小旋風</h3>
+        <p>唯一主角與遊戲視覺核心。角色自動往右跑，小朋友不是「直接移動角色」，而是透過體感幫助小旋風完成動作。</p>
+        <p><strong>口頭禪：</strong>「衝衝衝！超級松鼠小旋風！跌倒了，就馬上站起來！衝衝衝！」</p>
+      </div>
+      <div class="card">
+        <h3>米多 / 米絲</h3>
+        <p>僅作為輕量配角，主要出現在教學、開場、過關與加油畫面，不在遊戲進行中搶主角焦點。</p>
+      </div>
+    </div>
+
+    <h2>3. 遊戲流程</h2>
+    <div class="flow">
+<pre>開始畫面
+   ↓
+米多 / 米絲簡短教學
+   ↓
+站到鏡頭前 → 姿勢校正
+   ↓
+3、2、1
+   ↓
+小旋風自動向右跑
+   ↓
+地面障礙 → 跳
+空中障礙 → 蹲
+   ↓
+收集松果 → 英雄能量累積
+   ↓
+能量滿 → 雙手高舉 1 秒
+   ↓
+英雄模式
+   ↓
+抵達終點
+   ↓
+CHAR012 勝利歡呼</pre>
+    </div>
+
+    <h2>4. 撞擊與翻滾</h2>
+    <div class="note">
+      撞到障礙不 Game Over。碰撞後要有喜劇式翻滾動畫，短暫坐地暈眩，再立刻站起來繼續跑，對四歲幼兒比較友善。
+    </div>
+    <div class="flow" style="margin-top:12px">
+<pre>CHAR006 Hit
+   ↓
+FX101 HitImpact
+   ↓
+CHAR007 Roll
+   ↓
+CHAR008 Dizzy
+   ↓
+CHAR009 StandUp
+   ↓
+恢復 Run</pre>
+    </div>
+
+    <h2>5. 英雄模式</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>進入條件</h3>
+        <ul>
+          <li>收集 ITEM001 / ITEM002 累積 UI004 能量條。</li>
+          <li>能量滿時提示小朋友舉雙手。</li>
+          <li>雙手高舉約 1 秒後啟動。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>效果</h3>
+        <ul>
+          <li>切換 CHAR011 HeroRun。</li>
+          <li>搭配 FX001 / FX002 / FX003。</li>
+          <li>可提高速度或分數，但不建議完全無敵。</li>
+          <li>時間建議約 8–10 秒。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>6. 素材清單（Asset Manifest）</h2>
+
+    <h3>CHAR｜角色</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">CHAR001</td><td>Idle</td><td>待機站立</td></tr>
+        <tr><td class="asset-id">CHAR002</td><td>Run_A</td><td>跑步 A</td></tr>
+        <tr><td class="asset-id">CHAR003</td><td>Run_B</td><td>跑步 B</td></tr>
+        <tr><td class="asset-id">CHAR004</td><td>Jump</td><td>跳躍</td></tr>
+        <tr><td class="asset-id">CHAR005</td><td>Crouch</td><td>蹲下</td></tr>
+        <tr><td class="asset-id">CHAR006</td><td>Hit</td><td>撞擊瞬間</td></tr>
+        <tr><td class="asset-id">CHAR007</td><td>Roll</td><td>撞擊後翻滾</td></tr>
+        <tr><td class="asset-id">CHAR008</td><td>Dizzy</td><td>坐地暈眩</td></tr>
+        <tr><td class="asset-id">CHAR009</td><td>StandUp</td><td>重新站起來</td></tr>
+        <tr><td class="asset-id">CHAR010</td><td>HeroPose</td><td>雙手高舉，英雄模式啟動</td></tr>
+        <tr><td class="asset-id">CHAR011</td><td>HeroRun</td><td>英雄模式跑步</td></tr>
+        <tr><td class="asset-id">CHAR012</td><td>Victory</td><td>過關歡呼</td></tr>
+        <tr><td class="asset-id">CHAR101</td><td>Mido_Smile</td><td>米多微笑</td></tr>
+        <tr><td class="asset-id">CHAR102</td><td>Mido_Clap</td><td>米多拍手</td></tr>
+        <tr><td class="asset-id">CHAR201</td><td>Misi_Smile</td><td>米絲微笑</td></tr>
+        <tr><td class="asset-id">CHAR202</td><td>Misi_Clap</td><td>米絲拍手</td></tr>
+      </tbody>
+    </table>
+
+    <h3>BG｜背景與場景</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">BG001</td><td>Forest</td><td>16:9 森林主背景 / 遠景</td></tr>
+        <tr><td class="asset-id">BG002</td><td>Ground</td><td>草地地面，可水平無限拼接</td></tr>
+        <tr><td class="asset-id">BG003</td><td>Tree_Large</td><td>大型前 / 中景樹木</td></tr>
+        <tr><td class="asset-id">BG004</td><td>Tree_Small</td><td>小型前 / 中景樹木</td></tr>
+      </tbody>
+    </table>
+
+    <h3>OBS｜障礙物</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>對應動作</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">OBS001</td><td>Rock</td><td>跳</td></tr>
+        <tr><td class="asset-id">OBS002</td><td>TreeStump</td><td>跳</td></tr>
+        <tr><td class="asset-id">OBS003</td><td>FallenLog</td><td>跳</td></tr>
+        <tr><td class="asset-id">OBS101</td><td>Bee</td><td>蹲</td></tr>
+        <tr><td class="asset-id">OBS102</td><td>Branch</td><td>蹲</td></tr>
+        <tr><td class="asset-id">OBS103</td><td>Bird</td><td>蹲</td></tr>
+      </tbody>
+    </table>
+
+    <h3>ITEM｜收集物</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">ITEM001</td><td>PineCone</td><td>一般松果 / 累積英雄能量</td></tr>
+        <tr><td class="asset-id">ITEM002</td><td>GoldenPineCone</td><td>稀有高價值松果 / 額外能量</td></tr>
+      </tbody>
+    </table>
+
+    <h3>FX｜特效</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">FX001</td><td>HeroGlow</td><td>英雄模式光芒</td></tr>
+        <tr><td class="asset-id">FX002</td><td>HeroTrail</td><td>英雄模式拖尾</td></tr>
+        <tr><td class="asset-id">FX003</td><td>HeroAura</td><td>英雄模式能量光圈</td></tr>
+        <tr><td class="asset-id">FX101</td><td>HitImpact</td><td>碰撞瞬間</td></tr>
+        <tr><td class="asset-id">FX102</td><td>Dust</td><td>翻滾 / 落地灰塵</td></tr>
+        <tr><td class="asset-id">FX103</td><td>DizzyStars</td><td>暈眩星星</td></tr>
+      </tbody>
+    </table>
+
+    <h3>UI｜介面</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">UI001</td><td>Logo</td><td>遊戲 Logo</td></tr>
+        <tr><td class="asset-id">UI002</td><td>StartButton</td><td>開始按鈕</td></tr>
+        <tr><td class="asset-id">UI003</td><td>PauseButton</td><td>暫停</td></tr>
+        <tr><td class="asset-id">UI004</td><td>HeroEnergyBar</td><td>英雄能量條</td></tr>
+        <tr><td class="asset-id">UI005</td><td>FinishFlag</td><td>終點</td></tr>
+        <tr><td class="asset-id">UI006</td><td>Trophy</td><td>過關獎盃</td></tr>
+      </tbody>
+    </table>
+
+    <h3>AUDIO｜音效</h3>
+    <table>
+      <thead><tr><th>ID</th><th>名稱</th></tr></thead>
+      <tbody>
+        <tr><td class="asset-id">SFX001</td><td>Jump</td></tr>
+        <tr><td class="asset-id">SFX002</td><td>Hit</td></tr>
+        <tr><td class="asset-id">SFX003</td><td>Roll</td></tr>
+        <tr><td class="asset-id">SFX004</td><td>CollectPineCone</td></tr>
+        <tr><td class="asset-id">SFX005</td><td>HeroTransform</td></tr>
+        <tr><td class="asset-id">SFX006</td><td>Victory</td></tr>
+        <tr><td class="asset-id">SFX007</td><td>ButtonClick</td></tr>
+      </tbody>
+    </table>
+
+    <h2>7. 素材技術規格</h2>
+    <div class="ok">
+      <strong>角色 / 障礙物 / 收集物 / 特效：</strong>以透明 PNG（Alpha）為主；不要把背景、地板或 UI 畫進素材。角色素材盡量維持一致比例、朝右、完整入鏡。
+    </div>
+    <div class="grid" style="margin-top:14px">
+      <div class="card">
+        <h3>角色素材</h3>
+        <ul>
+          <li>建議 1024×1024 原始檔。</li>
+          <li>透明背景。</li>
+          <li>角色全身完整。</li>
+          <li>特效與角色分層。</li>
+          <li>正式遊戲可再縮圖或整理為 Texture Atlas。</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>背景素材</h3>
+        <ul>
+          <li>BG001 使用 16:9 橫向。</li>
+          <li>BG002 水平可重複拼接。</li>
+          <li>BG003 / BG004 作為獨立圖層物件。</li>
+          <li>可用不同捲動速度形成 Parallax。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>8. 遊戲圖層建議</h2>
+    <div class="flow">
+<pre>Layer 0  → BG001 遠景森林
+Layer 1  → BG003 / BG004 中景樹木
+Layer 2  → BG002 地面
+Layer 3  → ITEM / OBS
+Layer 4  → CHAR 超級松鼠小旋風
+Layer 5  → FX 特效
+Layer 6  → UI</pre>
+    </div>
+
+    <h2>9. 體感辨識規則</h2>
+    <table>
+      <thead><tr><th>人體動作</th><th>遊戲動作</th><th>建議判定</th></tr></thead>
+      <tbody>
+        <tr><td>跳起</td><td>CHAR004 Jump</td><td>身體中心 / 髖部相對校正基準明顯上升</td></tr>
+        <tr><td>蹲下</td><td>CHAR005 Crouch</td><td>髖部下降且膝蓋彎曲</td></tr>
+        <tr><td>雙手高舉</td><td>CHAR010 → Hero Mode</td><td>雙手腕高於肩膀並維持約 1 秒</td></tr>
+      </tbody>
+    </table>
+    <p class="small">建議判定採寬鬆策略，加入 300–500ms 穩定時間與約 0.8 秒 cooldown，避免幼兒動作不標準導致誤判。</p>
+
+    <h2>10. 技術架構</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>前端</h3>
+        <ul>
+          <li>Vue 3 + TypeScript + Vite</li>
+          <li>Phaser 3</li>
+          <li>MediaPipe Tasks Vision</li>
+          <li>Howler.js（可選）</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>MVP 運作方式</h3>
+        <ul>
+          <li>手機瀏覽器開啟網頁。</li>
+          <li>使用手機前鏡頭辨識小朋友。</li>
+          <li>手機畫面直接投影 / Cast 到電視。</li>
+          <li>第一版不做雙裝置配對。</li>
+        </ul>
+      </div>
+    </div>
+
+    <h2>11. Game State 建議</h2>
+    <div class="flow">
+<pre>BOOT
+ ↓
+READY
+ ↓
+COUNTDOWN
+ ↓
+RUNNING
+ ├─ JUMP
+ ├─ CROUCH
+ ├─ HIT → ROLL → DIZZY → STANDUP
+ └─ HERO
+ ↓
+FINISH
+ ↓
+VICTORY</pre>
+    </div>
+
+    <h2>12. Codex 開發目錄建議</h2>
+<pre>SuperSquirrel/
+├── docs/
+│   ├── plan.html
+│   ├── Character_Bible.md
+│   ├── Asset_Bible.md
+│   ├── Asset_Manifest.json
+│   └── Game_State.md
+├── assets/
+│   ├── characters/
+│   ├── backgrounds/
+│   ├── obstacles/
+│   ├── items/
+│   ├── effects/
+│   ├── ui/
+│   └── audio/
+└── src/</pre>
+
+    <h2>13. 開發優先順序</h2>
+    <table>
+      <thead><tr><th>階段</th><th>內容</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>素材整理與 Asset ID 對應</td></tr>
+        <tr><td>2</td><td>Phaser 建立 16:9 橫向場景與背景捲動</td></tr>
+        <tr><td>3</td><td>先用鍵盤完成 Run / Jump / Crouch / Hit / Hero</td></tr>
+        <tr><td>4</td><td>加入障礙物、碰撞、翻滾流程</td></tr>
+        <tr><td>5</td><td>加入松果與英雄能量</td></tr>
+        <tr><td>6</td><td>加入 MediaPipe 體感辨識</td></tr>
+        <tr><td>7</td><td>加入聲音、口頭禪與配角</td></tr>
+        <tr><td>8</td><td>手機 + 電視投影實測與調整</td></tr>
+      </tbody>
+    </table>
+
+    <div class="footer">Super Squirrel Whirlwind / 超級松鼠小旋風 — Game Plan v1.0</div>
+  </div>
+</body>
+</html>

@@ -591,9 +591,9 @@ function spawnHazard() {
   const kind = pick(useAir ? airKinds : groundKinds);
   lastHazardGround = !useAir; hazardCount++;
   const o = { type: kind, x: W + H * 0.3, frameT: 0, dead: false };
-  if (kind === 'rock')   { o.w = H * 0.15; o.h = H * 0.115; }
-  if (kind === 'stump')  { o.w = H * 0.13; o.h = H * 0.15; }
-  if (kind === 'log')    { o.w = H * 0.21; o.h = H * 0.10; }
+  if (kind === 'rock')   { o.w = H * 0.13; o.h = H * 0.10; }
+  if (kind === 'stump')  { o.w = H * 0.11; o.h = H * 0.12; }
+  if (kind === 'log')    { o.w = H * 0.18; o.h = H * 0.09; }
   if (kind === 'bee')    { o.w = H * 0.13; o.h = H * 0.11; }
   if (kind === 'bird')   { o.w = H * 0.14; o.h = H * 0.11; }
   if (kind === 'branch') { o.w = H * 0.30; o.h = H * 0.11; }
@@ -642,7 +642,7 @@ function doJump() {
   if (state.phase !== 'play' || state.paused) return;
   if (!['run', 'crouch'].includes(state.run) || state.py > 1) return;
   state.run = 'jump'; state.stT = 0;
-  state.vy = H * 1.65; sfxJump();
+  state.vy = H * 1.8; sfxJump();   // 跳高一點、滯空久一點，4 歲時間點抓不準也過得去
   burst(playerX(), groundY(), 5, 'dust', { sp: H * 0.2, up: H * 0.06, life: 0.5, grav: H * 0.3 });
 }
 function setCrouch(on) { state.crouchHold = on; }
@@ -663,7 +663,7 @@ function activateHero() {
 }
 
 /* ================== 撞擊 / 收集判定 ================== */
-function rectHit(a, b, shrink = 0.22) {
+function rectHit(a, b, shrink = 0.3) {
   const sx = b.w * shrink, sy = b.h * shrink;
   return a.x < b.x + b.w - sx && a.x + a.w > b.x + sx && a.y < b.y + b.h - sy && a.y + a.h > b.y + sy;
 }
@@ -706,7 +706,7 @@ function runStateTick(dt) {
   state.stT += dt;
   const s = state.run;
   if (s === 'jump') {
-    state.py += state.vy * dt; state.vy -= H * 4.4 * dt;
+    state.py += state.vy * dt; state.vy -= H * 4.0 * dt;
     if (state.py <= 0) { state.py = 0; state.run = 'run'; state.stT = 0; sfxLand();
       burst(playerX(), groundY(), 4, 'dust', { sp: H * 0.16, up: H * 0.04, life: 0.4, grav: H * 0.3 }); }
   } else if (s === 'run' || s === 'crouch') {
@@ -1088,13 +1088,17 @@ function drawObstacle(o) {
         const cx = o.x + o.w / 2;
         const cy = o.air ? o.y + o.h / 2 + bobY : groundY() - o.h * 0.5;
         const r = Math.max(o.w, o.h) * 1.3 + H * 0.07;
-        const a = 0.72 * warn * (0.78 + 0.22 * Math.sin(state.t * 7));
-        const gl = ctx.createRadialGradient(cx, cy, r * 0.1, cx, cy, r);
-        gl.addColorStop(0, `rgba(255,250,210,${a})`);
-        gl.addColorStop(0.45, `rgba(255,235,120,${a * 0.7})`);
-        gl.addColorStop(1, 'rgba(255,235,120,0)');
+        const a = 0.75 * warn * (0.78 + 0.22 * Math.sin(state.t * 7));
+        // 白心＋橘紅邊（綠背景的互補色）＋發光混合，最醒目
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const gl = ctx.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+        gl.addColorStop(0, `rgba(255,255,240,${a})`);
+        gl.addColorStop(0.45, `rgba(255,120,60,${a * 0.75})`);
+        gl.addColorStop(1, 'rgba(255,80,40,0)');
         ctx.fillStyle = gl;
         ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
       }
     }
   }
@@ -1116,8 +1120,8 @@ function drawObstacle(o) {
       ctx.rotate(Math.sin(o.frameT * 6) * 0.07);
       ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh);
     } else {
-      // 地面障礙：放大一點更醒目，自帶草叢底座，底部貼地
-      let dh = o.h * 1.22, dw = dh * asp;
+      // 地面障礙：視覺放大更醒目（碰撞框比視覺小，好跳過）
+      let dh = o.h * 1.45, dw = dh * asp;
       if (dw > H * 0.32) { dw = H * 0.32; dh = dw / asp; }
       ctx.drawImage(im, o.x + o.w / 2 - dw / 2, groundY() + H * 0.015 - dh, dw, dh);
     }

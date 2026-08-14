@@ -246,6 +246,24 @@ function sfxHero()    { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.16, 't
 function sfxHeroEnd() { sweep(900, 300, 0.4, 'triangle', 0.1); }
 function sfxSmash()   { sweep(500, 90, 0.25, 'square', 0.2); noiseBurst(0.16, 0.14, 1600); }
 function sfxVictory() { tone(196, 1.4, 'sine', 0.28); [523,659,784,1047,1319].forEach((f,i)=>tone(f,0.24,'triangle',0.16,0.15+i*0.11)); }
+function sfxCrowd() {   // 群眾歡呼：聲浪 + 口哨 + 劈啪掌聲
+  if (!AC) return;
+  const dur = 2.8;
+  const n = AC.sampleRate * dur, buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const s = AC.createBufferSource(); s.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 900; f.Q.value = 0.6;
+  const g = AC.createGain();
+  const t0 = AC.currentTime;
+  g.gain.setValueAtTime(0.001, t0);
+  g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.4);
+  g.gain.setValueAtTime(0.3, t0 + 1.5);
+  g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+  s.connect(f); f.connect(g); g.connect(AC.destination); s.start(); s.stop(t0 + dur + 0.1);
+  sweep(900, 1900, 0.28, 'sine', 0.1);
+  setTimeout(() => sweep(1000, 2100, 0.3, 'sine', 0.09), 400);
+  for (let i = 0; i < 14; i++) setTimeout(() => noiseBurst(0.03, 0.09, 2600), 150 + Math.random() * 2000);
+}
 function sfxAlarm()   { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.26, d); tone(587, 0.2, 'square', 0.26, d + 0.2); }); }
 function sfxFull()    { [988, 1319].forEach((f,i)=>tone(f,0.14,'triangle',0.18,i*0.1)); }
 
@@ -720,7 +738,8 @@ let confettiT = 0;
 function reachFinish() {
   state.finished = true; state.phase = 'victory'; state.run = 'run'; state.py = 0;
   state.hero = 0;
-  sfxVictory(); say('s16', 3);   // 太棒了！你是超級英雄！
+  sfxVictory(); sfxCrowd(); say('s16', 3);   // 歡呼聲 + 太棒了！你是超級英雄！
+  setTimeout(sfxCrowd, 2600);                 // 歡呼再來一波
   confettiT = 0;
   setTimeout(() => { document.getElementById('winOverlay').style.display = 'flex'; }, 1600);
 }

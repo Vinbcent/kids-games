@@ -200,7 +200,7 @@ const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 const chance = p => Math.random() < p;
-const GAME_VER = 2;
+const GAME_VER = 3;
 
 /* ================== 音效（WebAudio 合成） ================== */
 let AC = null;
@@ -305,7 +305,8 @@ function sayT(key, keys, gap = 2500, pri = 1) {
 const IMG = {};
 const IMG_LIST = ['BG001.jpg','BG002.png','CHAR001.png','CHAR002.png','CHAR003.png','CHAR004.png','CHAR005.png',
   'CHAR006.png','CHAR007.png','CHAR008.png','CHAR009.png','CHAR010.png','CHAR011.png','CHAR012.png',
-  'RUN1.png','RUN2.png','RUN3.png','RUN4.png','CHAR101.png','CHAR102.png','CHAR201.png','CHAR202.png'];
+  'RUN1.png','RUN2.png','RUN3.png','RUN4.png','CHAR101.png','CHAR102.png','CHAR201.png','CHAR202.png',
+  'BG003.png','BG004.png','OBS001.png','OBS002.png','OBS003.png','OBS101.png','OBS102.png','OBS103.png','ITEM001.png','ITEM002.png'];
 // RUN1~4 = 跑步改善四影格（576x384 橫幅，含尾巴）
 const has = im => im && im.complete && im.naturalWidth > 0;
 let imgsReady = false;
@@ -597,7 +598,8 @@ function spawnHazard() {
   if (kind === 'bird')   { o.w = H * 0.14; o.h = H * 0.11; }
   if (kind === 'branch') { o.w = H * 0.30; o.h = H * 0.11; }
   o.air = useAir;
-  o.y = useAir ? groundY() - H * 0.245 - o.h : groundY() - o.h; // y = 上緣
+  // 空中障礙底部在 GY-0.175H：站立（頭頂 GY-0.24H）必撞、蹲下（GY-0.145H）安全通過
+  o.y = useAir ? groundY() - H * 0.175 - o.h : groundY() - o.h; // y = 上緣
   obstacles.push(o);
   if (!useAir && !taughtJump) { taughtJump = true; toast('🪨 障礙來了！用力跳過去 ⬆️'); sayT('tJump', 's3', 1200, 2); }   // 跳過去！
   if (useAir && !taughtCrouch) { taughtCrouch = true; toast('🐝 小心上面！蹲下躲 ⬇️'); sayT('tCrouch', 's4', 1200, 2); }  // 蹲下躲開！
@@ -1074,7 +1076,35 @@ function drawPlayer() {
   }
 }
 function drawObstacle(o) {
-  let tex = null, fr = Math.floor(o.frameT * 8) % 2;
+  const fr = Math.floor(o.frameT * 8) % 2;
+  const bobY = o.air ? Math.sin(o.frameT * 3) * H * 0.008 : 0;
+  const OBS_IMG = { rock: IMG.OBS001, stump: IMG.OBS002, log: IMG.OBS003, bee: IMG.OBS101, branch: IMG.OBS102, bird: IMG.OBS103 };
+  const im = OBS_IMG[o.type];
+  if (has(im)) {
+    const asp = im.naturalWidth / im.naturalHeight;
+    ctx.save();
+    // 陰影光暈：讓障礙物從背景跳出來
+    ctx.shadowColor = 'rgba(40,20,0,.5)'; ctx.shadowBlur = H * 0.02; ctx.shadowOffsetY = H * 0.006;
+    if (o.type === 'branch') {
+      // 樹枝：樹葉底部貼齊碰撞框下緣（蹲下剛好躲過），枝幹在上方
+      const dh = H * 0.24, dw = dh * asp;
+      ctx.drawImage(im, o.x + o.w / 2 - dw / 2, o.y + o.h + H * 0.02 - dh + bobY, dw, dh);
+    } else if (o.air) {
+      // 蜜蜂/小鳥：飛行擺動 + 微微傾斜
+      const dh = o.h * 1.15, dw = dh * asp;
+      ctx.translate(o.x + o.w / 2, o.y + bobY + o.h / 2);
+      ctx.rotate(Math.sin(o.frameT * 6) * 0.07);
+      ctx.drawImage(im, -dw / 2, -dh / 2, dw, dh);
+    } else {
+      // 地面障礙：放大一點更醒目，自帶草叢底座，底部貼地
+      let dh = o.h * 1.22, dw = dh * asp;
+      if (dw > H * 0.32) { dw = H * 0.32; dh = dw / asp; }
+      ctx.drawImage(im, o.x + o.w / 2 - dw / 2, groundY() + H * 0.015 - dh, dw, dh);
+    }
+    ctx.restore();
+    return;
+  }
+  let tex = null;
   if (o.type === 'rock') tex = TEX_ROCK;
   if (o.type === 'stump') tex = TEX_STUMP;
   if (o.type === 'log') tex = TEX_LOG;
@@ -1082,7 +1112,6 @@ function drawObstacle(o) {
   if (o.type === 'bird') tex = TEX_BIRD[fr];
   if (o.type === 'branch') tex = TEX_BRANCH;
   if (!tex) return;
-  const bobY = o.air ? Math.sin(o.frameT * 3) * H * 0.008 : 0;
   ctx.drawImage(tex, o.x, o.y + bobY, o.w, o.h);
   if (!o.air) ell(ctx, o.x + o.w / 2, groundY() + H * 0.012, o.w * 0.5, H * 0.015, 'rgba(60,40,20,.25)');
 }
@@ -1100,18 +1129,32 @@ function draw() {
       else ctx.drawImage(bg, bx, 0, bw + 1, bh);
     }
   } else { ctx.fillStyle = '#bfe8ff'; ctx.fillRect(0, 0, W, H); }
-  // 裝飾小鳥
+  // 裝飾小鳥（OBS103 圖片面向左，往右飛才翻轉）
   for (const b of ambBirds) {
-    const fr = Math.floor(state.t * 6 + b.ph) % 2;
     ctx.save(); ctx.translate(b.x, b.y + Math.sin(state.t * 2 + b.ph) * H * 0.01);
-    if (b.sp < 0) ctx.scale(-1, 1);
-    ctx.globalAlpha = 0.85; ctx.drawImage(TEX_BIRD[fr], -H * 0.03, -H * 0.024, H * 0.06, H * 0.048); ctx.restore();
+    ctx.globalAlpha = 0.85;
+    if (has(IMG.OBS103)) {
+      if (b.sp > 0) ctx.scale(-1, 1);
+      ctx.rotate(Math.sin(state.t * 5 + b.ph) * 0.08);
+      ctx.drawImage(IMG.OBS103, -H * 0.033, -H * 0.022, H * 0.066, H * 0.044);
+    } else {
+      const fr = Math.floor(state.t * 6 + b.ph) % 2;
+      if (b.sp < 0) ctx.scale(-1, 1);
+      ctx.drawImage(TEX_BIRD[fr], -H * 0.03, -H * 0.024, H * 0.06, H * 0.048);
+    }
+    ctx.restore();
     ctx.globalAlpha = 1;
   }
-  // 中景樹
+  // 中景樹（BG003/BG004 圖片素材，備援用 canvas 畫的）
   for (const tr of midTrees) {
-    const th = H * 0.34;
-    ctx.drawImage(TEX_TREE[tr.k], tr.x, groundY() - th + H * 0.02, th * 0.88, th);
+    const timg = tr.k ? IMG.BG004 : IMG.BG003;
+    if (has(timg)) {
+      const th = H * 0.36, tw2 = th * (timg.naturalWidth / timg.naturalHeight);
+      drawSprB(timg, tr.x, groundY() + H * 0.03, tw2, th);
+    } else {
+      const th = H * 0.34;
+      ctx.drawImage(TEX_TREE[tr.k], tr.x, groundY() - th + H * 0.02, th * 0.88, th);
+    }
   }
   // 地面（BG002 拼接）
   const gd = IMG.BG002;
@@ -1142,10 +1185,32 @@ function draw() {
       g.addColorStop(0, 'rgba(255,220,90,.5)'); g.addColorStop(1, 'rgba(255,220,90,0)');
       ctx.fillStyle = g; ctx.fillRect(it.x - sz, it.y + bob - sz, sz * 2, sz * 2);
     }
-    ctx.drawImage(it.gold ? TEX_GOLD : TEX_CONE, it.x - sz * 0.42, it.y + bob - sz * 0.5, sz * 0.85, sz);
+    const ii = it.gold ? IMG.ITEM002 : IMG.ITEM001;
+    if (has(ii)) {
+      const dw = sz * 0.95, dh = dw * (ii.naturalHeight / ii.naturalWidth);
+      ctx.drawImage(ii, it.x - dw / 2, it.y + bob - dh / 2, dw, dh);
+    } else {
+      ctx.drawImage(it.gold ? TEX_GOLD : TEX_CONE, it.x - sz * 0.42, it.y + bob - sz * 0.5, sz * 0.85, sz);
+    }
   }
   // 障礙
   for (const o of obstacles) drawObstacle(o);
+  // 接近的障礙頭上冒 ❗ 提醒（提前約 1 秒）
+  if (state.phase === 'play') {
+    const vv = speedNow();
+    if (vv > 0) {
+      ctx.font = `${Math.round(H * 0.05)}px sans-serif`;
+      ctx.textAlign = 'center';
+      for (const o of obstacles) {
+        if (o.dead) continue;
+        const eta = (o.x + o.w / 2 - playerX()) / vv;
+        if (eta > 0.2 && eta < 1.1) {
+          const topY = o.type === 'branch' ? o.y - H * 0.16 : o.y;
+          ctx.fillText('❗', o.x + o.w / 2, topY - H * 0.03 + Math.sin(state.t * 10) * H * 0.014);
+        }
+      }
+    }
+  }
   // 玩家
   drawPlayer();
   // 勝利場景：小狗拍手 + 獎盃

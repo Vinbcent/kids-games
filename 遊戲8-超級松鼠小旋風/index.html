@@ -249,24 +249,38 @@ function sfxVictory() { tone(196, 1.4, 'sine', 0.28); [523,659,784,1047,1319].fo
 function sfxAlarm()   { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.26, d); tone(587, 0.2, 'square', 0.26, d + 0.2); }); }
 function sfxFull()    { [988, 1319].forEach((f,i)=>tone(f,0.14,'triangle',0.18,i*0.1)); }
 
-/* 語音：不排隊（講新的就取消舊的），重要台詞優先；語速快、音調隨機起伏 */
+/* 台詞語音：mic/ 錄音檔（對照表見 mic/對照.txt）
+   不排隊（新台詞取消舊的）、重要台詞優先、支援序列播放（s1→s2） */
 const lastSay = {};
-let sayCur = null;
-function say(text, pri = 1) {
-  try {
-    if (sayCur && sayCur.pri > pri) return;          // 更重要的還在講 → 小台詞跳過
-    speechSynthesis.cancel();                         // 不讓台詞大排長龍
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'zh-TW'; u.rate = 1.05; u.pitch = 1.0 + Math.random() * 0.4;
-    sayCur = { pri };
-    u.onend = u.onerror = () => { sayCur = null; };
-    speechSynthesis.speak(u);
-  } catch (e) {}
+const VOICE = {};
+for (let i = 1; i <= 18; i++) {
+  const a = new Audio('mic/s' + i + '.mp3?v=' + GAME_VER);
+  a.preload = 'auto';
+  VOICE['s' + i] = a;
 }
-function sayT(key, text, gap = 2500, pri = 1) {
+let sayCur = null;   // { pri, el }
+function say(keys, pri = 1) {
+  if (sayCur && sayCur.pri > pri) return;            // 更重要的還在講 → 小台詞跳過
+  if (sayCur) { try { sayCur.el.pause(); } catch (e) {} sayCur = null; }
+  const seq = Array.isArray(keys) ? keys.slice() : [keys];
+  const playNext = () => {
+    const k = seq.shift();
+    if (!k) { sayCur = null; return; }
+    const el = VOICE[k];
+    if (!el) { playNext(); return; }
+    try {
+      el.currentTime = 0;
+      sayCur = { pri, el };
+      el.onended = () => { if (sayCur && sayCur.el === el) playNext(); };
+      el.play().catch(() => { if (sayCur && sayCur.el === el) sayCur = null; });
+    } catch (e) { sayCur = null; }
+  };
+  playNext();
+}
+function sayT(key, keys, gap = 2500, pri = 1) {
   const n = performance.now();
   if (lastSay[key] && n - lastSay[key] < gap) return;
-  lastSay[key] = n; say(text, pri);
+  lastSay[key] = n; say(keys, pri);
 }
 
 /* ================== 圖片素材 ================== */
@@ -284,7 +298,31 @@ function loadImages(onProgress) {
     im.onload = im.onerror = () => { done++; onProgress && onProgress(done, IMG_LIST.length); res(); };
     im.src = 'pic/opt/' + name + '?v=' + GAME_VER;
     IMG[name.split('.')[0]] = im;
-  }))).then(() => { imgsReady = true; });
+  }))).then(() => { imgsReady = true; measurePads(); });
+}
+/* 量每張圖「內容底部到圖框底部」的透明邊距比例，存在 img._pad。
+   畫的時候往下補償，蹲下/坐地等影格才會真的貼地不浮空 */
+function measurePads() {
+  const S = 64;
+  const c = document.createElement('canvas'); c.width = S; c.height = S;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  for (const name of Object.keys(IMG)) {
+    const im = IMG[name];
+    if (!has(im) || im._pad != null) continue;
+    x.clearRect(0, 0, S, S);
+    x.drawImage(im, 0, 0, S, S);
+    let d;
+    try { d = x.getImageData(0, 0, S, S).data; } catch (e) { continue; }
+    let bottom = -1;
+    for (let yy = S - 1; yy >= 0 && bottom < 0; yy--)
+      for (let xx = 0; xx < S; xx++)
+        if (d[(yy * S + xx) * 4 + 3] > 20) { bottom = yy; break; }
+    im._pad = bottom < 0 ? 0 : (S - 1 - bottom) / S;
+  }
+}
+/* 底部貼齊畫圖（自動補圖檔下緣的透明邊距） */
+function drawSprB(img, x2, yBottom, w, h) {
+  ctx.drawImage(img, x2, yBottom - h + ((img && img._pad) || 0) * h, w, h);
 }
 
 /* ================== 原創手繪素材（canvas 畫的障礙 / 松果 / 樹） ================== */
@@ -543,8 +581,8 @@ function spawnHazard() {
   o.air = useAir;
   o.y = useAir ? groundY() - H * 0.245 - o.h : groundY() - o.h; // y = 上緣
   obstacles.push(o);
-  if (!useAir && !taughtJump) { taughtJump = true; toast('🪨 障礙來了！用力跳過去 ⬆️'); sayT('tJump', '跳過去！', 1200, 2); }
-  if (useAir && !taughtCrouch) { taughtCrouch = true; toast('🐝 小心上面！蹲下躲 ⬇️'); sayT('tCrouch', '蹲下躲開！', 1200, 2); }
+  if (!useAir && !taughtJump) { taughtJump = true; toast('🪨 障礙來了！用力跳過去 ⬆️'); sayT('tJump', 's3', 1200, 2); }   // 跳過去！
+  if (useAir && !taughtCrouch) { taughtCrouch = true; toast('🐝 小心上面！蹲下躲 ⬇️'); sayT('tCrouch', 's4', 1200, 2); }  // 蹲下躲開！
 }
 function spawnCones() {
   const style = pick(['line', 'arc', 'low']);
@@ -592,7 +630,7 @@ function startHit() {
   if (state.invinc > 0 || state.hero > 0) return;
   state.run = 'hit'; state.stT = 0; state.vy = H * 0.7; sfxHit();
   burst(playerX() + H * 0.08, groundY() - H * 0.18, 8, 'star', { sp: H * 0.5, life: 0.6 });
-  sayT('hit', pick(['哎呀！撞到了！', '碰！好痛痛～', '哇！翻滾囉～']), 1500, 2);
+  sayT('hit', pick(['s5', 's6', 's7', 's8']), 1500, 2);   // 哎呀撞到了 / 啊！ / 好痛痛 / 哇翻滾囉
   shake = 0.7;
 }
 function heroReady() { return state.energy >= ENERGY_MAX && state.hero <= 0 && ['run', 'crouch', 'jump'].includes(state.run); }
@@ -600,7 +638,7 @@ function activateHero() {
   if (!heroReady()) return;
   state.energy = 0; state.heroHold = 0;
   state.run = 'heroPose'; state.stT = 0; state.py = 0; state.vy = 0;
-  sfxHero(); say('衝衝衝！超級松鼠小旋風！', 3);
+  sfxHero(); say('s2', 3);   // 衝衝衝！超級松鼠小旋風！
   burst(playerX(), groundY() - H * 0.2, 14, 'star', { sp: H * 0.7, life: 0.9 });
 }
 
@@ -620,7 +658,7 @@ function collideTick() {
       o.dead = true; sfxSmash();
       burst(o.x + o.w / 2, o.y + o.h / 2, 10, 'star', { sp: H * 0.6, life: 0.8 });
       state.cones++;
-      sayT('smash', pick(['碰！', '咻！', '太強啦！']), 1800, 0);
+      sayT('smash', pick(['s12', 's13', 's14']), 1800, 0);   // 碰！ / 咻！ / 太強啦！
     } else if (state.invinc <= 0 && ['run', 'jump', 'crouch'].includes(state.run)) {
       startHit(); break;
     }
@@ -637,7 +675,7 @@ function collideTick() {
       burst(it.x, it.y, it.gold ? 8 : 4, 'star', { sp: H * 0.3, life: 0.5, col: it.gold ? '#ffd24a' : '#ffe9a8', size: H * 0.014 });
       if (state.energy >= ENERGY_MAX && before < ENERGY_MAX) {
         sfxFull();
-        say(state.mode === 'body' ? '能量滿了！雙手舉高高！' : '能量滿了！按閃電按鈕！', 2);
+        say(state.mode === 'body' ? 's10' : 's11', 2);   // 能量滿了！雙手舉高高／按閃電按鈕
       }
     }
   }
@@ -663,7 +701,7 @@ function runStateTick(dt) {
     if (state.stT > 0.75) { state.run = 'dizzy'; state.stT = 0; sfxDizzy(); }
   } else if (s === 'dizzy') {
     if (state.stT > 1.05) { state.run = 'standup'; state.stT = 0; sfxStand();
-      sayT('stand', '跌倒了，就馬上站起來！衝衝衝！', 4000, 2); }
+      sayT('stand', 's9', 4000, 2); }   // 跌倒了，就馬上站起來！衝衝衝！
   } else if (s === 'standup') {
     if (state.stT > 0.55) { state.run = 'run'; state.stT = 0; state.invinc = 1.2;
       burst(playerX(), groundY(), 6, 'dust', { sp: H * 0.2, up: H * 0.05, life: 0.5, grav: H * 0.3 }); }
@@ -673,7 +711,7 @@ function runStateTick(dt) {
   if (state.invinc > 0) state.invinc -= dt;
   if (state.hero > 0) {
     state.hero -= dt;
-    if (state.hero <= 0) { state.hero = 0; sfxHeroEnd(); sayT('heroEnd', '呼～繼續跑！', 3000); }
+    if (state.hero <= 0) { state.hero = 0; sfxHeroEnd(); sayT('heroEnd', 's15', 3000); }   // 繼續跑！
   }
 }
 
@@ -682,7 +720,7 @@ let confettiT = 0;
 function reachFinish() {
   state.finished = true; state.phase = 'victory'; state.run = 'run'; state.py = 0;
   state.hero = 0;
-  sfxVictory(); say('太棒了！你是超級英雄！', 3);
+  sfxVictory(); say('s16', 3);   // 太棒了！你是超級英雄！
   confettiT = 0;
   setTimeout(() => { document.getElementById('winOverlay').style.display = 'flex'; }, 1600);
 }
@@ -876,7 +914,7 @@ function startCountdown() {
   const el = document.getElementById('countdown'), num = document.getElementById('countNum');
   el.style.display = 'flex';
   const seq = ['3', '2', '1', '衝！'];
-  say('三、二、一，衝衝衝！超級松鼠小旋風！', 3);
+  say(['s1', 's2'], 3);   // 三、二、一 → 衝衝衝！超級松鼠小旋風！
   let i = 0;
   const step = () => {
     if (i < seq.length) { num.textContent = seq[i]; num.style.animation = 'none'; void num.offsetWidth; tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2); i++; setTimeout(step, 900); }
@@ -898,12 +936,12 @@ function update(dt) {
     else if (shoulderW < 0.23 || lost) { tooCloseSince = 0; }
     const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
     if (state.phase === 'play') {
-      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('太靠近了！往後退！', 3); }
+      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('s17', 3); }   // 太靠近了！往後退！
       state.paused = nowMs < pauseUntil;
     } else state.paused = false;
     document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
     if (state.paused) { const remain = Math.ceil((pauseUntil - nowMs) / 1000); document.getElementById('pauseCount').textContent = remain > 0 ? remain : ''; }
-    if (wasPaused && !state.paused) say('好！繼續衝！');
+    if (wasPaused && !state.paused) say('s18', 2);   // 好！繼續衝！
     wasPaused = state.paused;
     // 蹲下 → 角色蹲；英雄能量滿 → 雙手舉高啟動
     setCrouch(squatting);
@@ -1005,7 +1043,7 @@ function drawPlayer() {
     const hh = spr.wide ? sq * 0.86 : sq;
     const w = spr.wide ? hh * 1.5 : sq, ax = spr.wide ? 0.62 : 0.5;
     const bob = ['run', 'crouch'].includes(state.run) && state.py === 0 ? Math.abs(Math.sin(state.t * 11)) * H * 0.008 : 0;
-    ctx.drawImage(img, px - w * ax, bottom - hh - bob, w, hh);
+    drawSprB(img, px - w * ax, bottom - bob, w, hh);
   }
   ctx.restore();
   // 暈眩星星
@@ -1094,8 +1132,8 @@ function draw() {
   // 勝利場景：小狗拍手 + 獎盃
   if (state.phase === 'victory') {
     const pw = H * 0.26, fr = Math.floor(state.t * 3) % 2;
-    ctx.drawImage(fr ? IMG.CHAR102 : IMG.CHAR101, playerX() + H * 0.28, groundY() + H * 0.02 - pw, pw, pw);
-    ctx.drawImage(fr ? IMG.CHAR201 : IMG.CHAR202, playerX() + H * 0.55, groundY() + H * 0.02 - pw, pw, pw);
+    drawSprB(fr ? IMG.CHAR102 : IMG.CHAR101, playerX() + H * 0.28, groundY() + H * 0.02, pw, pw);
+    drawSprB(fr ? IMG.CHAR201 : IMG.CHAR202, playerX() + H * 0.55, groundY() + H * 0.02, pw, pw);
     const tw = H * 0.2, bounce = Math.abs(Math.sin(state.t * 3)) * H * 0.02;
     ctx.drawImage(TEX_TROPHY, playerX() - tw / 2, groundY() - H * 0.52 - bounce, tw, tw);
     ctx.font = `bold ${Math.round(H * 0.075)}px "Microsoft JhengHei", sans-serif`;

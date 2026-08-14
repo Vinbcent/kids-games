@@ -516,13 +516,14 @@ const state = {
   dist: 0, prog: 0, flag: null, finished: false,
   vy: 0, py: 0,       // py = 離地高度（畫面座標，向上為正）
   crouchHold: false, invinc: 0,
-  toastT: 0, paused: false, slow: 0,
+  toastT: 0, paused: false, slow: 0, assist: 1,
 };
 const ENERGY_MAX = 8, HERO_TIME = 9, LEVEL_T = 75;
 let SPD = 0, GYv = 0, SQ = 0;     // 由 onResize 計算
-function baseSpeed() { return H * 0.52 * (1 + (state.round - 1) * 0.12); }
+function baseSpeed() { return H * 0.46 * (1 + (state.round - 1) * 0.12); }
 function speedNow() {
   let v = baseSpeed();
+  v *= state.assist;          // 慢動作輔助：障礙接近且還沒起跳時放慢
   if (state.hero > 0) v *= 1.5;
   if (['hit', 'roll'].includes(state.run)) v *= 0.35;
   if (['dizzy', 'standup', 'heroPose'].includes(state.run)) v *= 0;
@@ -706,7 +707,7 @@ function runStateTick(dt) {
   state.stT += dt;
   const s = state.run;
   if (s === 'jump') {
-    state.py += state.vy * dt; state.vy -= H * 4.0 * dt;
+    state.py += state.vy * dt; state.vy -= H * 3.6 * dt;
     if (state.py <= 0) { state.py = 0; state.run = 'run'; state.stT = 0; sfxLand();
       burst(playerX(), groundY(), 4, 'dust', { sp: H * 0.16, up: H * 0.04, life: 0.4, grav: H * 0.3 }); }
   } else if (s === 'run' || s === 'crouch') {
@@ -924,7 +925,7 @@ function resetWorld() {
   state.run = 'run'; state.stT = 0; state.t = 0;
   state.cones = 0; state.energy = 0; state.hero = 0; state.heroHold = 0;
   state.dist = 0; state.prog = 0; state.flag = null; state.finished = false;
-  state.py = 0; state.vy = 0; state.invinc = 0; state.crouchHold = false;
+  state.py = 0; state.vy = 0; state.invinc = 0; state.crouchHold = false; state.assist = 1;
   spawnT = 2.2; hazardCount = 0; lastSpawnHazard = false;
   taughtJump = state.round > 1; taughtCrouch = state.round > 1;
 }
@@ -974,6 +975,17 @@ function update(dt) {
 
   const v = speedNow();
   scrollFar += v * 0.18 * dt; scrollMid += v * 0.5 * dt; scrollGnd += v * dt;
+
+  // 慢動作輔助：障礙接近 1 秒內且玩家還在地面 → 世界放慢，給 4 歲多一點反應時間
+  let assistTarget = 1;
+  if (state.phase === 'play' && state.hero <= 0 && ['run', 'crouch'].includes(state.run)) {
+    for (const o of obstacles) {
+      if (o.dead) continue;
+      const eta = (o.x + o.w / 2 - playerX()) / baseSpeed();
+      if (eta > 0 && eta < 1.0) { assistTarget = 0.78; break; }
+    }
+  }
+  state.assist += (assistTarget - state.assist) * Math.min(1, dt * 6);
 
   if (state.phase === 'play' && !state.paused) {
     runStateTick(dt);

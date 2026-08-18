@@ -248,3 +248,67 @@ Chrome 會自動存成 `CH101 (1).png`，後面的自動改名就對不上。
 
 → Project instructions 第 1 條白紙黑字寫「背景全透明」，**服從率 1/8**。
    所以本機的三路分流去背（真alpha／棋盤格／純色底）是必需品，不是保險。
+
+---
+
+# 接進 Three.js 場景時踩到的坑（遊戲7 實作）
+
+## L. 白色／淺色主體一定要指定「對比色背景」
+
+第一版的雲是「白色的雲畫在白色背景上」（實測背景 `#FEFEFE`、雲心 `#F1ECEC`）——
+**任何容差都分不開**，去背直接把雲吃光，只剩一條白邊，輸出 4KB。
+
+解法：在那一則訊息裡明確要求
+> 「這一張**背景請填滿鮮豔的洋紅色純色底**（不要透明、不要白色、不要漸層），方便我後製去背」
+
+洋紅 vs 白色在 RGB 上差 255（綠通道），容差開到 60 都不會誤傷。一次就成功。
+
+**通則：主體本身是白/米白/淺灰時，一律走 chroma key，不要指望透明背景。**
+
+## M. Sprite 的 scale 是「世界單位寬高」，不會照圖片比例
+
+Three.js 的 `Sprite.scale.set(w, h, 1)` 跟貼圖長寬比完全無關。
+原本的手繪貼圖都是正方形（256×256），所以程式裡到處寫 `scale.set(1.5, 1.5, 1)`。
+換成依內容裁切的 AI 圖（512×1160 之類）後直接沿用，角色會被壓扁成矮胖。
+
+做法：建一張長寬比表，寬度一律用「高 × 長寬比」算。
+```js
+const AR = { mazu: 512/1160, qian: 512/936, dhead: 640/566, /* ... */ };
+pic(texMazu(), 1.45 * AR.mazu, 1.45);
+```
+
+**更容易漏掉的是「每幀覆寫 scale」的地方**——遊戲7 有三處
+（龍頭依行進方向翻面、獅頭慶典放大、媽祖祝福淡入放大），
+它們每一幀都把 scale 寫回正方形，只改建立處是沒用的：
+```js
+dragon.head.scale.set((dir >= 0 ? 1 : -1) * dscl * AR.dhead, dscl, 1);
+lion.scale.set(lscl * AR.lion, lscl, 1);
+mazuHelper.scale.set(s * AR.mazu, s, 1);
+```
+
+## N. `const` 不會 hoist，貼圖工廠要放在第一個使用點之前
+
+`function` 宣告會 hoist，但 `const AR = {...}` 不會。
+把 AR 放在檔案中段、卻在前段就用它建背景板 → `Cannot access 'AR' before initialization`。
+整塊（`ART_VER` / `AR` / `imgTexCache` / `imgTex`）要移到第一個使用點之前。
+
+## O. 用指令碼改單行箭頭函式時，`//` 註解會吃掉整行後半
+
+```js
+// 改壞的樣子（後面的 s.position.set(...) 和 }); 全被註解掉了）
+dragon.segs.forEach((s, i) => { const k = (i+1) * 0.34;   // 註解 s.position.set(...); });
+```
+錯誤訊息是 `SyntaxError: missing ) after argument list`，離真正的問題行很遠。
+**註解要放在整行的上一行**。改完一定要跑一次語法檢查：
+```bash
+node -e "const fs=require('fs');const s=fs.readFileSync('x.html','utf8');
+const m=s.match(/<script type=\"module\">([\s\S]*?)<\/script>/);
+try{new Function(m[1].replace(/^import .*/gm,''));console.log('語法 OK')}catch(e){console.log('錯誤:',e.message)}"
+```
+
+## P. 背景板放在霧裡會被洗白
+
+遊戲7 有 `Fog(0xd6e6ea, 26, 80)`。遠山背景板放太遠會被霧洗掉大半。
+實測放在 `z = -46`（沿視線 depth 約 57）還看得清楚，再遠就開始糊。
+另外用 `Sprite` 而不是 `Mesh + PlaneGeometry`：Sprite 永遠面向鏡頭、也不吃 MeshToonMaterial 的光照，
+背景板要的就是這個效果。

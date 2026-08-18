@@ -266,6 +266,25 @@ const AR = {
   cloud: 420 / 152,    // FX001
   bird:  260 / 240,    // FX002
 };
+/* 小師傅四影格。h = 這張圖在世界座標的高度（含舉高的手、鏟子、水泥桶那些延伸物），
+   不是角色本身的身高——所以四張的 h 不一樣，是為了讓「角色本人」看起來一樣大。
+   ar 取自 build.ps1 的實際輸出尺寸，換素材重跑 build 後要一起更新。 */
+const KID_FRAMES = {
+  idle:      { file: 'CH001.webp', ar: 400 / 995,  h: 1.75 },
+  crouch:    { file: 'CH002.webp', ar: 400 / 679,  h: 1.25 },
+  armsUp:    { file: 'CH003.webp', ar: 400 / 1020, h: 2.15 },
+  celebrate: { file: 'CH004.webp', ar: 400 / 626,  h: 2.15 },
+};
+let kidSprite = null, kidFrameKey = '';
+function setKidFrame(key) {
+  if (key === kidFrameKey || !kidSprite) return;
+  kidFrameKey = key;
+  const f = KID_FRAMES[key];
+  kidSprite.material.map = imgTex(f.file);
+  kidSprite.material.needsUpdate = true;
+  kidSprite.scale.set(f.h * f.ar, f.h, 1);
+  kidSprite.position.y = f.h / 2;        // sprite 是中心對齊，往上推半個高度讓「腳底」貼齊 group 原點
+}
 const imgTexCache = new Map();
 function imgTex(file) {
   if (!imgTexCache.has(file)) {
@@ -373,22 +392,16 @@ function texLion() { return TEX_LION || (TEX_LION = imgTex('EV101.webp')); }
 /* ================== 小師傅（吉祥物，會跟著做動作） ================== */
 let kid, kidArmPivot;
 function buildKid() {
+  // 原本是 Three.js 積木（雙腿/雙靴/身體/頭/安全帽/帽簷/emoji 臉/手臂 pivot），
+  // 改成單一 Sprite + 四張影格。蹲下不再靠 scale.y 壓扁，蹲姿本身就畫在影格裡。
   const g = new THREE.Group();
-  const skin = toon(0xf7cfa6), vest = toon(0xff8a1a), pants = toon(0x37474f), boot = toon(0x263238), hat = toon(0xffd24a);
-  for (const sx of [-0.15, 0.15]) {
-    const l = new THREE.Mesh(new RoundedBoxGeometry(0.24, 0.48, 0.26, 3, 0.09), pants); l.position.set(sx, 0.38, 0); g.add(l);
-    const b = new THREE.Mesh(new RoundedBoxGeometry(0.26, 0.18, 0.32, 2, 0.07), boot); b.position.set(sx, 0.1, 0.03); g.add(b);
-  }
-  const body = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.68, 0.4, 3, 0.14), vest); body.position.y = 0.94; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 14), skin); head.position.y = 1.5; g.add(head);
-  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.33, 16, 12, 0, Math.PI*2, 0, Math.PI*0.55), hat); helm.position.y = 1.56; g.add(helm);
-  const brim = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.07, 0.34), hat); brim.position.set(0, 1.48, 0.05); g.add(brim);
-  const face = emojiSprite('😀', 0.4); face.position.set(0, 1.48, 0.3); g.add(face);
-  kidArmPivot = new THREE.Group(); kidArmPivot.position.set(0, 1.08, 0); g.add(kidArmPivot);
-  for (const sx of [-0.3, 0.3]) { const arm = new THREE.Mesh(new RoundedBoxGeometry(0.15, 0.15, 0.5, 3, 0.06), vest); arm.position.set(sx, 0.0, -0.05); kidArmPivot.add(arm); }
-  g.scale.setScalar(0.9);
+  kidSprite = pic(imgTex(KID_FRAMES.idle.file), 1, 1, true);
+  g.add(kidSprite);
+  kidArmPivot = new THREE.Group(); g.add(kidArmPivot);   // 保留空 Group，舊程式碼還會寫它的 rotation
+  setKidFrame('idle');
   return g;
 }
+
 
 /* ================== 工地機具 ================== */
 function addWheels(g, coords, r) {
@@ -1212,12 +1225,16 @@ function update(dt) {
 function syncVisual(dt) {
   kid.position.set(clamp(state.kidX * 0.7, -2.4, 2.4), Math.abs(Math.sin(state.t * 3)) * 0.03, 2.6);
   // 小師傅跟著做動作
-  let armAng = 0.2;
-  if (state.step === 'pour' && (state.mode === 'body' ? armsUp : touchDown)) armAng = -2.4;
-  else if (state.step === 'dig' && (state.mode === 'body' ? squatting : false)) armAng = 1.0;
-  else if (state.step === 'celebrate') armAng = -2.0 + Math.sin(state.t * 8) * 0.5;
-  kidArmPivot.rotation.x += (armAng - kidArmPivot.rotation.x) * Math.min(1, dt * 8);
-  const targetSY = (state.step === 'dig' && state.mode === 'body' && squatting) ? 0.62 : 0.9;
+  // 四個動作狀態直接對應四張影格（原本是 kidArmPivot.rotation.x 的四個角度）
+  let frame = 'idle';
+  if (state.step === 'celebrate') frame = 'celebrate';
+  else if (state.step === 'pour' && (state.mode === 'body' ? armsUp : touchDown)) frame = 'armsUp';
+  else if (state.step === 'dig' && (state.mode === 'body' ? squatting : touchDown)) frame = 'crouch';
+  setKidFrame(frame);
+  // 慶祝時左右擺動（取代原本手臂 sin 揮舞）
+  kidSprite.material.rotation = (frame === 'celebrate') ? Math.sin(state.t * 8) * 0.10 : 0;
+  // 蹲下的視覺已經在影格裡，這裡只留一點點壓縮讓切換有彈性、按下去有回饋
+  const targetSY = (frame === 'crouch') ? 0.94 : 1.0;
   kid.scale.y += (targetSY - kid.scale.y) * Math.min(1, dt * 10);
 
   // 相機

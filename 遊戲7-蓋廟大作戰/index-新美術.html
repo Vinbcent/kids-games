@@ -275,6 +275,35 @@ const KID_FRAMES = {
   armsUp:    { file: 'CH003.webp', ar: 400 / 1020, h: 2.15 },
   celebrate: { file: 'CH004.webp', ar: 400 / 626,  h: 2.15 },
 };
+/* 工程車。w = 世界座標寬度（含手臂、滾筒那些延伸物），挑法是讓「車體本身」看起來一樣大。
+   ar 取自 build.ps1 的實際輸出尺寸，換素材要一起更新。 */
+const VEH = {
+  exIdle: { file: 'VH001.webp', ar: 520 / 535, w: 2.6 },
+  exDig:  { file: 'VH002.webp', ar: 520 / 297, w: 3.2 },
+  cement: { file: 'VH003.webp', ar: 560 / 357, w: 3.4 },
+  roller: { file: 'VH004.webp', ar: 420 / 270, w: 2.4 },
+  wreck:  { file: 'VH005.webp', ar: 640 / 501, w: 3.6 },
+  ball:   { file: 'VH006.webp', ar: 140 / 400, w: 0.55 },
+};
+/* 車輪貼地：sprite 是中心對齊，往上推半個高度讓底邊落在 group 原點 */
+function vehSprite(key, depthTest = true) {
+  const v = VEH[key];
+  const h = v.w / v.ar;
+  const sp = pic(imgTex(v.file), v.w, h, depthTest);
+  sp.position.y = h / 2;
+  return sp;
+}
+let exFrameKey = '';
+function setExFrame(key) {
+  if (key === exFrameKey || !exArmSprite) return;
+  exFrameKey = key;
+  const v = VEH[key], h = v.w / v.ar;
+  exArmSprite.material.map = imgTex(v.file);
+  exArmSprite.material.needsUpdate = true;
+  exArmSprite.scale.set(v.w, h, 1);
+  exArmSprite.position.y = h / 2;
+}
+let exArmSprite = null, ballSprite = null;
 let kidSprite = null, kidFrameKey = '';
 function setKidFrame(key) {
   if (key === kidFrameKey || !kidSprite) return;
@@ -411,40 +440,35 @@ function addWheels(g, coords, r) {
 // 挖土機（含可動手臂）
 let excavator, exArm;
 function buildExcavator() {
+  // 原本是黃車身+駕駛艙+4輪+exArm(大臂/小臂/鏟斗)。手臂那段 -0.2↔-0.9 的 lerp
+  // 剛好是兩個狀態，改成兩張影格切換（VH001 收起 / VH002 下挖）。
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new RoundedBoxGeometry(1.5, 0.9, 1.2, 3, 0.16), toon(0xffcc22)); body.position.y = 0.75; g.add(body);
-  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.8, 0.7, 0.9, 3, 0.12), toon(0xbfe6ff)); cab.position.set(-0.3, 1.4, 0); g.add(cab);
-  addWheels(g, [[-0.5,-0.5],[0.5,-0.5],[-0.5,0.5],[0.5,0.5]], 0.3);
-  exArm = new THREE.Group(); exArm.position.set(0.5, 1.1, 0); g.add(exArm);
-  const a1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.18, 0.18), toon(0xff8a1a)); a1.position.set(0.55, 0, 0); exArm.add(a1);
-  const a2 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), toon(0xff8a1a)); a2.position.set(1.05, -0.35, 0); exArm.add(a2);
-  const scoop = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), toon(0x9aa0a6)); scoop.position.set(1.05, -0.75, 0); exArm.add(scoop);
-  g.rotation.y = -0.5;
+  exArmSprite = vehSprite('exIdle');
+  g.add(exArmSprite);
+  exFrameKey = 'exIdle';
+  exArm = new THREE.Group(); g.add(exArm);   // 保留空 Group，舊程式碼還會寫它的 rotation
   return g;
 }
+
 // 水泥車
 let cementTruck, cementDrum;
 function buildCementTruck() {
+  // 滾筒原本 rotation.y += dt*3 持續轉；2D 單張圖表現不出旋轉，捨棄這個細節（不影響玩法）
   const g = new THREE.Group();
-  const base = new THREE.Mesh(new RoundedBoxGeometry(2.4, 0.6, 1.2, 3, 0.14), toon(0x2f9e57)); base.position.y = 0.66; g.add(base);
-  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.8, 1.1, 3, 0.14), toon(0x2f9e57)); cab.position.set(-0.8, 1.05, 0); g.add(cab);
-  const win = new THREE.Mesh(new RoundedBoxGeometry(0.2, 0.5, 0.9, 2, 0.06), toon(0xbfe6ff)); win.position.set(-1.28, 1.15, 0); g.add(win);
-  cementDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.5, 1.3, 16), toon(0xf0e2c0)); cementDrum.rotation.z = Math.PI/2 - 0.3; cementDrum.position.set(0.55, 1.15, 0); g.add(cementDrum);
-  const chute = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.12, 0.4), toon(0x9aa0a6)); chute.position.set(1.4, 0.7, 0); chute.rotation.z = -0.4; g.add(chute);
-  addWheels(g, [[-0.8,-0.6],[0.4,-0.6],[-0.8,0.6],[0.4,0.6]], 0.3);
-  g.rotation.y = 0.4;
+  g.add(vehSprite('cement'));
+  cementDrum = new THREE.Group(); g.add(cementDrum);   // 保留空 Group 供舊程式碼寫 rotation
   return g;
 }
+
 // 壓路機（滾筒）
 let roller, rollerDrum;
 function buildRoller() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new RoundedBoxGeometry(1.0, 0.6, 1.0, 3, 0.12), toon(0xff5555)); body.position.set(-0.2, 0.7, 0); g.add(body);
-  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.6, 0.55, 0.7, 3, 0.1), toon(0xbfe6ff)); cab.position.set(-0.3, 1.2, 0); g.add(cab);
-  rollerDrum = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.3, 18), toon(0xc9ccd2)); rollerDrum.rotation.x = Math.PI/2; rollerDrum.position.set(0.55, 0.5, 0); g.add(rollerDrum);
-  addWheels(g, [[-0.6,-0.45],[-0.6,0.45]], 0.28);
+  g.add(vehSprite('roller'));
+  rollerDrum = new THREE.Group(); g.add(rollerDrum);   // 同上，滾筒旋轉捨棄
   return g;
 }
+
 // 吊車：只留細鋼索＋吊鉤從畫面上方垂下（不做粗大的塔身，避免擋住廟）
 let crane, craneHook, cranePivot;
 function buildCrane() {
@@ -458,18 +482,19 @@ function buildCrane() {
 // 破壞車（含擺動鐵球）
 let wrecker, wreckBallPivot;
 function buildWrecker() {
+  // 車體與鐵球拆成兩張圖：鐵球掛在 wreckBallPivot 底下，鐘擺擺盪保留（那是最好笑的部分）。
+  // Sprite 不吃父層旋轉的朝向，只吃位置，所以另外用 material.rotation 讓鐵鏈跟著甩。
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new RoundedBoxGeometry(2.2, 0.9, 1.3, 3, 0.16), toon(0x455a64)); body.position.y = 0.8; g.add(body);
-  const cab = new THREE.Mesh(new RoundedBoxGeometry(0.9, 0.9, 1.2, 3, 0.14), toon(0x37474f)); cab.position.set(-0.7, 1.2, 0); g.add(cab);
-  const win = new THREE.Mesh(new RoundedBoxGeometry(0.18, 0.55, 1.0, 2, 0.06), toon(0xffab40)); win.position.set(-1.15, 1.3, 0); g.add(win);
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.2, 0.2), toon(0xffcc22)); arm.position.set(0.7, 2.0, 0); arm.rotation.z = 0.5; g.add(arm);
-  wreckBallPivot = new THREE.Group(); wreckBallPivot.position.set(1.7, 2.7, 0); g.add(wreckBallPivot);
-  const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6), toon(0x222222)); chain.position.y = -0.7; wreckBallPivot.add(chain);
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 12), toon(0x2b2b2b)); ball.position.y = -1.5; wreckBallPivot.add(ball);
-  addWheels(g, [[-0.6,-0.65],[0.6,-0.65],[-0.6,0.65],[0.6,0.65]], 0.32);
+  g.add(vehSprite('wreck'));
+  wreckBallPivot = new THREE.Group(); wreckBallPivot.position.set(1.28, 2.72, 0); g.add(wreckBallPivot);
+  const bh = VEH.ball.w / VEH.ball.ar;
+  ballSprite = pic(imgTex(VEH.ball.file), VEH.ball.w, bh, true);
+  ballSprite.position.y = -bh / 2;          // 鐵鏈頂端對齊 pivot，球垂在下面
+  wreckBallPivot.add(ballSprite);
   g.visible = false;
   return g;
 }
+
 
 /* ================== 廟宇（分件組裝） ================== */
 let templeGrp, parts = {}, deities = {}, scaffoldGrp;
@@ -768,6 +793,7 @@ function wreckerTick(dt) {
   const targetX = wreck.x - 1.6;
   p.x += (targetX - p.x) * Math.min(1, dt * 3);
   wreckBallPivot.rotation.z = Math.sin(wreck.t * 6) * 0.9;
+  if (ballSprite) ballSprite.material.rotation = wreckBallPivot.rotation.z;   // 讓鐵鏈跟著甩，不然球在盪鏈子卻是直的
   // 撞擊瞬間
   if (wreck.t > 0.9 && !wreck.hit && Math.abs(p.x - targetX) < 0.8) {
     wreck.hit = true; sfxSmash(); state.shake = 14; templeWobble = 1;   // 整座廟果凍般晃
@@ -844,13 +870,13 @@ function buildTick(dt) {
     const dig = (state.mode === 'body' ? squatEdge() : touchTap);
     if (dig && digCount < digTarget) doDig();
     // 挖土機手臂動畫
-    exArm.rotation.z += ((digAnim > 0 ? -0.9 : -0.2) - exArm.rotation.z) * Math.min(1, dt * 8);
+    setExFrame(digAnim > 0 ? 'exDig' : 'exIdle');   // 原本是手臂角度 lerp，改成兩張影格切換
     if (digAnim > 0) digAnim -= dt;
     state.prog = digCount / digTarget;
     if (digCount >= digTarget) enterStep('pour');
   } else if (state.step === 'pour') {
     cementTruck.position.set(clamp(kx, -1.5, 2.5), 0.02, PLOT_Z + 1.6);
-    cementDrum.rotation.y += dt * 3;
+    // （滾筒旋轉已隨 2D 化捨棄）
     const pouring = (state.mode === 'body' ? armsUp : touchDown);
     if (pouring && state.prog < 1) {
       state.prog = Math.min(1, state.prog + dt * 0.4);
@@ -861,7 +887,7 @@ function buildTick(dt) {
     if (state.prog >= 1) { sfxCheer(); popText(TMP.set(0, SLAB_TOP + 1, PLOT_Z + 1), 'YES!', '#c9ccd2'); enterStep('flatten'); }
   } else if (state.step === 'flatten') {
     roller.position.set(clamp(kx, -2.5, 2.5), 0.02, PLOT_Z);
-    rollerDrum.rotation.x += dt * 6 * Math.sign(kx - lastRollX + 0.0001);
+    // （滾筒旋轉已隨 2D 化捨棄）
     lastRollX = kx;
     for (const b of bumps) {
       if (!b.flat) {

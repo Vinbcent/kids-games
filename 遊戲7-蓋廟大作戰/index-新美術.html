@@ -499,43 +499,37 @@ function buildWrecker() {
 /* ================== 廟宇（分件組裝） ================== */
 let templeGrp, parts = {}, deities = {}, scaffoldGrp;
 function buildSwallowRoof() {
+  // 原本是主脊+2 斜簷+2 燕尾翹脊+金脊飾+金珠+上層小脊共 7 件幾何。
+  // 廟是固定槽位的組裝，零件對不齊很明顯，所以這批一律「拉伸成原本的幾何尺寸」，
+  // 不照 AI 圖的原始長寬比——石台橫向拉寬看不出來，對不齊卻很礙眼。
   const g = new THREE.Group();
-  // 主脊
-  const main = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.5, 1.9), toon(0xc0392b)); main.position.y = 0; g.add(main);
-  // 屋簷斜面
-  const eaveG = new THREE.BoxGeometry(4.4, 0.16, 1.0);
-  for (const dz of [0.95, -0.95]) { const e = new THREE.Mesh(eaveG, toon(0xd94f3a)); e.position.set(0, -0.2, dz); e.rotation.x = dz > 0 ? -0.5 : 0.5; g.add(e); }
-  // 燕尾翹脊
-  const tipG = new THREE.BoxGeometry(0.7, 0.22, 2.0);
-  for (const dx of [2.0, -2.0]) { const t = new THREE.Mesh(tipG, toon(0xe5352b)); t.position.set(dx, 0.28, 0); t.rotation.z = dx > 0 ? -0.6 : 0.6; g.add(t); }
-  // 金脊飾
-  const ridge = new THREE.Mesh(new THREE.BoxGeometry(4.0, 0.14, 0.2), toon(0xf4c430)); ridge.position.y = 0.28; g.add(ridge);
-  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), toon(0xf4c430)); orb.position.set(0, 0.42, 0); g.add(orb);
-  // 上層小脊
-  const top = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.34, 1.2), toon(0xc0392b)); top.position.set(0, 0.5, 0); g.add(top);
+  const r = pic(imgTex('TP002.webp'), 4.8, 1.5, true);
+  r.position.y = 0.18;              // 對齊原本主脊(y=0)到金珠(y=0.42)的視覺重心
+  g.add(r);
   return g;
 }
+
 function buildTemple() {
   const G = new THREE.Group(); G.position.set(0, 0, PLOT_Z);
   const wood = 0x8a5a32, red = 0xc0392b, gold = 0xf4c430, stone = 0xcbb892;
   // 台基（壓平水泥後才出現）
-  parts.base = new THREE.Mesh(new RoundedBoxGeometry(4.6, 0.5, 2.8, 3, 0.1), toon(stone)); parts.base.position.y = SLAB_TOP - 0.1; parts.base.visible = false; G.add(parts.base);
+  parts.base = pic(imgTex('TP006.webp'), 4.6, 0.5, true); parts.base.position.y = SLAB_TOP - 0.1; parts.base.visible = false; G.add(parts.base);
   const steps = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, 0.5), toon(0xe0d0a8)); steps.position.set(0, SLAB_TOP - 0.05, 1.3); steps.visible = false; parts.steps = steps; G.add(steps);
   // 後牆
-  parts.backWall = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.4, 0.3), toon(wood)); parts.backWall.position.set(0, SLAB_TOP + 1.35, -1.0); parts.backWall.visible = false; G.add(parts.backWall);
-  const board = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.5, 0.05), toon(0x7a1f18)); board.position.set(0, SLAB_TOP + 2.5, -0.84); board.visible = false; parts.plaque = board; G.add(board);
+  parts.backWall = pic(imgTex('TP005.webp'), 3.6, 2.4, true); parts.backWall.position.set(0, SLAB_TOP + 1.35, -1.0); parts.backWall.visible = false; G.add(parts.backWall);
+  const board = pic(imgTex('TP007.webp'), 1.3, 0.5, true); board.position.set(0, SLAB_TOP + 2.5, -0.84); board.visible = false; parts.plaque = board; G.add(board);
   const plaqueTxt = pic(textTex('媽祖廟', '#f4c430'), 1.2, 0.45, true); plaqueTxt.position.set(0, SLAB_TOP + 2.5, -0.8); plaqueTxt.visible = false; parts.plaqueTxt = plaqueTxt; G.add(plaqueTxt);
   // 紅柱
-  const pillarG = new THREE.CylinderGeometry(0.22, 0.24, 2.2, 14);
-  parts.leftPillar = new THREE.Mesh(pillarG, toon(red)); parts.leftPillar.position.set(-1.5, SLAB_TOP + 1.1, 0.6); parts.leftPillar.visible = false; G.add(parts.leftPillar);
-  parts.rightPillar = new THREE.Mesh(pillarG, toon(red)); parts.rightPillar.position.set(1.5, SLAB_TOP + 1.1, 0.6); parts.rightPillar.visible = false; G.add(parts.rightPillar);
+  parts.leftPillar = pic(imgTex('TP003.webp'), 0.5, 2.2, true); parts.leftPillar.position.set(-1.5, SLAB_TOP + 1.1, 0.6); parts.leftPillar.visible = false; G.add(parts.leftPillar);
+  parts.rightPillar = pic(imgTex('TP003.webp'), 0.5, 2.2, true); parts.rightPillar.position.set(1.5, SLAB_TOP + 1.1, 0.6); parts.rightPillar.visible = false; G.add(parts.rightPillar);
   // 橫樑
-  parts.beam = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.42, 0.5), toon(0x9b3226)); parts.beam.position.set(0, SLAB_TOP + 2.35, 0.6); parts.beam.visible = false; G.add(parts.beam);
-  const beamGold = new THREE.Mesh(new THREE.BoxGeometry(3.62, 0.12, 0.52), toon(gold)); beamGold.position.set(0, SLAB_TOP + 2.15, 0.6); beamGold.visible = false; parts.beamGold = beamGold; G.add(beamGold);
+  parts.beam = pic(imgTex('TP004.webp'), 3.6, 0.5, true); parts.beam.position.set(0, SLAB_TOP + 2.35, 0.6); parts.beam.visible = false; G.add(parts.beam);
+  // 金飾帶已經畫在 TP004 裡，不用再疊一條幾何；保留一個空 Group 讓舊程式碼寫 visible 不會爆
+  const beamGold = new THREE.Group(); beamGold.visible = false; parts.beamGold = beamGold; G.add(beamGold);
   // 屋頂
   parts.roof = buildSwallowRoof(); parts.roof.position.set(0, SLAB_TOP + 3.0, 0.1); parts.roof.visible = false; G.add(parts.roof);
   // 神龕台座
-  const ped = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.7), toon(0xe0c060)); ped.position.set(0, SLAB_TOP + 0.55, -0.5); ped.visible = false; parts.pedestal = ped; G.add(ped);
+  const ped = pic(imgTex('TP008.webp'), 1.2, 0.6, true); ped.position.set(0, SLAB_TOP + 0.55, -0.5); ped.visible = false; parts.pedestal = ped; G.add(ped);
   // 燈籠
   for (const dx of [-1.5, 1.5]) { const lan = pic(imgTex('TP001.webp'), 0.8 * AR.lan, 0.8, false); lan.position.set(dx, SLAB_TOP + 1.9, 0.75); lan.visible = false; G.add(lan); parts['lan' + dx] = lan; }
   // 神像（立牌）
@@ -545,16 +539,12 @@ function buildTemple() {
   scene.add(G);
   // 鷹架
   scaffoldGrp = new THREE.Group(); scaffoldGrp.position.set(0, 0, PLOT_Z); scaffoldGrp.visible = false;
-  const bamboo = toon(0xcB9b5a);
-  for (const dx of [-2.4, 2.4]) for (const dz of [-1.3, 1.3]) {
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 4.2, 8), bamboo); pole.position.set(dx, SLAB_TOP + 2.1, dz); scaffoldGrp.add(pole);
-  }
-  for (let ly = 1; ly <= 3; ly++) for (const dz of [-1.3, 1.3]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.08, 0.08), bamboo); rail.position.set(0, SLAB_TOP + ly * 1.1, dz); scaffoldGrp.add(rail);
-    const plank = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.06, 0.3), toon(0xb5854a)); plank.position.set(0, SLAB_TOP + ly * 1.1 + 0.06, dz); scaffoldGrp.add(plank);
-  }
-  for (let ly = 1; ly <= 3; ly++) for (const dx of [-2.4, 2.4]) {
-    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 2.6), bamboo); rail.position.set(dx, SLAB_TOP + ly * 1.1, 0); scaffoldGrp.add(rail);
+  {
+    // 原本是 4 支竹柱 + 3 層橫桿/踏板/側桿約 16 件幾何，換成一張立面圖。
+    // 慶典時的 scale.y 縮到 0 拆除動畫照舊有效（sprite 被壓扁就是「拆掉」的感覺）。
+    const sc = pic(imgTex('TP009.webp'), 5.2, 4.4, true);
+    sc.position.y = SLAB_TOP + 2.1;
+    scaffoldGrp.add(sc);
   }
   scaffoldGrp.scale.set(TS, 1, TS);   // 鷹架跟著放大（y 留給拆除動畫）
   scene.add(scaffoldGrp);
@@ -690,8 +680,8 @@ function toast(txt, secs = 2.4) { zoneToast.textContent = txt; state.toastT = se
 function setCarryMesh(kind) {
   if (carryMesh) { craneHook.remove(carryMesh); carryMesh = null; }
   let m;
-  if (kind === 'pillar') m = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.24, 1.9, 12), toon(0xc0392b));
-  else if (kind === 'beam') m = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.42, 0.55), toon(0x9b3226));
+  if (kind === 'pillar') { m = pic(imgTex('TP003.webp'), 0.5, 2.2, true); m.material.color.copy(parts.leftPillar.material.color); }
+  else if (kind === 'beam') m = pic(imgTex('TP004.webp'), 3.6, 0.5, true);
   else if (kind === 'roof') { m = buildSwallowRoof(); m.scale.setScalar(0.7); }
   else if (kind === 'mazu') m = pic(texMazu(), 1.45 * AR.mazu, 1.45);
   else if (kind === 'qian') m = pic(texQian(), 1.25 * AR.qian, 1.25);
@@ -1186,9 +1176,13 @@ const PALETTES = [
   { pillar: 0x2e7d32, base: 0xd6c48a }, { pillar: 0x8e44ad, base: 0xe0cfa0 }, { pillar: 0xd35400, base: 0xe8d3a0 },
 ];
 function applyPalette() {
+  // 柱子與台基現在是 sprite，直接換 material 會把貼圖也換掉。
+  // 改成設 material.color——Three.js 會拿它去乘貼圖，所以素材才要畫成淺灰白中性色，
+  // 這樣每局隨機換色的重玩性設計就保留下來了。
   const p = pick(PALETTES);
-  parts.leftPillar.material = toon(p.pillar); parts.rightPillar.material = toon(p.pillar);
-  parts.base.material = toon(p.base);
+  parts.leftPillar.material.color.setHex(p.pillar);
+  parts.rightPillar.material.color.setHex(p.pillar);
+  parts.base.material.color.setHex(p.base);
 }
 const SURPRISES = [
   { e: '🦕', t: '挖到恐龍！', v: 'A dinosaur! Rawr!' },
@@ -1227,8 +1221,15 @@ function startCountdown() {
       const dbgStep = new URLSearchParams(location.search).get('step');
       const jump = ORDER.includes(dbgStep) ? dbgStep : 'dig';
       enterStep(jump);
+      if (jump !== 'dig') applyPalette();   // 跳關時也要抽配色，否則柱子/台基會是未染色的中性白
       // 跳關時要把前面關卡已經蓋好的東西補上，否則會看到「壓路機浮在空中」這種假象
-      if (ORDER.indexOf(jump) >= ORDER.indexOf('flatten')) { parts.base.visible = true; parts.base.scale.y = 1; }
+      if (ORDER.indexOf(jump) >= ORDER.indexOf('flatten')) { parts.base.visible = true; parts.base.scale.y = 1; parts.steps.visible = true; }
+      if (ORDER.indexOf(jump) >= ORDER.indexOf('install')) {
+        // 跳到請神像/慶典時，前面吊建材蓋好的部分要一起補上，否則會看到「廟不見了」的假象
+        for (const k of ['backWall','plaque','plaqueTxt','leftPillar','rightPillar','beam','roof','pedestal','lan-1.5','lan1.5']) {
+          if (parts[k]) parts[k].visible = true;
+        }
+      }
     }
   };
   step();

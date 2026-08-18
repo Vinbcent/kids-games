@@ -1052,25 +1052,27 @@ function updateCritters(dt) {
 
 /* --- 舞龍舞獅：全程在畫面遊走，慶典時衝到前景放大變快 --- */
 const dragon = { head: pic(texDragonHead(), 1.5 * AR.dhead, 1.5, false), segs: [] };
-dragon.head.material.depthTest = false; scene.add(dragon.head);
-for (let i = 0; i < 7; i++) { const s = pic(texDragonSeg(), 0.6 * AR.dseg, 0.6, false); s.material.depthTest = false; scene.add(s); dragon.segs.push(s); }
-const lion = pic(texLion(), 1.5 * AR.lion, 1.5, false); lion.material.depthTest = false; scene.add(lion);
+dragon.head.material.depthTest = true;  scene.add(dragon.head);   // 原本 false（永遠最前面），
+// 換成 AI 圖後會蓋住挖土機與廟；改吃深度後 z=-13 自然被擋住，慶典拉到 z=-3 一樣會在廟前面
+for (let i = 0; i < 7; i++) { const s = pic(texDragonSeg(), 0.6 * AR.dseg, 0.6, true); scene.add(s); dragon.segs.push(s); }
+const lion = pic(texLion(), 1.5 * AR.lion, 1.5, true); scene.add(lion);
 let paradeFg = 0;
 function updateParade(dt) {
   const target = (state.step === 'celebrate') ? 1 : 0;
   paradeFg += (target - paradeFg) * Math.min(1, dt * 1.2);
   const t = state.t, sp = 0.3 * (1.6 + paradeFg * 2.2);
-  const z = -13 + 10 * paradeFg, span = 9 - paradeFg * 3, yBase = 2.2 + paradeFg * 0.4;
+  const z = -13 + 10 * paradeFg, span = 9 - paradeFg * 3, yBase = 2.9 + paradeFg * 0.4;   // 2.2→2.9：素材變大後會從施工區正中間穿過去，抬高讓它們在工程車上方遊行
   const wave = k => yBase + Math.sin(t * (1.2 + paradeFg) - k) * (0.8 + paradeFg * 0.6);
   const dir = Math.cos(t * sp);
   const dscl = 1.5 + paradeFg * 0.4;
   dragon.head.position.set(Math.sin(t * sp) * span, wave(0), z);
   dragon.head.scale.set((dir >= 0 ? 1 : -1) * dscl * AR.dhead, dscl, 1);
   dragon.head.material.rotation = Math.sin(t * 3) * 0.06;
-  // 相位間距 0.55 -> 0.26：新素材的龍身節比原本的手繪橢圓寬，間距不收緊就接不起來
-  dragon.segs.forEach((s, i) => { const k = (i + 1) * 0.26; s.position.set(Math.sin(t * sp - k) * span, wave(k), z - 0.05); });
+  // 相位間距：世界座標的節距 ≈ span × k，節寬只有 1.0，k=0.26 會留 2.3 的空隙變成一顆顆分開的膠囊。
+  // 0.12 換算下來間距約 1.08，剛好首尾相接成一條龍。
+  dragon.segs.forEach((s, i) => { const k = (i + 1) * 0.12; s.position.set(Math.sin(t * sp - k) * span, wave(k), z - 0.05); });
   const lscl = 1.4 + paradeFg * 0.5;
-  lion.position.set(Math.sin(t * 0.9) * (5 - paradeFg * 2), (0.9 + paradeFg * 0.4) + Math.abs(Math.sin(t * 5)) * (0.3 + paradeFg * 0.3), z + 1.6 + paradeFg * 1.5);
+  lion.position.set(Math.sin(t * 0.9) * (5 - paradeFg * 2), (1.5 + paradeFg * 0.4) + Math.abs(Math.sin(t * 5)) * (0.3 + paradeFg * 0.3), z + 1.6 + paradeFg * 1.5);
   lion.scale.set(lscl * AR.lion, lscl, 1); lion.material.rotation = Math.sin(t * 5) * 0.12;
 }
 updateParade(0);   // 先擺到背景，避免倒數時閃現在畫面中央
@@ -1088,8 +1090,21 @@ function updateHelpers(dt) {
   shunHelper.position.y = 3.0 + Math.cos(state.t * 2) * 0.12 + (shunShake > 0 ? Math.sin(state.t * 40) * 0.12 : 0);
   if (shunShake > 0) shunShake -= dt;
   if (glowRing.visible && !wreck.active && (state.step === 'hoist' || state.step === 'install')) {
+    // 指路的神明要跟「當下請的那一尊」一致。原本寫死 qianHelper，
+    // 結果請順風耳、請媽祖的時候都是千里眼在比，小孩會對不起來。
+    const kind = carried && carried.carry;
+    let src = qianHelper, beamCol = 0x66ffcc;          // 吊建材階段仍由千里眼指路（那本來就是他的工作）
+    if (kind === 'shun')      { src = shunHelper; beamCol = 0x7fb8ff; }
+    else if (kind === 'mazu') { src = mazuHelper; beamCol = 0xffd76a; }
+    // 正在指路的那一尊放大一點點，讓「是誰在比」更明顯
+    for (const [h, base] of [[qianHelper, 1.1 * AR.qian], [shunHelper, 1.1 * AR.shun]]) {
+      const want = (h === src) ? 1.18 : 1.0;
+      h.scale.x += (base * want - h.scale.x) * Math.min(1, dt * 8);
+      h.scale.y += ((h === qianHelper ? 1.1 : 1.1) * want - h.scale.y) * Math.min(1, dt * 8);
+    }
     eyeBeam.visible = true;
-    _V1.copy(qianHelper.position); _V2.copy(glowRing.position);
+    eyeBeam.material.color.setHex(beamCol);
+    _V1.copy(src.position); _V2.copy(glowRing.position);
     _VD.subVectors(_V2, _V1); const len = _VD.length() || 1;
     eyeBeam.position.copy(_V1).addScaledVector(_VD, 0.5);
     eyeBeam.scale.set(1, len, 1);
@@ -1097,7 +1112,12 @@ function updateHelpers(dt) {
     eyeBeam.material.opacity = 0.25 + 0.2 * Math.abs(Math.sin(state.t * 6));
   } else eyeBeam.visible = false;
   if (mazuBless > 0) { mazuBless -= dt; mazuHelper.material.opacity = Math.min(0.95, mazuBless * 1.3); const s = 1.3 + (1.2 - mazuBless) * 0.35; mazuHelper.scale.set(s * AR.mazu, s, 1); }
-  else mazuHelper.material.opacity += (0 - mazuHelper.material.opacity) * Math.min(1, dt * 3);
+  else {
+    // 請媽祖時天空的媽祖要現身，否則光束會從空氣裡射出來
+    const showMazu = (state.step === 'install' && carried && carried.carry === 'mazu');
+    mazuHelper.material.opacity += ((showMazu ? 0.9 : 0) - mazuHelper.material.opacity) * Math.min(1, dt * 5);
+    if (showMazu) mazuHelper.scale.set(1.3 * AR.mazu, 1.3, 1);
+  }
 }
 function stepBless(key, voice) {
   mazuBless = 1.2;
@@ -1147,7 +1167,7 @@ function updateDayNight(dt) {
   sun.material.opacity = 1 - dayNight * 0.9; sun.position.y = 10 - dayNight * 5;
 }
 const birds = [];
-for (let i = 0; i < 3; i++) { const b = pic(imgTex('FX002.webp'), 0.75 * AR.bird, 0.75, false); b.material.depthTest = false; b.position.set(rnd(-12, 12), rnd(5, 8), -14 - rnd(0, 6)); scene.add(b); birds.push({ s: b, sp: rnd(0.8, 1.6) * (chance(0.5) ? 1 : -1) }); }
+for (let i = 0; i < 3; i++) { const b = pic(imgTex('FX002.webp'), 0.75 * AR.bird, 0.75, true); b.position.set(rnd(-12, 12), rnd(5, 8), -14 - rnd(0, 6)); scene.add(b); birds.push({ s: b, sp: rnd(0.8, 1.6) * (chance(0.5) ? 1 : -1) }); }
 function updateAmbient(dt) {
   for (const b of birds) { b.s.position.x += b.sp * dt; if (b.s.position.x > 13) b.s.position.x = -13; if (b.s.position.x < -13) b.s.position.x = 13; }
   for (const k of ['lan-1.5', 'lan1.5']) if (parts[k] && parts[k].visible) parts[k].material.rotation = Math.sin(state.t * 2 + (k.indexOf('-') >= 4 ? 0 : 1)) * 0.15;

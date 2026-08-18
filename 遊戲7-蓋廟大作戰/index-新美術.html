@@ -776,14 +776,14 @@ function placePiece() {
 let wreck = { active: false, t: 0, x: 0, hit: false, free: false };
 function summonWrecker(atX) {
   wreck.active = true; wreck.t = 0; wreck.hit = false; wreck.free = false; wreck.x = atX;
-  wrecker.visible = true; wrecker.position.set(atX - 6, 0, PLOT_Z + 1.2);
+  wrecker.visible = true; wrecker.position.set(atX - 6, 0.28, PLOT_Z + 1.2);
   shunShake = 1.2;   // 順風耳「聽到」了，嚇一跳
   popText(new THREE.Vector3(shunHelper.position.x, shunHelper.position.y + 1.0, shunHelper.position.z), '？！', '#ffcc33');
   sayT('wreck', pick(['Oops! Wrong spot! Boom!', 'Uh oh! Knock it down!', 'Crash! Try again!']), 500);
 }
 function freeSmash() {
   wreck.active = true; wreck.t = 0; wreck.hit = false; wreck.free = true; wreck.x = 0;
-  wrecker.visible = true; wrecker.position.set(-6, 0, PLOT_Z + 1.2);
+  wrecker.visible = true; wrecker.position.set(-6, 0.28, PLOT_Z + 1.2);
   shunShake = 1.2;
   say(pick(['Wrecking ball! Boom!', 'Smash it! Ha ha!', 'Here it comes! Crash!']));
 }
@@ -864,8 +864,13 @@ function finishTemple() {
 /* 蓋廟主更新 */
 function buildTick(dt) {
   const kx = state.kidX;
+  // 各關「車子該站在哪個面上」的高度（2D sprite 是底邊貼齊 group 原點，所以 y 要給地面高度）：
+  //   泥土台頂面 = 0.13 + 0.3/2 = 0.28
+  //   水泥板頂面 = 0.25 × TS(1.45) × 2 = 0.725   ← 廟那一組有整體放大 1.45 倍
+  // 原本 3D 車的輪子在 group 原點(y=0)，車體立體所以下沉看起來像「輪子壓進土裡」；
+  // 換成整片 sprite 之後，同樣的下沉就變成「整台車被切掉一截」。
   if (state.step === 'dig') {
-    excavator.position.set(clamp(kx, -2, 2), 0.02, PLOT_Z + 1.4);
+    excavator.position.set(clamp(kx, -2, 2), 0.28, PLOT_Z + 1.4);
     // 挖的動作：偵測「蹲下」的下降緣（body）或點擊（touch）
     const dig = (state.mode === 'body' ? squatEdge() : touchTap);
     if (dig && digCount < digTarget) doDig();
@@ -875,7 +880,9 @@ function buildTick(dt) {
     state.prog = digCount / digTarget;
     if (digCount >= digTarget) enterStep('pour');
   } else if (state.step === 'pour') {
-    cementTruck.position.set(clamp(kx, -1.5, 2.5), 0.02, PLOT_Z + 1.6);
+    // z 從 +1.6 挪到 +2.6：水泥板長大後前緣會到 z=-3.97（含 1.45 倍放大），
+    // 車子站在 -4.4 會被板子從前面蓋過去，看起來像被水泥淹掉
+    cementTruck.position.set(clamp(kx, -1.5, 2.5), 0.28, PLOT_Z + 2.6);
     // （滾筒旋轉已隨 2D 化捨棄）
     const pouring = (state.mode === 'body' ? armsUp : touchDown);
     if (pouring && state.prog < 1) {
@@ -886,7 +893,7 @@ function buildTick(dt) {
     }
     if (state.prog >= 1) { sfxCheer(); popText(TMP.set(0, SLAB_TOP + 1, PLOT_Z + 1), 'YES!', '#c9ccd2'); enterStep('flatten'); }
   } else if (state.step === 'flatten') {
-    roller.position.set(clamp(kx, -2.5, 2.5), 0.02, PLOT_Z);
+    roller.position.set(clamp(kx, -2.5, 2.5), 0.72, PLOT_Z);   // 壓路機是在「已倒好的水泥板」上跑，不是在泥土上
     // （滾筒旋轉已隨 2D 化捨棄）
     lastRollX = kx;
     for (const b of bumps) {
@@ -1213,7 +1220,16 @@ function startCountdown() {
   let i = 0;
   const step = () => {
     if (i < seq.length) { num.textContent = seq[i]; num.style.animation = 'none'; void num.offsetWidth; tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2); i++; setTimeout(step, 900); }
-    else { el.style.display = 'none'; state.phase = 'play'; state.t = 0; enterStep('dig'); }
+    else {
+      el.style.display = 'none'; state.phase = 'play'; state.t = 0;
+      // 開發用：?step=pour|flatten|hoist|install|celebrate 直接跳關，方便驗證後面關卡的美術
+      const ORDER = ['dig','pour','flatten','hoist','install','celebrate'];
+      const dbgStep = new URLSearchParams(location.search).get('step');
+      const jump = ORDER.includes(dbgStep) ? dbgStep : 'dig';
+      enterStep(jump);
+      // 跳關時要把前面關卡已經蓋好的東西補上，否則會看到「壓路機浮在空中」這種假象
+      if (ORDER.indexOf(jump) >= ORDER.indexOf('flatten')) { parts.base.visible = true; parts.base.scale.y = 1; }
+    }
   };
   step();
 }

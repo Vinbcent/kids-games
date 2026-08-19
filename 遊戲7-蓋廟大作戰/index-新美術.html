@@ -202,7 +202,9 @@ function sayT(key, text, gap = 2500) {
 const KID_X_MAX = 3.2;
 const PLOT_Z = -6;            // 工地/廟宇在此
 const SLAB_TOP = 0.35;        // 水泥板頂面（廟宇 local y 基準）
-const TS = 1.45;             // 廟宇整體放大倍率（含槽位/鷹架/凹凸同步）
+// 廟宇整體放大倍率 1.45 → 1.85。上限是吊鉤：吊件槽位在 ±1.5×TS，吊鉤範圍只有 ±2.8，
+// TS=1.85 時槽位 ±2.775 剛好還搆得到；再大就放不到外側的柱子了。
+const TS = 1.85;
 
 const state = {
   phase: 'menu', mode: null,
@@ -573,11 +575,13 @@ function buildTemple() {
   {
     // 原本是 4 支竹柱 + 3 層橫桿/踏板/側桿約 16 件幾何，換成一張立面圖。
     // 慶典時的 scale.y 縮到 0 拆除動畫照舊有效（sprite 被壓扁就是「拆掉」的感覺）。
-    const sc = pic(imgTex('TP009.webp'), 5.2, 4.4, true);
-    sc.position.y = SLAB_TOP + 2.1;
+    // 尺寸直接乘 TS：group 的 scale.y 要留給拆除動畫，不能拿來放大，
+    // 否則廟長高了鷹架還是矮矮一截包不住。
+    const sc = pic(imgTex('TP009.webp'), 5.4 * TS, 3.9 * TS, true);
+    sc.position.y = SLAB_TOP + 3.4;
     scaffoldGrp.add(sc);
   }
-  scaffoldGrp.scale.set(TS, 1, TS);   // 鷹架跟著放大（y 留給拆除動畫）
+  scaffoldGrp.scale.set(1, 1, 1);   // 尺寸已經乘進 sprite 了，這裡整組留給拆除動畫用（scale.y 1→0）
   scene.add(scaffoldGrp);
   G.scale.setScalar(TS);              // 整座廟放大
   return G;
@@ -986,10 +990,11 @@ function buildTick(dt) {
       const hookX = cranePivot.position.x;
       const d = Math.abs(hookX - slotX);
       if (d < 0.95) { alignT += dt; farT = 0; if (alignT > 0.3) placePiece(); }      // 大範圍、放一下就好
-      // 門檻 1.7 → 2.6：槽位在 0 與 ±1.5×TS(=±2.175)，玩家站在正中間不動時距離第一個槽位就有 2.175，
-      // 舊門檻 1.7 會讓「什麼都不做」自動招來破壞車。2.6 保證站中間絕對安全，
-      // 要跑到相反側（吊鉤範圍 ±2.8）才算「刻意停很遠」。停留時間也從 1.7 拉到 2.2 秒。
-      else if (d > 2.6) { farT += dt; alignT = 0; if (farT > 2.2) summonWrecker(hookX); }
+      // 破壞車只有「刻意跑很遠」才會來。純看距離會被 TS 綁死（槽位在 ±1.5×TS，
+      // TS 一放大，站在正中間不動就超過門檻，變成什麼都不做也會被砸）。
+      // 改成兩個條件都要成立：離目標夠遠，而且人自己也偏離中央夠多。
+      // 這樣站中間永遠安全，跑到另一側才會招來破壞車，跟 TS 多大無關。
+      else if (d > 2.4 && Math.abs(hookX) > 1.2) { farT += dt; alignT = 0; if (farT > 2.2) summonWrecker(hookX); }
       else { alignT = 0; farT = 0; }
       state.prog = (pieceIdx + Math.min(1, alignT / 0.3)) / currentPieces().length;
     }
@@ -1291,6 +1296,10 @@ function startCountdown() {
       if (jump !== 'dig') applyPalette();   // 跳關時也要抽配色，否則柱子/台基會是未染色的中性白
       // 跳關時要把前面關卡已經蓋好的東西補上，否則會看到「壓路機浮在空中」這種假象
       if (ORDER.indexOf(jump) >= ORDER.indexOf('flatten')) { parts.base.visible = true; parts.base.scale.y = 1; parts.steps.visible = true; }
+      if (jump === 'celebrate') {
+        // 跳到慶典時神像也要就位，否則廟裡空空的，驗不了美術
+        for (const k in deities) deities[k].visible = true;
+      }
       if (ORDER.indexOf(jump) >= ORDER.indexOf('install')) {
         // 跳到請神像/慶典時，前面吊建材蓋好的部分要一起補上，否則會看到「廟不見了」的假象
         for (const k of ['backWall','plaque','leftPillar','rightPillar','beam','roof','pedestal','lan-1.5','lan1.5']) {

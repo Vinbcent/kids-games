@@ -146,7 +146,6 @@
 
 <script type="module">
 import * as THREE from 'three';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 /* ================== 基本設定 ================== */
 const canvas = document.getElementById('game');
@@ -237,14 +236,13 @@ function toon(color) {
   if (!matCache.has(color)) matCache.set(color, new THREE.MeshToonMaterial({ color, gradientMap: gradMap }));
   return matCache.get(color);
 }
-function basic(color) { return new THREE.MeshBasicMaterial({ color }); }
 
 /* 地面 */
 /* ===== AI 生成素材（pic/opt/）=====
    sprite 的 scale 是「世界單位的寬高」，不會自動照圖片比例，
    所以每張圖的長寬比要寫死在 AR 裡，畫的時候用「高 × AR」算寬，否則會被壓扁。
    AR 值 = build.ps1 實際輸出的 w/h。換素材重跑 build 後要一起更新。 */
-const ART_VER = 1;
+const ART_VER = 6;   // 每換一批素材就 +1，否則 GitHub Pages 的舊快取會擋住新圖
 const AR = {
   mazu:  512 / 1160,   // CH101
   qian:  512 / 936,    // CH201
@@ -352,11 +350,6 @@ const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
 yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
 
 /* 遠山 */
-const HILL_GEO = new THREE.SphereGeometry(1, 14, 10);
-function addHill(x, z, r, color) {
-  const h = new THREE.Mesh(HILL_GEO, toon(color));
-  h.position.set(x, -r * 0.45, z); h.scale.set(r * 1.4, r * 0.7, r * 1.4); scene.add(h);
-}
 /* 遠山改用一張橫幅圖。原本是 12 顆壓扁球體隨機擺，AI 圖的層次比球體好看很多。
    z 放在 -46：比 Fog 的 far(80) 近，才不會被霧完全洗白；又夠遠不會擋到廟。
    用 Sprite 會永遠面向鏡頭且不受霧影響，這裡要的就是這個效果。 */
@@ -384,11 +377,6 @@ function emojiSprite(e, size) {
   s.scale.set(size, size, 1); return s;
 }
 /* 用 canvas 畫出來的原創立牌貼圖 */
-function drawTex(S, fn) {
-  const c = document.createElement('canvas'); c.width = c.height = S;
-  const x = c.getContext('2d'); fn(x, S);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
-}
 function pic(tex, w, h, depthTest = true) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest }));
   s.scale.set(w, h, 1); return s;
@@ -424,12 +412,6 @@ for (let i = 0; i < 3; i++) {
 
 /* ================== 原創手繪：媽祖 / 千里眼 / 順風耳 / 龍 / 獅 ================== */
 // 共用小工具
-function ellipse(x, cx, cy, rx, ry, fill) { x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, 7); x.fillStyle = fill; x.fill(); }
-function bigEye(x, cx, cy, r, look = 0) {
-  x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fillStyle = '#fff'; x.fill(); x.lineWidth = r * 0.18; x.strokeStyle = '#3a2a20'; x.stroke();
-  x.beginPath(); x.arc(cx + look, cy + r * 0.12, r * 0.5, 0, 7); x.fillStyle = '#20140c'; x.fill();
-  x.beginPath(); x.arc(cx + look - r * 0.18, cy - r * 0.1, r * 0.16, 0, 7); x.fillStyle = '#fff'; x.fill();
-}
 // 媽祖：鳳冠珠簾、紅金袍、慈祥
 let TEX_MAZU = null;
 function texMazu() { return TEX_MAZU || (TEX_MAZU = imgTex('CH101.webp')); }
@@ -462,10 +444,6 @@ function buildKid() {
 
 
 /* ================== 工地機具 ================== */
-function addWheels(g, coords, r) {
-  const wg = new THREE.CylinderGeometry(r, r, 0.34, 12);
-  for (const [wx, wz] of coords) { const w = new THREE.Mesh(wg, toon(0x1e2126)); w.rotation.x = Math.PI / 2; w.position.set(wx, r, wz); g.add(w); }
-}
 // 挖土機（含可動手臂）
 let excavator, exArm;
 function buildExcavator() {
@@ -502,9 +480,9 @@ function buildRoller() {
 let crane, craneHook, cranePivot;
 function buildCrane() {
   const g = new THREE.Group();
-  cranePivot = new THREE.Group(); cranePivot.position.set(0, 8.4, 0); g.add(cranePivot);
-  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 5.2, 6), toon(0x333333)); cable.position.y = -2.6; cranePivot.add(cable);
-  craneHook = new THREE.Group(); craneHook.position.y = -4.5; cranePivot.add(craneHook);   // 吊件掛在偏高處，不擋廟身
+  cranePivot = new THREE.Group(); cranePivot.position.set(0, 12, 0); g.add(cranePivot);   // 8.4 → 12：那個深度的畫面上緣約在 y=11.1，鋼索頂端會露出來變成「繩子憑空開始」
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 8.8, 6), toon(0x333333)); cable.position.y = -4.4; cranePivot.add(cable);   // 加長讓它從畫面外垂下來
+  craneHook = new THREE.Group(); craneHook.position.y = -8.1; cranePivot.add(craneHook);   // 8.4-4.5 = 12-8.1，吊件的絕對高度沒變   // 吊件掛在偏高處，不擋廟身
   const hook = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.05, 6, 12), toon(0x9aa0a6)); hook.position.y = 0.1; craneHook.add(hook);
   return g;
 }
@@ -540,7 +518,6 @@ function buildSwallowRoof() {
 
 function buildTemple() {
   const G = new THREE.Group(); G.position.set(0, 0, PLOT_Z);
-  const wood = 0x8a5a32, red = 0xc0392b, gold = 0xf4c430, stone = 0xcbb892;
   // 台基（壓平水泥後才出現）
   parts.base = pic(imgTex('TP006.webp'), 4.6, 0.5, true); parts.base.position.y = SLAB_TOP - 0.1; parts.base.visible = false; G.add(parts.base);
   const steps = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, 0.5), toon(0xe0d0a8)); steps.position.set(0, SLAB_TOP - 0.05, 1.3); steps.visible = false; parts.steps = steps; G.add(steps);
@@ -721,7 +698,6 @@ const INSTALL_PIECES = [
   { key: 'mazu', slot:  0.0, label: '媽祖',   carry: 'mazu' },
 ];
 let carried = null, carryMesh = null, alignT = 0, farT = 0, pieceIdx = 0, placeLock = 0;
-const TREASURES = ['💎', '🦴', '🏺', '🪙', '🔧', '🪨'];
 
 const stepTip = document.getElementById('stepTip');
 const zoneToast = document.getElementById('zoneToast');
@@ -736,7 +712,6 @@ function setCarryMesh(kind) {
   else if (kind === 'mazu') m = pic(texMazu(), 1.45 * AR.mazu, 1.45);
   else if (kind === 'qian') m = pic(texQian(), 1.25 * AR.qian, 1.25);
   else if (kind === 'shun') m = pic(texShun(), 1.25 * AR.shun, 1.25);
-  else m = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.26, 0.7), toon(0x8a5a32)); // 木板
   // 半透明，避免吊件擋住廟（材質 clone，才不會動到共用快取）
   m.traverse ? m.traverse(o => { if (o.material) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.72; o.material.depthWrite = false; } })
              : (m.material.opacity = 0.82);
@@ -1365,7 +1340,6 @@ function syncVisual(dt) {
   camera.lookAt(state.kidX * 0.15, 2.7, PLOT_Z);
 
   for (const c of clouds) { c.sprite.position.x -= c.sp * dt; if (c.sprite.position.x < -14) c.sprite.position.x = 14; }
-  glowRing.rotation.z += dt * 1.2;
 
   // 破壞後整座廟果凍般晃動
   if (templeWobble > 0.001) {

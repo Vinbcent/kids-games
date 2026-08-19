@@ -137,7 +137,7 @@
 </div>
 
 <div class="overlay" id="startOverlay">
-  <img class="big" src="pic/opt/UI001.webp?v=7" alt="">
+  <img class="big" src="pic/opt/UI001.webp?v=8" alt="">
   <h1>蓋廟大作戰</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
@@ -242,7 +242,7 @@ function toon(color) {
    sprite 的 scale 是「世界單位的寬高」，不會自動照圖片比例，
    所以每張圖的長寬比要寫死在 AR 裡，畫的時候用「高 × AR」算寬，否則會被壓扁。
    AR 值 = build.ps1 實際輸出的 w/h。換素材重跑 build 後要一起更新。 */
-const ART_VER = 7;   // 每換一批素材就 +1，否則 GitHub Pages 的舊快取會擋住新圖
+const ART_VER = 8;   // 每換一批素材就 +1，否則 GitHub Pages 的舊快取會擋住新圖
 const AR = {
   mazu:  512 / 1160,   // CH101
   qian:  512 / 936,    // CH201
@@ -259,7 +259,14 @@ const AR = {
   bunny: 220 / 348,    // FX004
   dog:   220 / 256,    // FX005
   fw:    300 / 287,    // FX006 煙火
+  dust:  200 / 177,    // FX007 煙塵（中性白，靠 material.color 上棕/灰）
+  brick: 180 / 170,    // FX008 碎磚
+  star:  200 / 215,    // FX009 星光
+  cat:   260 / 278,    // FX010 飛天貓
 };
+/* 挖到的驚喜。原本是 9 種 emoji（🦕🦖🐭🦴💎🏺🐱🪙🚰），size 1.0 比小師傅的頭還大，
+   是全場最刺眼的 emoji 殘留。比照小動物的作法砍成 4 種 AI 圖——寧可少幾種也要風格一致。 */
+const SURPRISE_AR = { 'FX011.webp': 300 / 313, 'FX012.webp': 300 / 229, 'FX013.webp': 300 / 247, 'FX014.webp': 300 / 278 };
 /* 亂入小動物。原本是 7 種 emoji（🐱🐶🦆🐭🐸🐤🐰）隨機抽，
    刻意縮成三種 AI 圖——AI 圖跟 emoji 混在一起很不協調，寧可少幾種也要一致。 */
 const CRITTERS = [
@@ -587,6 +594,19 @@ function addVillageTemple(n) {
 /* ================== 特效 ================== */
 const particles = [];
 const TMP = new THREE.Vector3();
+/* burst3 的 AI 圖版本。tint 可以讓同一張圖重複用（煙塵上棕當泥土、上灰當水泥）。 */
+function burstImg(pos, n, file, ar, opt = {}) {
+  for (let i = 0; i < n; i++) {
+    const h = (opt.size || 0.7) * (0.7 + Math.random() * 0.6);
+    const s = pic(imgTex(file), h * ar, h, false);
+    s.material.depthTest = false;
+    if (opt.tint) s.material.color.setHex(opt.tint);
+    s.position.copy(pos);
+    const a = Math.random() * Math.PI * 2, sp = (opt.sp || 4) * (0.4 + Math.random());
+    particles.push({ sprite: s, vx: Math.cos(a)*sp, vy: (opt.up||4)+Math.random()*3, vz: Math.sin(a)*sp, life: opt.life||1, max: opt.life||1, grav: opt.grav ?? 9, rot: opt.rot ?? rnd(-3, 3) });
+    scene.add(s);
+  }
+}
 function burst3(pos, n, emojis, opt = {}) {
   for (let i = 0; i < n; i++) {
     const s = emojiSprite(pick(emojis), opt.size || 0.7);
@@ -792,7 +812,7 @@ function placePiece() {
     else deities[pc.key].visible = true;
   }
   const wp = new THREE.Vector3(); templeGrp.getWorldPosition(wp);
-  burst3(TMP.set(pc.slot * TS + wp.x, SLAB_TOP * TS + 2, PLOT_Z + 0.5), 8, ['✨', '🎉', '⭐'], { up: 4 });
+  burstImg(TMP.set(pc.slot * TS + wp.x, SLAB_TOP * TS + 2, PLOT_Z + 0.5), 8, 'FX009.webp', AR.star, { up: 4 });
   popText(TMP.set(pc.slot * TS, SLAB_TOP * TS + 2.6, PLOT_Z + 1), pick(['GOOD!', 'NICE!', 'YES!']), '#ffe14d');
   if (carryMesh) { craneHook.remove(carryMesh); carryMesh = null; }
   const placed = state.step === 'hoist' ? parts[pc.key] : deities[pc.key];
@@ -825,7 +845,7 @@ function wreckerTick(dt) {
   // 撞擊瞬間
   if (wreck.t > 0.9 && !wreck.hit && Math.abs(p.x - targetX) < 0.8) {
     wreck.hit = true; sfxSmash(); state.shake = 14; templeWobble = 1;   // 整座廟果凍般晃
-    burst3(TMP.set(wreck.x, SLAB_TOP + 1.2, PLOT_Z + 0.6), 16, ['🧱', '💥', '💨', '🪨'], { up: 5, sp: 6, life: 1.2 });
+    burstImg(TMP.set(wreck.x, SLAB_TOP + 1.2, PLOT_Z + 0.6), 16, 'FX008.webp', AR.brick, { up: 5, sp: 6, life: 1.2, size: 0.5 });
     burst3(TMP.set(wreck.x, SLAB_TOP + 1.0, PLOT_Z + 0.6), 3, ['😹', '🙀'], { up: 4, sp: 3, life: 1.3 });
     launchCat();
     popText(TMP.set(wreck.x, SLAB_TOP + 2.2, PLOT_Z + 1), '碰！', '#ff5533');
@@ -872,7 +892,7 @@ function celebrateTick(dt) {
   if (scaffoldGrp.scale.y <= 0.02) scaffoldGrp.visible = false;
   const boost = (state.mode === 'body' ? armsUp : touchDown);
   if (Math.random() < dt * (boost ? 12 : 5)) fireworks3();
-  if (Math.random() < dt * 3) burst3(TMP.set(rnd(-5, 5), rnd(1, 5), -5), 4, ['🧧', '🎊', '✨', '🏮'], { up: 4, life: 1.3 });
+  if (Math.random() < dt * 3) burstImg(TMP.set(rnd(-5, 5), rnd(1, 5), -5), 4, 'FX009.webp', AR.star, { up: 4, life: 1.3, size: 0.55 });
   if (Math.random() < dt * 4) sfxFirecracker();
   const glow = 0.6 + 0.4 * Math.sin(celebrateT * 4);
   if (deities.mazu.visible) deities.mazu.material.opacity = 0.85 + 0.15 * glow;
@@ -917,7 +937,7 @@ function buildTick(dt) {
     if (pouring && state.prog < 1) {
       state.prog = Math.min(1, state.prog + dt * 0.4);
       parts.base.scale.y = Math.max(0.02, state.prog);
-      if (Math.random() < dt * 30) { const s = emojiSprite('⬜', 0.3); s.position.set(cementTruck.position.x + 1.4, 1.2, PLOT_Z + 0.6); scene.add(s); particles.push({ sprite: s, vx: 0.4, vy: -0.5, vz: 0, life: 0.6, max: 0.6, grav: 6 }); }
+      if (Math.random() < dt * 30) { const s = pic(imgTex('FX007.webp'), 0.34 * AR.dust, 0.34, false); s.material.depthTest = false; s.material.color.setHex(0xdcdcd4); s.position.set(cementTruck.position.x + 1.4, 1.2, PLOT_Z + 0.6); scene.add(s); particles.push({ sprite: s, vx: 0.4, vy: -0.5, vz: 0, life: 0.6, max: 0.6, grav: 6 }); }
       if (Math.random() < dt * 8) sfxPour();
     }
     if (state.prog >= 1) { sfxCheer(); popText(TMP.set(0, SLAB_TOP + 1, PLOT_Z + 1), 'YES!', '#c9ccd2'); enterStep('flatten'); }
@@ -986,16 +1006,17 @@ function squatEdge() {
 function doDig() {
   digCount++; digAnim = 0.35; sfxDig(); state.shake = Math.max(state.shake, 5);
   const dx = excavator.position.x;
-  burst3(TMP.set(dx + 0.6, 0.4, PLOT_Z + 0.6), 6, ['🟫', '💨'], { up: 3, sp: 3, life: 0.7 });
+  burstImg(TMP.set(dx + 0.6, 0.4, PLOT_Z + 0.6), 6, 'FX007.webp', AR.dust, { up: 3, sp: 3, life: 0.7, size: 0.55, tint: 0x9c7a4e });
   // 挖到反應式驚喜（每座廟隨機不同）
   if (!treasureGiven && digCount >= 2 && chance(0.7)) {
     treasureGiven = true;
     const su = pick(SURPRISES);
-    const s = emojiSprite(su.e, 1.0); s.position.set(dx + 0.6, 0.6, PLOT_Z + 0.6); scene.add(s);
+    const sAr = SURPRISE_AR[su.img] || 1;
+    const s = pic(imgTex(su.img), 1.0 * sAr, 1.0, false); s.material.depthTest = false; s.position.set(dx + 0.6, 0.6, PLOT_Z + 0.6); scene.add(s);
     particles.push({ sprite: s, vx: rnd(-0.6, 0.6), vy: 5, vz: 1.2, life: 2.0, max: 2.0, grav: 5, rot: rnd(-2, 2) });
     popText(TMP.set(dx + 0.6, 1.6, PLOT_Z + 0.6), su.t, '#ffe14d');
     sayT('surprise', su.v, 400); sfxCheer();
-    if (su.e === '🚰') burst3(TMP.set(dx + 0.6, 0.8, PLOT_Z + 0.6), 12, ['💧', '💦'], { up: 6, sp: 3, life: 1.2 });   // 水管噴水
+    if (su.img === 'FX014.webp') burst3(TMP.set(dx + 0.6, 0.8, PLOT_Z + 0.6), 12, ['💧', '💦'], { up: 6, sp: 3, life: 1.2 });
   }
 }
 
@@ -1051,7 +1072,7 @@ function updatePops(dt) {
   }
 }
 function launchCat() {
-  const c = emojiSprite(pick(['🐈', '🐈‍⬛', '🐱']), 0.9); c.position.set(rnd(-1, 1), SLAB_TOP + 1.5, PLOT_Z + 0.6); scene.add(c);
+  const c = pic(imgTex('FX010.webp'), 1.0 * AR.cat, 1.0, false); c.material.depthTest = false; c.position.set(rnd(-1, 1), SLAB_TOP + 1.5, PLOT_Z + 0.6); scene.add(c);
   particles.push({ sprite: c, vx: rnd(-4, 4), vy: 9, vz: 2, life: 1.9, max: 1.9, grav: 6, rot: rnd(-6, 6) });
   sayT('catfly', 'Meoooow!', 400);
 }
@@ -1163,7 +1184,7 @@ function updateHelpers(dt) {
 }
 function stepBless(key, voice) {
   mazuBless = 1.2;
-  burst3(TMP.set(0, SLAB_TOP + 2.6, PLOT_Z), 8, ['✨', '🌟', '🧧'], { up: 3, life: 1.2 });
+  burstImg(TMP.set(0, SLAB_TOP + 2.6, PLOT_Z), 8, 'FX009.webp', AR.star, { up: 3, life: 1.2 });
   fireworks3(); sfxGong();
   if (voice) sayT(key, voice, 1200);
 }
@@ -1229,16 +1250,12 @@ function applyPalette() {
   parts.rightPillar.material.color.setHex(p.pillar);
   parts.base.material.color.setHex(p.base);
 }
+// 原本 9 種 emoji，砍成 4 種 AI 圖（同「寧可少幾種也要風格一致」的原則）
 const SURPRISES = [
-  { e: '🦕', t: '挖到恐龍！', v: 'A dinosaur! Rawr!' },
-  { e: '🦖', t: '恐龍寶寶！', v: 'A baby dino! Rawr!' },
-  { e: '🐭', t: '鼴鼠哈囉～', v: 'Hello, little mole!' },
-  { e: '🦴', t: '恐龍骨頭！', v: 'Dino bones! Cool!' },
-  { e: '💎', t: '閃亮寶石！', v: 'A shiny gem!' },
-  { e: '🏺', t: '古董花瓶！', v: 'An ancient vase!' },
-  { e: '🐱', t: '吵醒睡貓了！', v: 'Oops! A sleepy cat!' },
-  { e: '🪙', t: '一堆金幣！', v: 'Lots of gold coins!' },
-  { e: '🚰', t: '挖到水管！噴水啦', v: 'A water pipe! Splash!' },
+  { img: 'FX011.webp', t: '挖到恐龍！',       v: 'A dinosaur! Rawr!' },
+  { img: 'FX012.webp', t: '閃亮寶石！',       v: 'A shiny gem!' },
+  { img: 'FX013.webp', t: '一堆金幣！',       v: 'Lots of gold coins!' },
+  { img: 'FX014.webp', t: '挖到水管！噴水啦', v: 'A water pipe! Splash!' },
 ];
 
 const smashBtn = document.getElementById('smashBtn');

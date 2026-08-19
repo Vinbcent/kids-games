@@ -42,7 +42,7 @@
     text-align: center; color: #fff; }
   #startOverlay { background: linear-gradient(180deg, #d94f3a 0%, #e88a4a 40%, #f4c95a 72%, #f7e4a8 100%); padding: 2vmin; overflow: hidden; }
   #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(120,20,0,.45); }
-  #startOverlay .big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: sway 1.6s ease-in-out infinite; }
+  #startOverlay .big { width: clamp(120px, 34vmin, 300px); height: auto; display: block; margin: 0 auto; animation: sway 1.6s ease-in-out infinite; }
   @keyframes sway { 0%,100% { transform: translateY(0) rotate(-3deg) } 50% { transform: translateY(-1.6vmin) rotate(3deg) } }
   .btn { margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
     color: #fff; border: none; border-radius: 60px; cursor: pointer; box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35); }
@@ -137,7 +137,7 @@
 </div>
 
 <div class="overlay" id="startOverlay">
-  <div class="big">🛕</div>
+  <img class="big" src="pic/opt/UI001.webp?v=7" alt="">
   <h1>蓋廟大作戰</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
@@ -242,7 +242,7 @@ function toon(color) {
    sprite 的 scale 是「世界單位的寬高」，不會自動照圖片比例，
    所以每張圖的長寬比要寫死在 AR 裡，畫的時候用「高 × AR」算寬，否則會被壓扁。
    AR 值 = build.ps1 實際輸出的 w/h。換素材重跑 build 後要一起更新。 */
-const ART_VER = 6;   // 每換一批素材就 +1，否則 GitHub Pages 的舊快取會擋住新圖
+const ART_VER = 7;   // 每換一批素材就 +1，否則 GitHub Pages 的舊快取會擋住新圖
 const AR = {
   mazu:  512 / 1160,   // CH101
   qian:  512 / 936,    // CH201
@@ -348,6 +348,17 @@ ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -28); scene.add(
 /* 工地泥土地台 */
 const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
 yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
+/* 泥土台頂面貼圖。yard 是被俯視的水平面（相機俯角只有 7.4°，頂面幾乎全露），
+   所以不能用 billboard sprite（會立起來變成牌子），要用躺平的 Plane。 */
+{
+  const yt = new THREE.Mesh(
+    new THREE.PlaneGeometry(9, 6),
+    new THREE.MeshBasicMaterial({ map: imgTex('BG003.webp'), transparent: true, depthWrite: false, toneMapped: false })
+  );
+  yt.rotation.x = -Math.PI / 2;
+  yt.position.set(0, 0.29, PLOT_Z);       // 貼在 yard 頂面(0.28)上方一點點
+  scene.add(yt);
+}
 
 /* 遠山 */
 /* 遠山改用一張橫幅圖。原本是 12 顆壓扁球體隨機擺，AI 圖的層次比球體好看很多。
@@ -520,11 +531,13 @@ function buildTemple() {
   const G = new THREE.Group(); G.position.set(0, 0, PLOT_Z);
   // 台基（壓平水泥後才出現）
   parts.base = pic(imgTex('TP006.webp'), 4.6, 0.5, true); parts.base.position.y = SLAB_TOP - 0.1; parts.base.visible = false; G.add(parts.base);
-  const steps = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.16, 0.5), toon(0xe0d0a8)); steps.position.set(0, SLAB_TOP - 0.05, 1.3); steps.visible = false; parts.steps = steps; G.add(steps);
+  // 台階：sprite 是中心對齊，position.y 往上推讓階梯底部貼齊台基頂面
+  const steps = pic(imgTex('TP010.webp'), 2.4, 0.62, true); steps.position.set(0, SLAB_TOP + 0.16, 1.3); steps.visible = false; parts.steps = steps; G.add(steps);
   // 後牆
   parts.backWall = pic(imgTex('TP005.webp'), 3.6, 2.4, true); parts.backWall.position.set(0, SLAB_TOP + 1.35, -1.0); parts.backWall.visible = false; G.add(parts.backWall);
-  const board = pic(imgTex('TP007.webp'), 1.3, 0.5, true); board.position.set(0, SLAB_TOP + 2.5, -0.84); board.visible = false; parts.plaque = board; G.add(board);
-  const plaqueTxt = pic(textTex('媽祖廟', '#f4c430'), 1.2, 0.45, true); plaqueTxt.position.set(0, SLAB_TOP + 2.5, -0.8); plaqueTxt.visible = false; parts.plaqueTxt = plaqueTxt; G.add(plaqueTxt);
+  // 匾額原本在 z=-0.84（後牆那邊），會被 z=0.1 的屋頂整片蓋住完全看不到。
+  // 字已經畫進 TP007 了，改掛到橫樑下方、神龕上方讓它露出來。
+  const board = pic(imgTex('TP007.webp'), 1.3, 0.5, true); board.position.set(0, SLAB_TOP + 1.98, 0.85); board.visible = false; parts.plaque = board; G.add(board);
   // 紅柱
   parts.leftPillar = pic(imgTex('TP003.webp'), 0.5, 2.2, true); parts.leftPillar.position.set(-1.5, SLAB_TOP + 1.1, 0.6); parts.leftPillar.visible = false; G.add(parts.leftPillar);
   parts.rightPillar = pic(imgTex('TP003.webp'), 0.5, 2.2, true); parts.rightPillar.position.set(1.5, SLAB_TOP + 1.1, 0.6); parts.rightPillar.visible = false; G.add(parts.rightPillar);
@@ -772,7 +785,7 @@ function placePiece() {
   sfxPlace(); sfxCheer();
   if (state.step === 'hoist') {
     parts[pc.key].visible = true;
-    if (pc.key === 'beam') { parts.beamGold.visible = true; parts.backWall.visible = true; parts.plaque.visible = true; parts.plaqueTxt.visible = true; }
+    if (pc.key === 'beam') { parts.beamGold.visible = true; parts.backWall.visible = true; parts.plaque.visible = true; }   // 「媽祖廟」三個字已經畫進 TP007，不再疊 canvas 字
     if (pc.key === 'roof') { parts['lan-1.5'].visible = true; parts['lan1.5'].visible = true; }
   } else {
     if (pc.key === 'mazu') { deities.mazu.visible = true; parts.pedestal.visible = true; }
@@ -1258,7 +1271,7 @@ function startCountdown() {
       if (ORDER.indexOf(jump) >= ORDER.indexOf('flatten')) { parts.base.visible = true; parts.base.scale.y = 1; parts.steps.visible = true; }
       if (ORDER.indexOf(jump) >= ORDER.indexOf('install')) {
         // 跳到請神像/慶典時，前面吊建材蓋好的部分要一起補上，否則會看到「廟不見了」的假象
-        for (const k of ['backWall','plaque','plaqueTxt','leftPillar','rightPillar','beam','roof','pedestal','lan-1.5','lan1.5']) {
+        for (const k of ['backWall','plaque','leftPillar','rightPillar','beam','roof','pedestal','lan-1.5','lan1.5']) {
           if (parts[k]) parts[k].visible = true;
         }
       }

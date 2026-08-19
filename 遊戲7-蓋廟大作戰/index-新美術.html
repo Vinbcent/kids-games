@@ -222,7 +222,10 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x9fd0ea);
 scene.fog = new THREE.Fog(0xd6e6ea, 26, 80);
 const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 300);
-camera.position.set(0, 5.0, 11.8);
+// 鏡頭拉近：11.8 → 10.0。原本在廟的深度看得到約 33 個世界單位寬，工地台只佔 27%，
+// 左右各留一大片空地。拉近後可視寬度降到約 28，配合加寬的工地台就填滿了。
+// y 5.0 → 4.7、lookAt 2.7 → 2.45 是為了讓小師傅的腳不會被下緣切掉（算過：腳在 y=0，下緣約 -0.4）。
+camera.position.set(0, 4.7, 10.0);
 
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0xcaa870, 1.15); scene.add(hemiLight);
 const sunLight = new THREE.DirectionalLight(0xfff2cc, 1.0);
@@ -353,13 +356,15 @@ ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -28); scene.add(
   scene.add(gt);
 }
 /* 工地泥土地台 */
-const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
+// 工地台 9x6 → 15x7.5：原本只佔畫面寬約 27%，左右各留一大片空地，
+// 跟滿版的遠山比起來很不成比例。加寬讓它讀起來像一塊真的工地。
+const yard = new THREE.Mesh(new THREE.BoxGeometry(15, 0.3, 7.5), toon(0x8a6a3a));
 yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
 /* 泥土台頂面貼圖。yard 是被俯視的水平面（相機俯角只有 7.4°，頂面幾乎全露），
    所以不能用 billboard sprite（會立起來變成牌子），要用躺平的 Plane。 */
 {
   const yt = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 6),
+    new THREE.PlaneGeometry(15, 7.5),
     new THREE.MeshBasicMaterial({ map: imgTex('BG003.webp'), transparent: true, depthWrite: false, toneMapped: false })
   );
   yt.rotation.x = -Math.PI / 2;
@@ -1366,8 +1371,8 @@ function syncVisual(dt) {
   // 相機
   const cx = state.kidX * 0.28 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.04 : 0);
   camera.position.x += (cx - camera.position.x) * Math.min(1, dt * 6);
-  camera.position.y = 5.0 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.03 : 0);
-  camera.lookAt(state.kidX * 0.15, 2.7, PLOT_Z);
+  camera.position.y = 4.7 + (state.shake > 0 ? (Math.random()-0.5)*state.shake*0.03 : 0);
+  camera.lookAt(state.kidX * 0.15, 2.45, PLOT_Z);
 
   for (const c of clouds) { c.sprite.position.x -= c.sp * dt; if (c.sprite.position.x < -14) c.sprite.position.x = 14; }
 

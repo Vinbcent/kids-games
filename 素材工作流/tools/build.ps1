@@ -164,6 +164,24 @@ public static class Build {
       for(int x=0;x<w;x++) if(isBg[y*w+x]){ row[x*4]=0; row[x*4+1]=0; row[x*4+2]=0; row[x*4+3]=0; } }
   }
 
+  // ---- 邊緣羽化：四邊往內 pct 比例做 alpha 線性淡出 ----
+  //      給「鋪在既有純色面上的貼圖」用（例如地面），讓它自然融進底色而不是一條硬邊
+  public static void FeatherEdges(Bitmap bmp, double pct) {
+    if (pct <= 0) return;
+    int w=bmp.Width, h=bmp.Height;
+    int fx=Math.Max(1,(int)(w*pct)), fy=Math.Max(1,(int)(h*pct));
+    var d=bmp.LockBits(new Rectangle(0,0,w,h), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+    unsafe { byte* p=(byte*)d.Scan0;
+      for(int y=0;y<h;y++){ byte* row=p+y*d.Stride;
+        double fyv = Math.Min(1.0, Math.Min(y, h-1-y) / (double)fy);
+        for(int x=0;x<w;x++){
+          double fxv = Math.Min(1.0, Math.Min(x, w-1-x) / (double)fx);
+          double f = Math.Min(fxv, fyv);
+          row[x*4+3] = (byte)(row[x*4+3] * f);
+        } } }
+    bmp.UnlockBits(d);
+  }
+
   // ---- 修半透明光暈 ----
   public static void AlphaKnee(Bitmap bmp, int knee) {
     if (knee<=0) return;
@@ -254,6 +272,9 @@ foreach ($a in $items) {
     $tol = if ($null -ne $o.純色容差) { [int]$o.純色容差 } else { 26 }
     [Build]::RemoveSolidBg($img, $tol)
   }
+
+  # ---- 邊緣羽化（鋪在既有色面上的貼圖用，例如地面）----
+  if ($null -ne $o.邊緣淡出) { [Build]::FeatherEdges($img, [double]$o.邊緣淡出) }
 
   # ---- 裁切 / 縮放 ----
   if ($trim) { $bb = [Build]::AlphaBounds($img, 12) }

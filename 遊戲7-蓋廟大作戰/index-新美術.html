@@ -240,14 +240,6 @@ function toon(color) {
 function basic(color) { return new THREE.MeshBasicMaterial({ color }); }
 
 /* 地面 */
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshToonMaterial({ color: 0x9c8f66, gradientMap: gradMap }));
-ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -28); scene.add(ground);
-/* 工地泥土地台 */
-const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
-yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
-
-/* 遠山 */
-const HILL_GEO = new THREE.SphereGeometry(1, 14, 10);
 /* ===== AI 生成素材（pic/opt/）=====
    sprite 的 scale 是「世界單位的寬高」，不會自動照圖片比例，
    所以每張圖的長寬比要寫死在 AR 裡，畫的時候用「高 × AR」算寬，否則會被壓扁。
@@ -265,7 +257,23 @@ const AR = {
   vtemple: 420 / 282,  // TP018 聚落小廟
   cloud: 420 / 152,    // FX001
   bird:  260 / 240,    // FX002
+  frog:  220 / 225,    // FX003
+  bunny: 220 / 348,    // FX004
+  dog:   220 / 256,    // FX005
+  fw:    300 / 287,    // FX006 煙火
 };
+/* 亂入小動物。原本是 7 種 emoji（🐱🐶🦆🐭🐸🐤🐰）隨機抽，
+   刻意縮成三種 AI 圖——AI 圖跟 emoji 混在一起很不協調，寧可少幾種也要一致。 */
+const CRITTERS = [
+  { file: 'FX003.webp', ar: 220 / 225, h: 0.66 },   // 青蛙
+  { file: 'FX004.webp', ar: 220 / 348, h: 0.80 },   // 兔子（耳朵長，給高一點）
+  { file: 'FX005.webp', ar: 220 / 256, h: 0.72 },   // 小狗
+];
+function critterSprite(c) {
+  const sp = pic(imgTex(c.file), c.h * c.ar, c.h, true);
+  sp.userData.baseScale = { x: c.h * c.ar, y: c.h };   // 壓扁動畫要還原成各自的原尺寸，不能寫死
+  return sp;
+}
 /* 小師傅四影格。h = 這張圖在世界座標的高度（含舉高的手、鏟子、水泥桶那些延伸物），
    不是角色本身的身高——所以四張的 h 不一樣，是為了讓「角色本人」看起來一樣大。
    ar 取自 build.ps1 的實際輸出尺寸，換素材重跑 build 後要一起更新。 */
@@ -324,6 +332,27 @@ function imgTex(file) {
   }
   return imgTexCache.get(file);
 }
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshToonMaterial({ color: 0x9c8f66, gradientMap: gradMap }));
+ground.rotation.x = -Math.PI / 2; ground.position.set(0, -0.02, -28); scene.add(ground);
+/* 地面貼圖：不做無縫平鋪（AI 生不出真無縫，大面積接縫很明顯），
+   改成「一整張不重複的圖鋪在鏡頭看得到的範圍」，四周在 build 時做了 alpha 羽化，
+   會自然融進下面那片純色平面，所以看不到邊界。 */
+{
+  const gt = new THREE.Mesh(
+    new THREE.PlaneGeometry(64, 40),
+    new THREE.MeshBasicMaterial({ map: imgTex('BG002.webp'), color: 0xe0d3bd, transparent: true, depthWrite: false, toneMapped: false })   // 乘上暖灰把飽和度壓下來，跟遠山色調協調
+  );
+  gt.rotation.x = -Math.PI / 2;
+  gt.position.set(0, 0.005, -8);          // 貼在純色地面上方一點點，避免 z-fighting
+  gt.renderOrder = -1;                     // 保證畫在所有立牌之前
+  scene.add(gt);
+}
+/* 工地泥土地台 */
+const yard = new THREE.Mesh(new THREE.BoxGeometry(9, 0.3, 6), toon(0x8a6a3a));
+yard.position.set(0, 0.13, PLOT_Z); scene.add(yard);
+
+/* 遠山 */
+const HILL_GEO = new THREE.SphereGeometry(1, 14, 10);
 function addHill(x, z, r, color) {
   const h = new THREE.Mesh(HILL_GEO, toon(color));
   h.position.set(x, -r * 0.45, z); h.scale.set(r * 1.4, r * 0.7, r * 1.4); scene.add(h);
@@ -577,7 +606,28 @@ function burst3(pos, n, emojis, opt = {}) {
     scene.add(s);
   }
 }
-function fireworks3() { for (let k = 0; k < 4; k++) setTimeout(() => burst3(TMP.set((Math.random()-0.5)*10, 5+Math.random()*3, -7-Math.random()*8), 12, ['✨','⭐','🎉','🧧'], { up: 5, sp: 5, life: 1.1 }), k * 150); }
+/* 慶典煙火：原本是 ✨⭐🎉🧧 emoji 粒子，改成一朵 AI 煙火在空中綻放＋放大淡出 */
+function fireworks3() {
+  for (let k = 0; k < 5; k++) setTimeout(() => {
+    const s = pic(imgTex('FX006.webp'), 1.0 * AR.fw, 1.0, false);
+    s.material.depthTest = false;
+    s.position.set((Math.random() - 0.5) * 12, 5.5 + Math.random() * 3, -7 - Math.random() * 8);
+    scene.add(s);
+    fwBursts.push({ sprite: s, t: 0, life: 0.9, size: 1.6 + Math.random() * 1.2 });
+  }, k * 170);
+}
+const fwBursts = [];
+function updateFireworks(dt) {
+  for (let i = fwBursts.length - 1; i >= 0; i--) {
+    const f = fwBursts[i]; f.t += dt;
+    const k = Math.min(1, f.t / f.life);
+    const sc = f.size * (0.25 + 0.75 * Math.sqrt(k));        // 快速綻開再慢下來
+    f.sprite.scale.set(sc * AR.fw, sc, 1);
+    f.sprite.material.opacity = 1 - k * k;                    // 尾段才明顯淡出
+    f.sprite.material.rotation += dt * 0.6;
+    if (k >= 1) { scene.remove(f.sprite); fwBursts.splice(i, 1); }
+  }
+}
 function popText(pos, text, color = '#ffe14d') {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: textTex(text, color), transparent: true, depthWrite: false, depthTest: false }));
   s.scale.set(1.7, 0.85, 1); s.position.copy(pos); scene.add(s);
@@ -806,7 +856,8 @@ function wreckerTick(dt) {
 
 /* 壓水泥的凹凸 + 青蛙 */
 const bumps = [];
-const frog = { mesh: emojiSprite('🐸', 0.7), squished: false, cell: 0 };
+function frogSprite() { return pic(imgTex('FX003.webp'), 0.8 * AR.frog, 0.8, true); }
+const frog = { mesh: frogSprite(), squished: false, cell: 0 };
 function buildBumps() {
   const n = 6;
   for (let i = 0; i < n; i++) {
@@ -898,10 +949,10 @@ function buildTick(dt) {
     }
     // 青蛙被壓扁
     if (!frog.squished && Math.abs(roller.position.x - bumps[frog.cell].bx) < 0.5) {
-      frog.squished = true; frog.mesh.scale.set(1.3, 0.15, 1); sfxRoll();
+      frog.squished = true; frog.mesh.scale.set(0.8 * AR.frog * 1.35, 0.8 * 0.18, 1); sfxRoll();
       popText(TMP.set(bumps[frog.cell].bx, SLAB_TOP + 0.8, PLOT_Z), '呱！', '#7ec86a');
       sayT('frog', 'Ribbit! Flat frog!', 500);
-      setTimeout(() => { if (frog.mesh) { frog.mesh.scale.set(1, 1, 1); frog.mesh.position.y += 0.4; particles.push({ sprite: frog.mesh, vx: 3, vy: 4, vz: 2, life: 1.4, max: 1.4, grav: 6 }); const nf = emojiSprite('🐸', 0.7); nf.visible = false; frog.mesh = nf; scene.add(nf); } }, 400);
+      setTimeout(() => { if (frog.mesh) { frog.mesh.scale.set(0.8 * AR.frog, 0.8, 1); frog.mesh.position.y += 0.4; particles.push({ sprite: frog.mesh, vx: 3, vy: 4, vz: 2, life: 1.4, max: 1.4, grav: 6 }); const nf = frogSprite(); nf.visible = false; frog.mesh = nf; scene.add(nf); } }, 400);
     }
     const flatN = bumps.filter(b => b.flat).length;
     state.flatLeft = bumps.length - flatN;
@@ -922,7 +973,10 @@ function buildTick(dt) {
       const hookX = cranePivot.position.x;
       const d = Math.abs(hookX - slotX);
       if (d < 0.95) { alignT += dt; farT = 0; if (alignT > 0.3) placePiece(); }      // 大範圍、放一下就好
-      else if (d > 1.7) { farT += dt; alignT = 0; if (farT > 1.7) summonWrecker(hookX); }  // 刻意停很遠才會招來破壞車
+      // 門檻 1.7 → 2.6：槽位在 0 與 ±1.5×TS(=±2.175)，玩家站在正中間不動時距離第一個槽位就有 2.175，
+      // 舊門檻 1.7 會讓「什麼都不做」自動招來破壞車。2.6 保證站中間絕對安全，
+      // 要跑到相反側（吊鉤範圍 ±2.8）才算「刻意停很遠」。停留時間也從 1.7 拉到 2.2 秒。
+      else if (d > 2.6) { farT += dt; alignT = 0; if (farT > 2.2) summonWrecker(hookX); }
       else { alignT = 0; farT = 0; }
       state.prog = (pieceIdx + Math.min(1, alignT / 0.3)) / currentPieces().length;
     }
@@ -1019,10 +1073,12 @@ const critters = [];
 let smashX = null, smashHold = 0;
 function spawnCritter() {
   if (critters.length > 4) return;
-  const s = emojiSprite(pick(['🐱', '🐶', '🦆', '🐭', '🐸', '🐤', '🐰']), 0.6);
+  const c = pick(CRITTERS);
+  const s = critterSprite(c);
   const side = chance(0.5) ? -1 : 1;
-  s.position.set(side * 5.5, 0.35, PLOT_Z + rnd(-0.4, 1.6)); scene.add(s);
-  critters.push({ sprite: s, vx: -side * rnd(0.5, 1.1), squish: 0, hop: Math.random() * 6, baseY: 0.35 });
+  const baseY = c.h / 2 + 0.02;              // sprite 中心對齊，往上推半個高度才會站在地上
+  s.position.set(side * 5.5, baseY, PLOT_Z + rnd(-0.4, 1.6)); scene.add(s);
+  critters.push({ sprite: s, vx: -side * rnd(0.5, 1.1), squish: 0, hop: Math.random() * 6, baseY });
 }
 function updateCritters(dt) {
   if (state.phase === 'play' && !state.paused && Math.random() < dt * 0.7) spawnCritter();
@@ -1033,13 +1089,14 @@ function updateCritters(dt) {
     const c = critters[i]; const p = c.sprite.position;
     if (c.squish > 0) {
       c.squish -= dt;
-      if (c.squish <= 0) { c.sprite.scale.set(0.6, 0.6, 1); c.vx = (p.x < 0 ? 1 : -1) * 2.4; }   // 彈回原狀、快跑
+      if (c.squish <= 0) { const b = c.sprite.userData.baseScale; c.sprite.scale.set(b.x, b.y, 1); c.vx = (p.x < 0 ? 1 : -1) * 2.4; }   // 彈回原狀、快跑
       p.x += c.vx * dt; p.y = c.baseY + Math.abs(Math.sin(state.t * 16)) * 0.4;
     } else {
       p.x += c.vx * dt; p.y = c.baseY + Math.abs(Math.sin(state.t * 6 + c.hop)) * 0.18;
       if (dangerX !== null && Math.abs(p.x - dangerX) < 0.55 && Math.abs(p.z - PLOT_Z) < 2.2) {
-        c.squish = 0.5; c.sprite.scale.set(1.25, 0.14, 1); sfxRoll();
-        popText(TMP.set(p.x, c.baseY + 0.7, p.z), pick(['呱！', '喵！', '啾！', '咦！']), '#7ec86a');
+        const b = c.sprite.userData.baseScale;
+        c.squish = 0.5; c.sprite.scale.set(b.x * 1.35, b.y * 0.18, 1); sfxRoll();
+        popText(TMP.set(p.x, c.baseY + 0.7, p.z), pick(['呱！', '汪！', '咦！']), '#7ec86a');   // 小動物池縮成青蛙/兔子/狗，叫聲跟著改
         sayT('squish', pick(['Squish!', 'Oopsie!', 'Boing!']), 350);
       }
     }
@@ -1282,6 +1339,7 @@ function update(dt) {
   touchTap = false;
   updatePops(dt);
   updateParticles(dt);
+  updateFireworks(dt);
 }
 
 /* ================== 呈現 ================== */

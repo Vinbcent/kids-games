@@ -394,3 +394,225 @@ const KID_FRAMES = {
    介面上沒有那個提示，就更能排除額度。
 
 > 這次的結論是服務端異常，等一段時間再重試即可，不需要改 prompt、也不需要換帳號。
+
+---
+
+# Project「Sources」實測（2026-08-20）
+
+工作流改成「GPT 做企劃／場景設計／素材設計」之後，Project 的 **Sources**（專案資源）
+從可有可無變成主要載體。這一節是在真實頁面上一條一條試出來的。
+
+## V. Sources 分頁：`.click()` 切不過去，要先 `pointerdown`
+
+```js
+const b = [...document.querySelectorAll('button[role=tab]')]
+            .find(e => (e.textContent || '').trim() === 'Sources');
+b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+b.click();                       // 只有 click() 時 aria-selected 不會變
+```
+
+網址會變成 `…/project?tab=sources`，但**直接 navigate 到那個網址不會自動選中分頁**，
+載入後仍要再點一次。判斷成功看 `b.getAttribute('aria-selected') === 'true'`。
+
+## W. `Add sources` 有五個入口，其中兩個對自動化特別重要
+
+| 入口 | 用途 | 能不能全自動 |
+|---|---|---|
+| **Text input** | 貼純文字建立一份 source | ✅ **最好用**，見下 |
+| **Upload** | 上傳本機檔案 | ✅ 用 `file_upload` 工具，見 Y |
+| **Add from library** | 從「已生成圖片庫」挑 | ⚠️ 可以，但**檔名會變成圖庫標題**（`Cheerful Glossy Baby Dinosaur`），不是我要的 `CH001.png` |
+| Google Drive / Slack | 連外部服務 | 不用 |
+
+## X. Text input：規格文件不必碰檔案對話框
+
+`Add sources → Text input` 開的是 `Add text source` 對話框：
+
+```
+Title (optional)   <input  placeholder="e.g., Team onboarding notes">
+Text               <textarea placeholder="Paste or type your text here…">
+[Back]  [Save]
+```
+
+兩個欄位 **`maxLength` 都是 -1（無上限）**。
+這代表**企劃書、場景設計、素材清單、美術規範這類長文件，可以整份用 JS 灌進去**，
+完全不需要產檔案、也不需要開作業系統的檔案選取視窗。
+
+React 受控元件要用原生 setter 才吃得到：
+
+```js
+function setReactValue(el, v) {
+  const proto = el.tagName === 'TEXTAREA'
+    ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+```
+
+## Y. `file_upload` **可以**傳本機檔案——舊文件說不行是錯的
+
+README 舊表把「用 `file_upload` 傳專案裡的參考圖」列為 ❌ 不可行（標註「未實測」）。
+**2026-08-20 實測：可行。**
+
+```
+1. 先把檔案複製到本 session 的 scratchpad 目錄（工具只收「使用者分享給本 session」的路徑，
+   專案資料夾原路徑會被拒，scratchpad 會過）
+2. Add sources 選單打開後，用 find 工具拿 file input 的 ref
+   （會找到 5 個 input[type=file]，要的是描述含「Add sources dialog」那個）
+3. mcp__claude-in-chrome__file_upload({ paths:[scratchpad\CH001.png], ref, tabId })
+```
+
+實測結果：`Uploaded 1 file(s): CH001.png (1190 KB)`，
+Sources 列表出現 **`CH001.png` / `Image · Aug 20, 2026`**——**檔名原封保留**。
+
+> 這條是整套「設定圖」機制的關鍵：檔名可控，才能在後續 prompt 裡用
+> 「請參考 CH001.png」精確指到那一張。走 `Add from library` 會拿到圖庫自動取的英文標題，指不準。
+> 單次上傳總大小上限 10 MB。
+
+## Z. 後續新對話**真的看得到** Sources 裡的圖（實測，不是推測）
+
+這是整個機制成不成立的關鍵，所以用「不花生圖額度」的文字探針測：
+
+> 先不要生圖。請打開這個專案 Sources 裡的 CH001.png，描述你**實際看到**的角色外觀……
+> 如果你其實看不到，請老實說「我看不到」，不要用猜的。
+
+回答具體到：黃色安全帽上有紅色圓徽與「廟」字、兩側青綠雲紋、白色短袖 T、藍色吊帶牛仔褲、
+紅領巾、黃橘工作靴配紅鞋帶與深咖啡鞋頭、約 3 頭身、腰間工具帶與鐵鎚、背後斜插捲筒圖紙。
+**細節密度不可能是從檔名猜出來的** → 判定：模型確實取得了圖片畫面。
+
+## AA. 「參考 CH001 生成另一個姿勢」——設計一致性成立，指令服從度沒有變好
+
+同一個新對話接著送：
+
+> 完全沿用 CH001.png 裡那個角色（配色與配件一模一樣，不要改造型），
+> 畫成雙腳離地往上跳、雙手高舉歡呼，面向右邊。背景全透明，只有他一個人，不要地面陰影文字。
+
+| 項目 | 結果 |
+|---|---|
+| 安全帽（黃底＋紅圓徽＋「廟」字＋綠雲紋） | ✅ 對 |
+| 紅領巾、白 T、藍吊帶牛仔褲、胸前金色廟宇圖案 | ✅ 對 |
+| 黃橘工作靴＋紅鞋帶＋深色鞋頭、黃黑手套 | ✅ 對 |
+| 工具帶＋鐵鎚＋背後捲筒圖紙 | ✅ 對 |
+| 三頭身比例 | ✅ 對 |
+| 指定的姿勢（跳起歡呼） | ✅ 對 |
+| **「面向右邊」** | ❌ **沒服從**，畫成正面偏左 |
+| **「背景全透明」** | ❌ **沒服從**，白底 |
+
+> **結論要記牢：參考圖解決的是「設計一致性」（同一個角色、同樣配色配件比例），
+> 不解決「指令服從度」，更不解決「幾何一致性」。**
+> 方向、背景、構圖這些照舊會漂，照舊要靠本機 `build.ps1`（幾何正規化、去背、水平翻轉）收尾。
+
+## AB. Project settings 的欄位
+
+`sidebar → button[aria-label="Open project options for <專案名>"] → Project settings`
+
+| 欄位 | 型別 | 備註 |
+|---|---|---|
+| Project name | `input` | 無 maxLength |
+| **Instructions** | `textarea` | **無 maxLength**（前端沒設限；仍建議寫短，長指令會稀釋服從度） |
+| Memory | 選項 | 預設 `Default memory` |
+| Library access | 開關 | `Enabled`；**分享專案會關掉圖庫存取** |
+
+> 指令要短、規格放 Sources：Instructions 是每則訊息都吃的成本，
+> Sources 是要用才撈的參考。把長規格塞進 Instructions 只會稀釋真正重要的那幾條。
+
+## AC. Source 只能 **Download / Delete**，**不能改名、不能編輯**
+
+每一列右側 `button[aria-label="Source actions"]` 的選單只有兩項：
+
+```
+Download
+Delete
+```
+
+兩個推論，都會影響工作流設計：
+
+1. **`Add from library` 實務上不能用來放設定圖**。從圖庫加進來的檔名是圖庫自己取的英文標題
+   （`Cheerful Glossy Baby Dinosaur`），而且**改不掉**。
+   要讓 prompt 能寫「請參考 CH001.png」，就只能走 **`file_upload` 上傳本機檔名**（見 Y）。
+2. **文件沒有「編輯」**。規格改版＝先 `Delete` 舊的、再 `Text input` 貼新的。
+   所以 **repo 才是規格的唯一真相**，Sources 只是它的一份投影；
+   不要在 ChatGPT 上直接改文件，改完 repo 再整份推上去。
+
+> `Delete` 是不可逆的破壞性操作，自動化腳本不要自己按。
+> 需要刪的時候先跟使用者確認，或請使用者自己點。
+
+## AD. `.md` 也能當 source，所以**規格文件走 `file_upload`，不要走 Text input**
+
+實測把 `G7-素材清單.md`（25 KB）丟進 `Add sources` 的 file input：
+
+```
+Uploaded 1 file(s): G7-素材清單.md (25 KB total)
+→ Sources 列表出現「G7-素材清單.md / File · Aug 20, 2026」
+```
+
+檔名一樣原封保留。**這比 Text input 好，理由有三個**：
+
+| | `file_upload` | `Text input` |
+|---|---|---|
+| 檔名 | 完全可控（`04-素材命名與交付格式.md`），prompt 裡指得到 | 只有 Title，指起來沒那麼明確 |
+| 內容怎麼進去 | 直接讀本機檔，**內容不用經過我的工具呼叫** | 要把整份文字塞進 JS 字串，一份 10 KB 文件就是 10 KB 的呼叫 |
+| 真相在哪 | repo 檔案就是真相，改完重推即可 | 內容散在瀏覽器操作紀錄裡 |
+
+> 所以標準做法是：**文件寫在 repo → 複製到本 session 的 scratchpad → `file_upload`**。
+> Text input 留給臨時的短東西。
+
+## AE. Sources 會**自動被檢索**，但別把「每張圖都要遵守的鐵則」丟進去
+
+實測：在新對話裡問「這個專案的素材規劃裡，第一批包含哪幾個 ID？」
+**完全沒有提到檔名**，它仍然正確答出 `CH101 媽祖 / CH201 千里眼 / CH301 順風耳 /
+EV001 龍頭 / EV002 龍身 / EV101 獅頭 / TP001 燈籠`（與 `assets.json` 第一批完全吻合），
+而且回答末尾自己標了引用來源 `G7-素材清單`。
+
+→ **Sources 是 RAG，會依問題自動撈，不需要在 prompt 裡指名。**
+
+但要注意這個實驗的條件：**那是一則「明顯在問資料」的訊息**。
+生圖訊息長得完全不一樣（「畫一隻⋯⋯」），**不保證會觸發檢索**。所以分配原則是：
+
+| 放哪裡 | 放什麼 | 理由 |
+|---|---|---|
+| **Project Instructions** | 每張圖都必須遵守的鐵則（單一主體／無文字／留白／背景色／一致性） | 永遠在 context 裡，不靠檢索 |
+| **Sources** | 企劃約束、技術約束、規範細節與理由、素材清單、設定圖 | 要用才撈；放這裡不佔每則訊息的成本 |
+
+> 反過來做（把鐵則放 Sources、把長篇規格塞 Instructions）兩頭都輸：
+> 鐵則可能沒被撈到，而長 Instructions 會稀釋服從度。
+
+## AF. 取回 GPT 的**文字**產出：也走 blob 下載，不要用分段讀 innerText
+
+新工作流裡 GPT 會交出企劃書、場景設計、素材清單這種**長文字**。取回來的方式很重要：
+
+**`javascript_tool` 的回傳實測約 1000 字元就截斷。**
+（用一段 10,399 字元的可預測字串測：`slice(0,9000)` 只拿回到第 38 行就 `[TRUNCATED]`。）
+一份 6000 字的企劃書要分七八次讀，而且每次都要對齊切點，很容易漏段。
+
+**改用已經驗證過的 blob 下載，一次拿完整份：**
+
+```js
+const md = document.querySelectorAll('[data-message-author-role="assistant"]');
+const text = md[md.length - 1].innerText;          // 或指定某一則
+const blob = new Blob([text], { type: 'text/markdown' });
+const u = URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = u; a.download = '_g7_企劃書.md';           // 檔名完全由我決定
+document.body.appendChild(a); a.click(); a.remove();
+setTimeout(() => URL.revokeObjectURL(u), 4000);
+```
+
+實測：10,399 字元原封落到 `Downloads\`，首行 `L000-…`、末行 `L399-…` 都在，**沒有截斷**。
+之後照舊用 shell 搬進 repo。
+
+> 跟圖片走的是同一條路（README 第二節），所以不需要新機制、也不需要新的授權。
+> 記得加一次性前綴（`_g7_`）避免跟舊檔撞名，搬完就把 Downloads 裡的清掉。
+
+---
+
+# 雙向管線總結（2026-08-20 全部實測通過）
+
+```
+repo ──file_upload──► Project Sources        檔名原封保留，.md 與 .png 都吃，單次總量 < 10 MB
+                                             （要先複製到本 session 的 scratchpad，專案原路徑會被拒）
+
+Project 對話 ──blob <a download>──► Downloads ──shell──► repo
+                                             圖片與文字都適用，無截斷
+```
+
+**repo 是唯一真相**：Sources 不能編輯只能刪除重加，所以規格一律在 repo 改，改完整份重推。

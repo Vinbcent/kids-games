@@ -253,12 +253,16 @@ let personX = 0.5;         // 鏡像後 0~1
 let handsUp = false;
 let shoulderW = 0;         // 肩寬佔畫面比例（越大 = 離鏡頭越近）
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+// 智慧變焦：偵測器內部只吃 224x224 縮圖，人站遠會小到抓不到；把上次的人物範圍裁切放大再餵模型
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null; // {x,y,w,h} 全畫面正規化座標，null=全畫面
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
   loadingText.textContent = '正在啟動鏡頭…';
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false,
   });
   video.srcObject = stream;
@@ -270,11 +274,15 @@ async function setupBodyTracking() {
   const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
     numPoses: 1,
+    // 閾值調低：小孩體型小、動作大，預設值太容易跟丟
+    minPoseDetectionConfidence: 0.3,
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
   });
   pip.style.display = 'block';
 }
@@ -282,20 +290,49 @@ async function setupBodyTracking() {
 function trackFrame() {
   if (!poseLandmarker || video.currentTime === lastVideoTime) return;
   lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null; // 丟失夠久→退回全畫面重新搜人
+  const zb = zoomBox;
   let result;
-  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
   const lm = result.landmarks && result.landmarks[0];
-  if (lm) {
-    lastSeen = performance.now();
-    // 肩膀中心當作身體位置；前鏡頭要左右鏡像（1 - x）才像照鏡子
-    const cx = (lm[11].x + lm[12].x) / 2;
-    personX = 1 - cx;
-    // 雙手手腕都高於鼻子 → 加速！（y 越小越高）
-    handsUp = lm[15].y < lm[0].y && lm[16].y < lm[0].y;
-    shoulderW = Math.abs(lm[11].x - lm[12].x);
-    pipDot.style.left = (personX * 100) + '%';
-    pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
+  const nowT = performance.now();
+  if (!lm) {
+    // 追蹤丟失時手勢要歸零，不然火箭會卡在永遠噴射（PIP 圓點顏色也要跟著還原）
+    if (nowT - lastSeen > 700) { handsUp = false; pipDot.style.background = '#00ff88'; }
+    return;
   }
+  lastSeen = nowT;
+  // 裁切模式下座標是框內的，先映回全畫面座標，後面的手勢計算才不用改
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  // 用這格的人物範圍更新下一格的裁切框（平滑跟隨，避免抖動）
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const zcx = (minX + maxX) / 2, zcy = (minY + maxY) / 2;
+    let s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4)); // 正方形裁切避免變形
+    const bx = Math.min(1 - s, Math.max(0, zcx - s / 2)), by = Math.min(1 - s, Math.max(0, zcy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  // 肩膀中心當作身體位置；前鏡頭要左右鏡像（1 - x）才像照鏡子
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;
+  // 看不清楚的點不能拿來判斷手勢（visibility 可能是 undefined，用 ?? 1 兜底）
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  // 雙手手腕都高於鼻子 → 加速！（y 越小越高）；任一點不可見就不算舉手
+  handsUp = visOK(15) && visOK(16) && visOK(0) && lm[15].y < lm[0].y && lm[16].y < lm[0].y;
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
 }
 
 /* ================== 觸控模式 ================== */

@@ -658,11 +658,15 @@ let lastVideoTime = -1, lastSeen = 0;
 let personX = 0.5, shoulderW = 0, armsUp = false, squatting = false;
 let bodyRatioBase = 0;
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+// 智慧變焦：偵測器內部只吃 224x224 縮圖，人站遠會縮到剩幾個像素抓不到 → 裁切放大再餵模型
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null; // {x,y,w,h} 全畫面正規化座標，null=全畫面
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
   loadingText.textContent = '正在啟動鏡頭…';
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }, audio: false });
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
   video.srcObject = stream;
   await new Promise(r => video.onloadedmetadata = r);
   await video.play();
@@ -670,19 +674,49 @@ async function setupBodyTracking() {
   const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
   const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task', delegate: 'GPU' },
+    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate: 'GPU' },
     runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3,
   });
   pip.style.display = 'block';
 }
 function trackFrame() {
   if (!poseLandmarker || video.currentTime === lastVideoTime) return;
   lastVideoTime = video.currentTime;
+  const now = performance.now();
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && now - lastSeen > 1200) zoomBox = null; // 丟失夠久→退回全畫面重新搜人
+  const zb = zoomBox;
   let result;
-  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x*vw, zb.y*vh, zb.w*vw, zb.h*vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, now);
+    } else {
+      result = poseLandmarker.detectForVideo(video, now);
+    }
+  } catch (e) { return; }
   const lm = result.landmarks && result.landmarks[0];
-  if (!lm) return;
-  const now = performance.now(); lastSeen = now;
+  if (!lm) {
+    // 追蹤丟失時手勢不能卡在最後狀態（否則蹲下後站不起來、灌漿停不了）
+    if (now - lastSeen > 700) { armsUp = false; squatting = false; armsUpSince = 0; }
+    if (now - lastSeen > 2000) bodyRatioBase = 0; // 站姿基準也重學（可能換人或換距離）
+    return;
+  }
+  if (zb) for (const p of lm) { p.x = zb.x + p.x*zb.w; p.y = zb.y + p.y*zb.h; } // 先映回全畫面座標，後面的手勢計算才不受裁切影響
+  lastSeen = now;
+  // 依這格人物範圍更新下一格的裁切框（正方形避免變形、平滑跟隨）
+  {
+    let minX=1,minY=1,maxX=0,maxY=0;
+    for (const p of lm) { if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x; if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; }
+    const cx=(minX+maxX)/2, cy=(minY+maxY)/2;
+    const s = Math.min(1, Math.max(0.45, Math.max(maxX-minX, maxY-minY) * 2.4));
+    const bx = Math.min(1-s, Math.max(0, cx - s/2)), by = Math.min(1-s, Math.max(0, cy - s/2));
+    if (!zoomBox) zoomBox = { x:bx, y:by, w:s, h:s };
+    else { zoomBox.x += (bx-zoomBox.x)*0.12; zoomBox.y += (by-zoomBox.y)*0.12; zoomBox.w += (s-zoomBox.w)*0.12; zoomBox.h += (s-zoomBox.h)*0.12; }
+  }
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5; // 被裁掉/擋住的關節不可信
   const scx = (lm[11].x + lm[12].x) / 2, scy = (lm[11].y + lm[12].y) / 2;
   personX = 1 - scx;
   shoulderW = Math.abs(lm[11].x - lm[12].x);
@@ -690,15 +724,19 @@ function trackFrame() {
   // 雙手高舉
   const wmy = (lm[15].y + lm[16].y) / 2;
   const band = sw * 0.5;
-  armsUp = (scy - lm[15].y) > band && (scy - lm[16].y) > band;
+  armsUp = visOK(15) && visOK(16) && (scy - lm[15].y) > band && (scy - lm[16].y) > band;
   // 蹲下：以「腳踝~肩」的身高（除肩寬正規化）低於站姿基準 → 蹲
-  const ankY = (lm[27].y + lm[28].y) / 2;
-  const ratio = (ankY - scy) / sw;
-  if (ratio > 0.5 && ratio < 12) {
-    if (ratio > bodyRatioBase) bodyRatioBase += (ratio - bodyRatioBase) * 0.06;
-    else bodyRatioBase += (ratio - bodyRatioBase) * 0.01;
-    const thr = squatting ? 0.90 : 0.80;
-    squatting = bodyRatioBase > 1 && ratio < bodyRatioBase * thr;
+  if (!visOK(27) || !visOK(28)) {
+    squatting = false; // 腳踝看不到就不判蹲、也不更新基準（太近時本來就有 too-close 暫停接手）
+  } else {
+    const ankY = (lm[27].y + lm[28].y) / 2;
+    const ratio = (ankY - scy) / sw;
+    if (ratio > 0.5 && ratio < 12) {
+      if (ratio > bodyRatioBase) bodyRatioBase += (ratio - bodyRatioBase) * 0.06;
+      else bodyRatioBase += (ratio - bodyRatioBase) * 0.01;
+      const thr = squatting ? 0.90 : 0.80;
+      squatting = bodyRatioBase > 1 && ratio < bodyRatioBase * thr;
+    }
   }
   pipDot.style.left = (personX * 100) + '%';
   pipDot.style.top = (squatting ? 74 : armsUp ? 20 : 50) + '%';

@@ -296,12 +296,16 @@ let isSquatHeld = false;
 let standBaseY = 0;
 let shoulderW = 0;
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+// 智慧變焦：偵測器內部只吃小縮圖，人站遠會縮到剩幾個像素，裁切放大再餵才抓得到
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null; // {x,y,w,h} 全畫面正規化座標，null=全畫面
 
 async function setupBodyTracking() {
   const loadingText = document.getElementById('loadingText');
   loadingText.textContent = '正在啟動鏡頭…';
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
     audio: false,
   });
   video.srcObject = stream;
@@ -313,11 +317,14 @@ async function setupBodyTracking() {
   const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
   poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
     baseOptions: {
-      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task',
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
       delegate: 'GPU',
     },
     runningMode: 'VIDEO',
     numPoses: 1,
+    minPoseDetectionConfidence: 0.3, // 降低閾值，小孩或側身也抓得到
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
   });
   pip.style.display = 'block';
 }
@@ -325,11 +332,40 @@ async function setupBodyTracking() {
 function trackFrame() {
   if (!poseLandmarker || video.currentTime === lastVideoTime) return;
   lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null; // 丟失夠久→退回全畫面重新搜人
+  const zb = zoomBox;
   let result;
-  try { result = poseLandmarker.detectForVideo(video, performance.now()); } catch (e) { return; }
+  try {
+    if (zb) { // 裁切上次人物範圍放大再偵測，人站遠也抓得到
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
   const lm = result.landmarks && result.landmarks[0];
-  if (lm) {
-    lastSeen = performance.now();
+  const nowT = performance.now();
+  if (!lm) {
+    // 追蹤丟失時要重置手勢，不然狀態會永遠卡住（例如蹲下後站不起來）
+    if (nowT - lastSeen > 700) { armsUp = false; squat = false; isSquatHeld = false; }
+    if (nowT - lastSeen > 2000) standBaseY = 0; // 久未見人→重新抓到後重學站立基準
+    return;
+  }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; } // 先映回全畫面座標，後面手勢邏輯不用改
+  // 用本格人物範圍更新下一格裁切框（緩慢跟隨避免抖動）
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    let s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4)); // 正方形裁切避免變形
+    const bx = Math.min(1 - s, Math.max(0, cx - s / 2)), by = Math.min(1 - s, Math.max(0, cy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  {
     const cx = (lm[11].x + lm[12].x) / 2;
     personX = 1 - cx; // 前鏡頭鏡像
     shoulderW = Math.abs(lm[11].x - lm[12].x);
@@ -337,7 +373,8 @@ function trackFrame() {
 
     // ---- 雙手高舉（兩手腕都明顯高過肩）= 填土（高門檻防誤觸）----
     const band = shoulderW * 0.5;
-    armsUp = (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
+    const visOK = i => (lm[i].visibility ?? 1) >= 0.5; // 看不到的點不能拿來判斷，避免亂猜誤觸
+    armsUp = visOK(15) && visOK(16) && (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
 
     // ---- 蹲下 = 挖（高門檻 + 遲滯防抖）----
     const hipY = (lm[23].y + lm[24].y) / 2;

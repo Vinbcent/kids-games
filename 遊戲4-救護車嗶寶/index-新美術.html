@@ -133,7 +133,7 @@
    - 美術：Codex 生成素材（pic/opt/*.webp），企劃 plan.md、場景 scene.md、清單 assets.json
    - 旁白：Gemini TTS 音檔（snd/*.mp3），缺檔退回瀏覽器語音
    - 體感：與原版 index.html 完全相同（左右移動換道、雙手高舉變身） */
-const ART_VER = 3;
+const ART_VER = 4;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = window.innerWidth, H = window.innerHeight, DPR = 1;
@@ -143,6 +143,7 @@ const ART = {
   BG001: { file: 'BG001.webp' },                                        // 遠景橫幅（天空、遠山、城市天際線）
   CH001: { file: 'CH001.webp' }, CH002: { file: 'CH002.webp' }, CH003: { file: 'CH003.webp' },   // 嗶寶：直行／轉彎／被撞暈
   CH004: { file: 'CH004.webp' }, CH005: { file: 'CH005.webp' },         // 機器人：背面衝刺／正面登場
+  CH006: { file: 'CH006.webp' }, CH007: { file: 'CH007.webp' },         // 機器人跑步影格（與 CH004 交替：006→004→007→004）
   VH101: { file: 'VH101.webp' }, VH102: { file: 'VH102.webp' },         // 橘色小轎車：受傷／治好
   VH201: { file: 'VH201.webp' }, VH202: { file: 'VH202.webp' },         // 藍色廂型車
   VH301: { file: 'VH301.webp' }, VH302: { file: 'VH302.webp' },         // 黃色旅行車
@@ -867,7 +868,16 @@ function drawPlayer() {
     return;
   }
   if (state.robot > 0) {
-    sprite('CH004', '🤖', p.sx, p.sy - bobY - 0.05 * p.s, 1.45 * p.s, { anchorBottom: true, rot: turn * 0.18 });
+    // 跑步循環：每步 0.11 秒，006→004→007→004；步伐彈跳 + 左右微擺
+    const STEP = 0.11, cyc = ['CH006', 'CH004', 'CH007', 'CH004'];
+    const ph = (state.t / STEP), fi = Math.floor(ph) % 4, frac = ph - Math.floor(ph);
+    const id = has('CH006') && has('CH007') ? cyc[fi] : 'CH004';
+    const bounce = Math.abs(Math.sin(ph * Math.PI)) * 0.12 * p.s;          // 每步一次彈跳
+    const sway = Math.sin(ph * Math.PI / 2) * 0.05;                          // 兩步一次左右擺
+    const lean = -0.06;                                                      // 身體前傾（略縮短高度）
+    sprite(id, '🤖', p.sx, p.sy - bounce - 0.05 * p.s, 1.45 * p.s * (1 + lean * Math.abs(Math.sin(ph * Math.PI))), { anchorBottom: true, rot: turn * 0.18 + sway });
+    // 腳下塵土
+    if (frac < 0.15 && fi % 2 === 0 && Math.random() < 0.6) particles.push({ x: p.sx + (Math.random() - 0.5) * 0.5 * p.s, y: p.sy, vx: (Math.random() - 0.5) * H * 0.2, vy: -H * 0.08, life: 0.35, max: 0.35, txt: '💨', sz: 0.05 * H, rot: 0, vr: 0 });
     return;
   }
   if (state.crash > 0) {

@@ -1,12 +1,13 @@
 """全域洋紅去背：把整張圖裡接近洋紅的像素全部打成透明（不限邊緣連通）。
 用在「鏤空」素材（柵欄、輪圈、環狀物）——build.ps1 的邊緣 flood-fill 到不了被主體包住的縫隙。
-用法: python chroma-global.py <遊戲資料夾> <ID> [容差=70]
+用法: python chroma-global.py <遊戲資料夾> <ID> [容差=70] [過渡下限比例=0.65]
    讀 pic/_tmp/ID.png（build.ps1 的中繼檔），寫回同檔 + 重新編碼 pic/opt/ID.webp
 """
 import sys, subprocess, numpy as np
 from PIL import Image
 game, aid = sys.argv[1], sys.argv[2]
 tol = int(sys.argv[3]) if len(sys.argv) > 3 else 70
+lofac = float(sys.argv[4]) if len(sys.argv) > 4 else 0.65   # 半透明過渡帶的下限比例；主體本身偏紫/粉時調高（0.9~0.97）
 p = f"{game}/pic/_tmp/{aid}.png"
 im = Image.open(p).convert("RGBA"); a = np.array(im).astype(int)
 r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
@@ -14,7 +15,7 @@ r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
 # 「洋紅度」= min(R,B) - G：純洋紅 255、淡粉 ~70、奶油/黃/灰 都是負的或很小
 m = np.minimum(r, b) - g
 hi = 255 - tol          # 洋紅度高於這個 → 透明（tol=70 → 185）
-lo = hi * 0.65          # 介於 lo~hi → 半透明並壓掉洋紅
+lo = hi * lofac          # 介於 lo~hi → 半透明並壓掉洋紅
 mask = m >= hi
 soft = (m >= lo) & (m < hi)
 al2 = al.copy(); al2[mask] = 0

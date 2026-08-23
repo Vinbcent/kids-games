@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>追蹤測試台</title>
+<style>
+  body { margin:0; background:#111; color:#eee; font-family:system-ui,sans-serif; }
+  #wrap { position:relative; width:100vw; height:56.25vw; max-height:60vh; background:#000; }
+  video, canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; transform:scaleX(-1); }
+  #ctrl { padding:6px 8px; display:flex; flex-wrap:wrap; gap:6px; font-size:3.4vmin; align-items:center; }
+  select, button { font-size:inherit; padding:5px 9px; border-radius:6px; border:0; }
+  button { background:#36c; color:#fff; } button.mark { background:#c33; } button.gray { background:#555; }
+  #stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:5px; padding:6px 8px; font-size:4.2vmin; }
+  .s { background:#222; border-radius:8px; padding:4px 8px; line-height:1.15; }
+  .s b { display:block; font-size:2.4vmin; color:#9ad; font-weight:normal; }
+  .ok { color:#6f6 } .bad { color:#f66 } .warn { color:#fc6 }
+  #msg { padding:6px 8px; font-size:3.4vmin; color:#fc6; }
+  textarea { width:100%; height:26vh; background:#000; color:#9f9; font-size:11px; box-sizing:border-box; border:1px solid #333; }
+</style>
+</head>
+<body>
+<div id="wrap"><video id="video" playsinline muted autoplay></video><canvas id="cv"></canvas></div>
+<div id="ctrl">
+  <label>模型 <select id="model"><option value="lite">lite</option><option value="full">full</option><option value="heavy">heavy</option></select></label>
+  <label>解析度 <select id="res"><option value="480">640×480</option><option value="720">1280×720</option></select></label>
+  <label>變焦 <select id="zoom"><option value="1">開</option><option value="0">關</option></select></label>
+  <label>運算 <select id="gpu"><option value="GPU">GPU</option><option value="CPU">CPU</option></select></label>
+  <button id="apply">套用並重啟</button>
+  <button id="mark" class="mark">⚑ 標記問題時刻</button>
+  <button id="copy" class="gray">複製紀錄</button>
+</div>
+<div id="msg">正在啟動…</div>
+<div id="stats"></div>
+<textarea id="log" readonly></textarea>
+<script type="module">
+/* 追蹤測試台：和遊戲用同一套 MediaPipe 管線（含丟失重置、visibility 過濾、智慧變焦），
+   但把所有中間數據攤開，用來找出「為什麼抓不到」。不含任何遊戲邏輯。 */
+const $ = id => document.getElementById(id);
+const qs = new URLSearchParams(location.search);
+const cfg = {
+  model: qs.get('model') || 'full',
+  res: qs.get('res') || '720',
+  zoom: (qs.get('zoom') ?? '1') === '1',
+  gpu: qs.get('gpu') || 'GPU',
+};
+$('model').value = cfg.model; $('res').value = cfg.res; $('zoom').value = cfg.zoom ? '1' : '0'; $('gpu').value = cfg.gpu;
+$('apply').onclick = () => {
+  const p = new URLSearchParams({ model: $('model').value, res: $('res').value, zoom: $('zoom').value, gpu: $('gpu').value });
+  location.search = p.toString();
+};
+
+const video = $('video'), cv = $('cv'), ctx = cv.getContext('2d');
+const logEl = $('log');
+let logLines = [];
+function log(s) { logLines.push(s); if (logLines.length > 400) logLines.shift(); logEl.value = logLines.join('\n'); logEl.scrollTop = logEl.scrollHeight; }
+$('mark').onclick = () => log('⚑⚑⚑ 標記問題時刻 t=' + t() + 's ⚑⚑⚑');
+$('copy').onclick = async () => {
+  try { await navigator.clipboard.writeText(logEl.value); $('msg').textContent = '已複製到剪貼簿'; }
+  catch (e) { logEl.select(); $('msg').textContent = '請長按文字框全選複製'; }
+};
+const t0 = performance.now();
+const t = () => ((performance.now() - t0) / 1000).toFixed(0);
+
+const ua = navigator.userAgent;
+const isMobile = /Android|iPhone|iPad/i.test(ua);
+log(`裝置: ${isMobile ? '手機/平板' : '電腦'} | 核心數 ${navigator.hardwareConcurrency || '?'} | ${ua.slice(0, 90)}`);
+log(`設定: 模型=${cfg.model} 解析度=${cfg.res}p 變焦=${cfg.zoom ? '開' : '關'} 運算=${cfg.gpu}`);
+
+let poseLandmarker = null, DrawingUtils = null, POSE_CONNECTIONS = null;
+let lastVideoTime = -1, lastSeen = 0;
+const zoomCanvas = document.createElement('canvas'), zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+// 與遊戲8相同的蹲下/舉手/跳躍判定
+let bodyRatioBase = 0, squatting = false, armsUp = false;
+let hipS = 0, hipBase = 0, hipPrevT = 0, jumpCool = 0, jumps = 0;
+// 統計
+let inferMs = 0, frames = 0, fpsShown = 0, fpsT = performance.now();
+const hitHist = [];          // 最近 60 個處理過的影格是否抓到人
+let lastVis = {}, lastRatio = 0, lastSw = 0, lastS = 1, curVisAnk = 1, curLm = null;
+
+async function init() {
+  try {
+    $('msg').textContent = '正在啟動鏡頭…';
+    const w = cfg.res === '720' ? 1280 : 640, h = cfg.res === '720' ? 720 : 480;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: w }, height: { ideal: h } }, audio: false });
+    video.srcObject = stream;
+    await new Promise(r => video.onloadedmetadata = r);
+    await video.play();
+    cv.width = video.videoWidth; cv.height = video.videoHeight;
+    log(`鏡頭實際解析度: ${video.videoWidth}×${video.videoHeight}`);
+    $('msg').textContent = '正在載入 AI 模型…';
+    const tm = performance.now();
+    const mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+    const { PoseLandmarker, FilesetResolver } = mod;
+    DrawingUtils = mod.DrawingUtils; POSE_CONNECTIONS = PoseLandmarker.POSE_CONNECTIONS;
+    const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+      baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${cfg.model}/float16/1/pose_landmarker_${cfg.model}.task`, delegate: cfg.gpu },
+      runningMode: 'VIDEO', numPoses: 1,
+      minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3,
+    });
+    log(`模型載入 ${((performance.now() - tm) / 1000).toFixed(1)} 秒`);
+    $('msg').textContent = '執行中。請站到平常玩的位置，做：站著→蹲下→站起來→舉手→走遠→走近。';
+    requestAnimationFrame(loop);
+    setInterval(secondLog, 1000);
+  } catch (e) {
+    $('msg').textContent = '啟動失敗：' + e.message;
+    log('啟動失敗: ' + e.message);
+  }
+}
+
+function loop() {
+  requestAnimationFrame(loop);
+  frames++;
+  const nowF = performance.now();
+  if (nowF - fpsT >= 1000) { fpsShown = frames; frames = 0; fpsT = nowF; }
+  trackFrame();
+  render();
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = cfg.zoom ? zoomBox : null;
+  let result;
+  const ti = performance.now();
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { log('detect 錯誤: ' + e.message); return; }
+  inferMs += (performance.now() - ti - inferMs) * 0.1;
+  const lm = result.landmarks && result.landmarks[0];
+  const now = performance.now();
+  hitHist.push(lm ? 1 : 0); if (hitHist.length > 60) hitHist.shift();
+  if (!lm) {
+    if (now - lastSeen > 700 && (squatting || armsUp)) { squatting = false; armsUp = false; log(`t=${t()}s 丟失>0.7s → 手勢歸零`); }
+    if (now - lastSeen > 2000 && bodyRatioBase) { bodyRatioBase = 0; hipBase = 0; hipS = 0; hipPrevT = 0; log(`t=${t()}s 丟失>2s → 基準線重學`); }
+    curLm = null;
+    return;
+  }
+  const seenGap = now - lastSeen; lastSeen = now;
+  if (seenGap > 300) { hipS = 0; hipPrevT = 0; if (seenGap < 60000) log(`t=${t()}s 重新抓到人（中斷 ${(seenGap / 1000).toFixed(1)}s）`); }
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    const s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, cx - s / 2)), by = Math.min(1 - s, Math.max(0, cy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+    lastS = zoomBox.w;
+  }
+  curLm = lm;
+  const vis = i => (lm[i].visibility ?? 1);
+  const visOK = i => vis(i) >= 0.5;
+  lastVis = { nose: vis(0), lw: vis(15), rw: vis(16), la: vis(27), ra: vis(28) };
+  const scx = (lm[11].x + lm[12].x) / 2, scy = (lm[11].y + lm[12].y) / 2;
+  lastSw = Math.abs(lm[11].x - lm[12].x);
+  const sw = Math.max(0.05, lastSw);
+  const band = sw * 0.5;
+  armsUp = visOK(15) && visOK(16) && (scy - lm[15].y) > band && (scy - lm[16].y) > band;
+  const ankY = (lm[27].y + lm[28].y) / 2;
+  lastRatio = (ankY - scy) / sw;
+  curVisAnk = Math.min(vis(27), vis(28));
+  if (!visOK(27) || !visOK(28)) {
+    if (squatting) log(`t=${t()}s 腳踝看不到 → 蹲下取消`);
+    squatting = false;
+  } else if (lastRatio > 0.5 && lastRatio < 12) {
+    if (lastRatio > bodyRatioBase) bodyRatioBase += (lastRatio - bodyRatioBase) * 0.06;
+    else bodyRatioBase += (lastRatio - bodyRatioBase) * 0.01;
+    const thr = squatting ? 0.90 : 0.80;
+    const ns = bodyRatioBase > 1 && lastRatio < bodyRatioBase * thr;
+    if (ns !== squatting) log(`t=${t()}s ${ns ? '▼ 蹲下' : '▲ 站起來'} ratio=${lastRatio.toFixed(2)} base=${bodyRatioBase.toFixed(2)}`);
+    squatting = ns;
+  }
+  const hy = (lm[23].y + lm[24].y) / 2;
+  const dtT = hipPrevT ? Math.min(0.2, (now - hipPrevT) / 1000) : 0.033;
+  const prev = hipS || hy;
+  hipS = prev + (hy - prev) * 0.55;
+  const vy = (prev - hipS) / dtT;
+  hipPrevT = now;
+  if (!hipBase) hipBase = hipS;
+  if (hipS > hipBase) hipBase += (hipS - hipBase) * 0.08; else hipBase += (hipS - hipBase) * 0.012;
+  if (jumpCool > 0) jumpCool -= dtT;
+  if (jumpCool <= 0 && !squatting && (hipBase - hipS) > sw * 0.30 && vy > sw * 1.5) { jumpCool = 0.85; jumps++; log(`t=${t()}s ⤒ 跳躍`); }
+}
+
+function render() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (zoomBox && cfg.zoom) {
+    ctx.strokeStyle = '#fc6'; ctx.lineWidth = 3;
+    ctx.strokeRect(zoomBox.x * cv.width, zoomBox.y * cv.height, zoomBox.w * cv.width, zoomBox.h * cv.height);
+  }
+  if (curLm && DrawingUtils) {
+    const du = new DrawingUtils(ctx);
+    du.drawConnectors(curLm, POSE_CONNECTIONS, { color: '#0f0', lineWidth: 3 });
+    du.drawLandmarks(curLm, { color: '#f33', radius: 4, fillColor: (d) => ((d.from.visibility ?? 1) >= 0.5 ? '#3f3' : '#f33') });
+  }
+  const hit = hitHist.length ? Math.round(100 * hitHist.reduce((a, b) => a + b, 0) / hitHist.length) : 0;
+  const cls = (v, good, warn) => v >= good ? 'ok' : v >= warn ? 'warn' : 'bad';
+  const f = (v, d = 2) => (v === undefined || v === null) ? '–' : (+v).toFixed(d);
+  $('stats').innerHTML = [
+    ['畫面 fps', `<span class="${cls(fpsShown, 25, 15)}">${fpsShown}</span>`],
+    ['推論耗時', `<span class="${inferMs <= 40 ? 'ok' : inferMs <= 70 ? 'warn' : 'bad'}">${f(inferMs, 0)} ms</span>`],
+    ['偵測率(近60格)', `<span class="${cls(hit, 90, 60)}">${hit}%</span>`],
+    ['肩寬(距離)', `<span class="${lastSw >= 0.12 ? 'ok' : lastSw >= 0.08 ? 'warn' : 'bad'}">${f(lastSw, 3)}</span>`],
+    ['身高比 / 基準', `${f(lastRatio)} / ${f(bodyRatioBase)}`],
+    ['蹲下', `<span class="${squatting ? 'warn' : ''}">${squatting ? '▼ 是' : '否'}</span>`],
+    ['舉手', `<span class="${armsUp ? 'warn' : ''}">${armsUp ? '▲ 是' : '否'}</span>`],
+    ['跳躍次數', jumps],
+    ['腳踝可見度', `<span class="${cls(curVisAnk, 0.5, 0.3)}">${f(lastVis.la)} / ${f(lastVis.ra)}</span>`],
+    ['手腕可見度', `${f(lastVis.lw)} / ${f(lastVis.rw)}`],
+    ['變焦框', cfg.zoom ? (zoomBox ? f(lastS) : '全畫面') : '關'],
+    ['鏡頭', `${video.videoWidth}×${video.videoHeight}`],
+  ].map(([k, v]) => `<div class="s"><b>${k}</b>${v}</div>`).join('');
+}
+
+function secondLog() {
+  const hit = hitHist.length ? Math.round(100 * hitHist.reduce((a, b) => a + b, 0) / hitHist.length) : 0;
+  log(`t=${t()}s fps=${fpsShown} 推論=${inferMs.toFixed(0)}ms 偵測=${hit}% 肩寬=${lastSw.toFixed(3)} 身高比=${lastRatio.toFixed(2)}/${bodyRatioBase.toFixed(2)} 蹲=${squatting ? 1 : 0} 舉=${armsUp ? 1 : 0} 腳踝vis=${(lastVis.la ?? 0).toFixed(2)}/${(lastVis.ra ?? 0).toFixed(2)} 手腕vis=${(lastVis.lw ?? 0).toFixed(2)}/${(lastVis.rw ?? 0).toFixed(2)} 變焦=${cfg.zoom ? (zoomBox ? zoomBox.w.toFixed(2) : '全') : '關'}`);
+}
+init();
+</script>
+</body>
+</html>

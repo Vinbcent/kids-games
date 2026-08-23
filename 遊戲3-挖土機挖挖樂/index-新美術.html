@@ -208,17 +208,42 @@ function picLink(id, px, py, ang, L, alpha = 1) {
 
 /* ================== 音效（Web Audio 合成） ================== */
 let AC = null;
-function audioInit() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); }
+
+/* ---- 音訊衛生（全系列共用補丁 2026-08-23）----
+   1. 所有聲音接到 MASTER 主音量，分頁切到背景／投放被搶焦點時立刻靜音、回來再開
+   2. AudioContext 不是 running（被系統暫停）時不排任何音——否則恢復瞬間會全部疊在一起爆出來
+   3. 同時發聲上限 14 個，超過就丟掉（事件連發不會無限疊加）
+   4. 循環音全部登記在 AUDIO_LOOPS，背景時一律關掉；語音佇列也清掉 */
+let MASTER = null, AUDIO_VOICES = 0, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }  // 以時間窗計數，不靠 onended（被暫停時 onended 不會來）
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioVoiceDone() {}
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = []; try { speechSynthesis.cancel(); } catch (e) {} }
+    else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); audioGuardInstall(); } }
 function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audioCanPlay()) return;
   if (!AC) return;
   const o = AC.createOscillator(), g = AC.createGain();
   o.type = type; o.frequency.value = freq;
   g.gain.setValueAtTime(vol, AC.currentTime + when);
   g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
-  o.connect(g); g.connect(AC.destination);
-  o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+  o.connect(g); g.connect(AUDIO_DEST());
+  o.onended = audioVoiceDone; audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
 }
 function sweep(f0, f1, dur, type, vol, when = 0) {
+  if (!audioCanPlay()) return;
   if (!AC) return;
   const o = AC.createOscillator(), g = AC.createGain();
   o.type = type;
@@ -226,11 +251,12 @@ function sweep(f0, f1, dur, type, vol, when = 0) {
   o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + when + dur);
   g.gain.setValueAtTime(vol, AC.currentTime + when);
   g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur + 0.05);
-  o.connect(g); g.connect(AC.destination); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.1);
+  o.connect(g); g.connect(AUDIO_DEST()); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.1);
 }
 // 噪音短音（撞擊、泥土、水花）：白噪音 → 濾波 → 包絡
 let noiseBuf = null;
 function noise(dur, { type = 'lowpass', freq = 800, vol = 0.3, when = 0, q = 1, sweepTo = null } = {}) {
+  if (!audioCanPlay()) return;
   if (!AC) return;
   if (!noiseBuf) { noiseBuf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
   const s = AC.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
@@ -238,16 +264,17 @@ function noise(dur, { type = 'lowpass', freq = 800, vol = 0.3, when = 0, q = 1, 
   if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, AC.currentTime + when + dur);
   const g = AC.createGain(); const t0 = AC.currentTime + when;
   g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012); g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
-  s.connect(f); f.connect(g); g.connect(AC.destination); s.start(t0); s.stop(t0 + dur + 0.05);
+  s.connect(f); f.connect(g); g.connect(AUDIO_DEST()); s.start(t0); s.stop(t0 + dur + 0.05);
 }
 // 帶顫音的音（恐龍吼、滑音哨）
 function wobble(f0, f1, dur, type, vol, { rate = 12, depth = 20, when = 0 } = {}) {
+  if (!audioCanPlay()) return;
   if (!AC) return;
   const o = AC.createOscillator(), g = AC.createGain(), lfo = AC.createOscillator(), lg = AC.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, AC.currentTime + when); o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + when + dur);
   lfo.frequency.value = rate; lg.gain.value = depth; lfo.connect(lg); lg.connect(o.frequency);
   g.gain.setValueAtTime(vol, AC.currentTime + when); g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
-  o.connect(g); g.connect(AC.destination); lfo.start(AC.currentTime + when); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05); lfo.stop(AC.currentTime + when + dur + 0.05);
+  o.connect(g); g.connect(AUDIO_DEST()); lfo.start(AC.currentTime + when); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05); lfo.stop(AC.currentTime + when + dur + 0.05);
 }
 // 兩個微失諧振盪器疊在一起，比單音飽滿（喇叭用）
 function horn(freq, dur, vol, when = 0, type = 'square') { tone(freq, dur, type, vol, when); tone(freq * 1.007, dur, type, vol * 0.6, when); tone(freq / 2, dur, 'triangle', vol * 0.5, when); }
@@ -287,8 +314,8 @@ const engine = (() => {
         if (!noiseBuf) noise(0.01, { vol: 0.0001 });
         src = AC.createBufferSource(); src.buffer = noiseBuf; src.loop = true;
         const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 140;
-        gain = AC.createGain(); gain.gain.value = 0; src.connect(f); f.connect(gain); gain.connect(AC.destination); src.start();
-        osc = AC.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 48; og = AC.createGain(); og.gain.value = 0; osc.connect(og); og.connect(AC.destination); osc.start();
+        gain = AC.createGain(); gain.gain.value = 0; src.connect(f); f.connect(gain); gain.connect(AUDIO_DEST()); src.start();
+        osc = AC.createOscillator(); osc.type = 'sawtooth'; osc.frequency.value = 48; og = AC.createGain(); og.gain.value = 0; osc.connect(og); og.connect(AUDIO_DEST()); osc.start();
       }
       gain.gain.setTargetAtTime(0.22 * level, AC.currentTime, 0.08);
       og.gain.setTargetAtTime(0.05 * level, AC.currentTime, 0.08);
@@ -319,13 +346,13 @@ const bgm = (() => {
     }
   }
   return {
-    start() { if (!AC || timer) return; gainN = AC.createGain(); gainN.gain.value = 1; gainN.connect(AC.destination); next = AC.currentTime + 0.1; timer = setInterval(schedule, 250); schedule(); },
+    start() { if (!AC || timer) return; gainN = AC.createGain(); gainN.gain.value = 1; gainN.connect(AUDIO_DEST()); next = AC.currentTime + 0.1; timer = setInterval(schedule, 250); schedule(); },
     duck(on) { if (!gainN || muted === on) return; muted = on; gainN.gain.setTargetAtTime(on ? 0.15 : 1, AC.currentTime, 0.2); },
   };
 })();
 function noiseLoop(filterType, freq, vol) {
   let src = null, gain = null;
-  return {
+  const H = {
     on() {
       if (!AC || src) return;
       const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
@@ -334,7 +361,7 @@ function noiseLoop(filterType, freq, vol) {
       src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
       const f = AC.createBiquadFilter(); f.type = filterType; f.frequency.value = freq;
       gain = AC.createGain(); gain.gain.value = 0;
-      src.connect(f); f.connect(gain); gain.connect(AC.destination);
+      src.connect(f); f.connect(gain); gain.connect(AUDIO_DEST());
       src.start();
       gain.gain.linearRampToValueAtTime(vol, AC.currentTime + 0.15);
     },
@@ -345,6 +372,7 @@ function noiseLoop(filterType, freq, vol) {
       setTimeout(() => { try { n.stop(); } catch (e) {} }, 300);
     },
   };
+  AUDIO_LOOPS.push(H); return H;
 }
 const digSfx = noiseLoop('bandpass', 1100, 0.13);
 const fillSfx = noiseLoop('lowpass', 480, 0.13);
@@ -926,10 +954,11 @@ function update(dt, now) {
   }
   state.dig += ((wantDig ? 1 : 0) - state.dig) * Math.min(1, dt * 6);
   state.fill += ((wantFill ? 1 : 0) - state.fill) * Math.min(1, dt * 6);
-  if (canAct) {
-    if (wantDig && !digOn) { digSfx.on(); digOn = true; } if (!wantDig && digOn) { digSfx.off(); digOn = false; }
-    if (wantFill && !fillOn) { fillSfx.on(); fillOn = true; } if (!wantFill && fillOn) { fillSfx.off(); fillOn = false; }
-  }
+  // 循環音用「想要的狀態」每格對齊，不放在 canAct 裡（否則暫停／慶祝時關不掉，會一直響）
+  const digWant = canAct && wantDig, fillWant = canAct && wantFill;
+  if (digWant && !digOn) { digSfx.on(); digOn = true; } if (!digWant && digOn) { digSfx.off(); digOn = false; }
+  if (fillWant && !fillOn) { fillSfx.on(); fillOn = true; } if (!fillWant && fillOn) { fillSfx.off(); fillOn = false; }
+  if (document.visibilityState === 'hidden') { digOn = fillOn = waterOn = false; }  // 背景時補丁已把循環音全關，旗標跟著歸零
   if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
   state.bodyBounce = Math.max(0, state.bodyBounce - dt * 2.2);
   state.bodyTilt *= Math.max(0, 1 - dt * 4);

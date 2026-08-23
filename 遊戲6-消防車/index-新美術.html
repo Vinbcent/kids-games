@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#e5352b">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🚒 消防車救援隊</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #7fd0ef; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  #pip { position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000; }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear, top .1s linear; }
+  #pipHide { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px; }
+
+  .overlay { position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff; }
+  #startOverlay { background: linear-gradient(180deg, #5ec0e8 0%, #bfe6ff 45%, #ffd9a8 78%, #e57a3a 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay .bg { position: absolute; inset: 0; background: center/cover no-repeat; z-index: -1; }
+  #startOverlay .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,30,60,.15), rgba(0,30,60,.45)); }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(0,40,80,.6); }
+  #startOverlay .hero { height: clamp(70px, 24vmin, 200px); animation: drive 1.4s ease-in-out infinite; filter: drop-shadow(0 1vmin 1.5vmin rgba(0,0,0,.35)); }
+  #startOverlay .car-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: drive 1.4s ease-in-out infinite; display: none; }
+  @keyframes drive { 0%,100% { transform: translateX(-2vmin) rotate(-2deg) } 50% { transform: translateX(2vmin) rotate(2deg) } }
+  .btn { margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer; box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35); }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff6f8a, #e23a5e); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #fff8ec; max-width: 92%; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,40,80,.7); }
+
+  #rotateHint { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.7); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin; pointer-events: none; }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(20,60,90,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer { position: fixed; inset: auto 0 18% 0; z-index: 25; display: none; text-align: center; pointer-events: none; }
+  #findPlayer .bubble { display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold; padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite; }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  #tooClose { position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none; background: rgba(180, 40, 0, .3); }
+  #tooClose .bubble { background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold; padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite; }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🚒</div>
+  <p id="loadingText">正在準備消防隊…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="bg" id="startBg"></div>
+  <img class="hero" id="heroImg" src="pic/opt/VH001.webp" alt="" onerror="this.style.display='none';document.getElementById('heroFallback').style.display='block'">
+  <div class="car-big" id="heroFallback">🚒</div>
+  <h1>消防車救援隊</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">🔥 哪扇窗戶在跳？<b>左右移動身體</b>把消防車開到那扇窗正下方，水柱就會自動噴、雲梯自動伸出去救小動物 🐱🐶🐰！<br>屋頂上的小動物要<b>蹲下</b>壓扁氣墊、站起來「蹦」接住 😆 車上坐滿五隻，<b>雙手高舉</b>就開水花派對 💦🎉<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script>
+/* 消防車救援隊・新美術版（2026-08-24 玩法重製）
+   - 玩法：站到求救窗戶正下方→水柱自動噴→火滅→雲梯自動接小動物→坐進車裡；每 2～3 次穿插屋頂救援（蹲下壓氣墊、起身彈出）；
+           坐滿 5 隻→雙手高舉→全員水花派對→休息站→新一輪。沒有失敗、沒有時間壓力。
+   - 體感：整個人左右站位（主操作）、蹲下（屋頂）、雙手高舉（派對）——三個訊號分階段隔離。
+   - 美術：Codex 生成素材（pic/opt/*.webp）；旁白 Gemini TTS（snd/*.mp3），缺檔退回瀏覽器語音。 */
+const ART_VER = 1;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight, DPR = 1;
+
+/* ================== 素材與錨點（正規化座標，拿到圖後校） ================== */
+const ART = {
+  BG001: { file: 'BG001.webp' }, BG002: { file: 'BG002.webp' }, BG003: { file: 'BG003.webp' }, BG004: { file: 'BG004.webp' },
+  VH001: { file: 'VH001.webp' }, VH002: { file: 'VH002.webp' }, VH003: { file: 'VH003.webp' }, VH004: { file: 'VH004.webp' },
+  TP001: { file: 'TP001.webp' }, TP002: { file: 'TP002.webp' }, TP003: { file: 'TP003.webp' }, TP004: { file: 'TP004.webp' }, TP005: { file: 'TP005.webp' },
+  TP006: { file: 'TP006.webp' }, TP007: { file: 'TP007.webp' },
+  CH101: { file: 'CH101.webp' }, CH201: { file: 'CH201.webp' }, CH301: { file: 'CH301.webp' }, CH401: { file: 'CH401.webp' }, CH501: { file: 'CH501.webp' }, CH601: { file: 'CH601.webp' },
+  FX001: { file: 'FX001.webp' }, FX002: { file: 'FX002.webp' }, FX003: { file: 'FX003.webp' }, FX004: { file: 'FX004.webp' }, FX005: { file: 'FX005.webp' },
+  FX006: { file: 'FX006.webp' }, FX007: { file: 'FX007.webp' }, FX008: { file: 'FX008.webp' }, FX009: { file: 'FX009.webp' },
+};
+// 消防車錨點（相對圖片寬高）：水砲口、雲梯轉軸、五個乘客座位中心、眼睛
+const TRUCK = { cannon: [0.45, 0.04], pivot: [0.30, 0.10], seats: [[0.108, 0.38], [0.233, 0.38], [0.358, 0.38], [0.483, 0.38], [0.608, 0.38]], eye: null, seatR: 0.1 };   // 依 VH001 實圖量的（車頂沒有水砲，水柱從車頂中央出）
+// 房屋錨點：窗戶中心（相對房屋圖）、屋頂落點
+const HOUSES = {   // 依實圖量的窗戶中心
+  TP001: { windows: [[0.28, 0.41], [0.5, 0.41], [0.72, 0.41], [0.28, 0.74], [0.5, 0.74], [0.72, 0.74]], roof: null },
+  TP002: { windows: [[0.25, 0.51], [0.52, 0.51], [0.78, 0.51], [0.25, 0.75], [0.52, 0.75], [0.78, 0.75]], roof: null },
+  TP003: { windows: [[0.22, 0.30], [0.5, 0.30], [0.78, 0.30], [0.22, 0.535], [0.5, 0.535], [0.78, 0.535], [0.22, 0.76], [0.78, 0.76]], roof: [0.5, 0.03] },
+  TP004: { windows: [[0.48, 0.32], [0.3, 0.53], [0.7, 0.53], [0.7, 0.8]], roof: null },
+  TP005: { windows: [[0.5, 0.25], [0.3, 0.46], [0.7, 0.46], [0.23, 0.81], [0.77, 0.81]], roof: null },
+};
+const LADDER = { a: [0.03, 0.92], b: [0.90, 0.15] };   // VH003 基座端 → 籃子端（相對圖片）
+const ANIMALS = [
+  { id: 'CH101', emo: '🐱', name: '小貓' }, { id: 'CH201', emo: '🐶', name: '小狗' }, { id: 'CH301', emo: '🐰', name: '小兔' },
+  { id: 'CH401', emo: '🐥', name: '小鴨' }, { id: 'CH501', emo: '🦔', name: '小刺蝟' }, { id: 'CH601', emo: '🐿️', name: '小松鼠' },
+];
+const IMG = {};
+function loadArt() {
+  return Promise.all(Object.entries(ART).map(([id, a]) => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[id] = im; a.ar = im.naturalWidth / im.naturalHeight; res(); };
+    im.onerror = () => { IMG[id] = null; res(); };
+    im.src = 'pic/opt/' + a.file + '?v=' + ART_VER;
+  })));
+}
+const has = id => !!IMG[id];
+function pic(id, cx, cy, h, { flip = false, rot = 0, alpha = 1, anchorBottom = false, w = null, sx = 1, sy = 1 } = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let ww = w != null ? w : h * ART[id].ar;
+  if (w != null) h = w / ART[id].ar;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(cx, anchorBottom ? cy : cy);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  ctx.scale(sx, sy);
+  ctx.drawImage(im, -ww / 2, anchorBottom ? -h : -h / 2, ww, h);
+  ctx.restore();
+  return true;
+}
+function emo(txt, cx, cy, h, { rot = 0, alpha = 1, anchorBottom = false, flip = false } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(cx, anchorBottom ? cy - h / 2 : cy); if (rot) ctx.rotate(rot); if (flip) ctx.scale(-1, 1);
+  ctx.font = `${h * 0.9}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(txt, 0, 0); ctx.restore();
+}
+function sprite(id, fallback, cx, cy, h, opt) { if (!pic(id, cx, cy, h, opt)) emo(fallback, cx, cy, h, opt); }
+// 雲梯：圖片上 a 點對齊 (px,py)，a→b 方向轉到「向上偏 ang」、長度 = L（等比縮放）
+function picLink(id, px, py, ang, L) {
+  const im = IMG[id]; if (!im) return false;
+  const iw = im.naturalWidth, ih = im.naturalHeight;
+  const ax = LADDER.a[0] * iw, ay = LADDER.a[1] * ih, bx = LADDER.b[0] * iw, by = LADDER.b[1] * ih;
+  const dx = bx - ax, dy = by - ay, dl = Math.hypot(dx, dy) || 1, a0 = Math.atan2(dy, dx);
+  const sc = L / dl, want = ang - Math.PI / 2;   // 「向上」= -90°，ang 是相對向上的偏角（順時針為正）
+  ctx.save(); ctx.translate(px, py); ctx.rotate(want - a0); ctx.scale(sc, sc); ctx.drawImage(im, -ax, -ay, iw, ih); ctx.restore();
+  return true;
+}
+// 以「圖片底邊中點對齊 (px,py)、向上方向轉到角度 ang、長度 L」畫水柱（非等比伸縮）
+function picBeam(id, fallback, px, py, ang, L, width = null, alpha = 1) {
+  const im = IMG[id];
+  ctx.save(); ctx.globalAlpha *= alpha; ctx.translate(px, py); ctx.rotate(ang);
+  if (im) { const w = width != null ? width : L * ART[id].ar; ctx.drawImage(im, -w / 2, -L, w, L); }
+  else { ctx.font = `${Math.max(12, L * 0.25)}px sans-serif`; ctx.textAlign = 'center'; for (let i = 0; i < 4; i++) ctx.fillText(fallback, 0, -L * (i + 0.5) / 4); }
+  ctx.restore();
+}
+
+/* ================== 音效（Web Audio 合成）＋ 音訊衛生 ================== */
+let AC = null, MASTER = null, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = []; try { speechSynthesis.cancel(); } catch (e) {} if (curVoice) { try { curVoice.pause(); } catch (e) {} } }
+    else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); audioGuardInstall(); } }
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweep(f0, f1, dur, type, vol, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, AC.currentTime + when);
+  o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + when + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur + 0.05);
+  o.connect(g); g.connect(AUDIO_DEST()); audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.1);
+}
+function noiseLoop(filterType, freq, vol) {
+  let src = null, gain = null, filt = null;
+  const Hd = {
+    on() {
+      if (!AC || src) return;
+      const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+      filt = AC.createBiquadFilter(); filt.type = filterType; filt.frequency.value = freq;
+      gain = AC.createGain(); gain.gain.value = 0;
+      src.connect(filt); filt.connect(gain); gain.connect(AUDIO_DEST());
+      src.start();
+      gain.gain.linearRampToValueAtTime(vol, AC.currentTime + 0.3);
+    },
+    setVol(v) { if (gain) gain.gain.setTargetAtTime(v, AC.currentTime, 0.1); },
+    off() { if (!src) return; gain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.2); const n = src; src = null; setTimeout(() => { try { n.stop(); } catch (e) {} }, 300); },
+    get running() { return !!src; },
+  };
+  AUDIO_LOOPS.push(Hd); return Hd;
+}
+const waterSfx = noiseLoop('bandpass', 1400, 0.0);   // 噴水時開，音量隨狀態對齊
+function sfxLock()      { [523, 659, 784].forEach((f, i) => tone(f, 0.14, 'triangle', 0.22, i * 0.06)); }
+function sfxHiss()      { sweep(1800, 500, 0.5, 'sawtooth', 0.06); }
+function sfxLadder()    { for (let i = 0; i < 6; i++) tone(300 + i * 60, 0.08, 'square', 0.12, i * 0.09); }
+function sfxSeat()      { sweep(300, 900, 0.18, 'sine', 0.25); tone(1047, 0.25, 'triangle', 0.2, 0.18); }
+function sfxCheer()     { [659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.22, 'sine', 0.2, i * 0.08)); }
+function sfxSplash()    { sweep(900, 200, 0.25, 'sine', 0.18); tone(150, 0.15, 'square', 0.1, 0.05); }
+function sfxSqueeze()   { sweep(500, 180, 0.35, 'sawtooth', 0.12); }
+function sfxBoing()     { sweep(180, 700, 0.18, 'sine', 0.3); sweep(700, 220, 0.25, 'sine', 0.24, 0.15); }
+function sfxSneeze()    { sweep(400, 900, 0.12, 'square', 0.12); sweep(900, 200, 0.3, 'sawtooth', 0.18, 0.12); }
+function sfxParty()     { sweep(220, 1200, 0.5, 'sawtooth', 0.22); [880, 1175, 1568, 2093].forEach((f, i) => tone(f, 0.2, 'square', 0.16, 0.5 + i * 0.1)); }
+function sfxFirework()  { sweep(200, 1400, 0.25, 'sine', 0.12); tone(1800, 0.1, 'triangle', 0.1, 0.25); }
+function sfxAlarm()     { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); }); }
+function sfxSiren()     { tone(740, 0.3, 'sine', 0.14); tone(560, 0.3, 'sine', 0.14, 0.3); }
+function sfxPop()       { tone(600, 0.05, 'square', 0.15); tone(900, 0.08, 'square', 0.12, 0.05); }
+
+/* ================== 旁白 ================== */
+const LINES = {
+  s1: ['Fire truck, ready!', '消防車出動！'],
+  s2: ['Move under the window!', '站到窗戶下面！'],
+  s3: ['Follow the bouncing window!', '看跳跳的窗戶！'],
+  s4: ['Splash! Try this window!', '水花噴歪啦！'],
+  s5: ['Great aim! Water on!', '對準了！噴水！'],
+  s6: ['Fire is out!', '火熄滅了！'],
+  s7: ['Ladder up!', '雲梯升高！'],
+  s8: ['Animal safe!', '小動物安全了！'],
+  s9: ['Crouch down!', '蹲下壓扁氣墊！'],
+  s10: ['Now stand up!', '現在站起來！'],
+  s11: ['Boing! Nice catch!', '蹦！接到了！'],
+  s12: ['Hands up for the big splash!', '雙手舉高，大水砲！'],
+  s13: ['Super splash party!', '超級水花派對！'],
+  s14: ['What a rescue team!', '最棒的救援隊！'],
+  s15: ["New rescue, let's go!", '下一隊，出發！'],
+  s16: ['Step back, please!', '請往後退！'],
+  s17: ["All clear, let's rescue!", '可以繼續救援囉！'],
+};
+const TONE = { excited: { rate: 1.12, pitch: 1.45 }, happy: { rate: 1.05, pitch: 1.3 }, calm: { rate: 1.0, pitch: 1.1 }, warn: { rate: 0.95, pitch: 0.9 } };
+const LINE_TONE = { s1: 'excited', s2: 'calm', s3: 'happy', s4: 'happy', s5: 'excited', s6: 'happy', s7: 'happy', s8: 'happy', s9: 'calm', s10: 'excited', s11: 'excited', s12: 'excited', s13: 'excited', s14: 'happy', s15: 'happy', s16: 'warn', s17: 'happy' };
+let caption = { text: '', t: 0 };
+const lastSay = {};
+let voiceCache = null;
+function pickVoice() {
+  if (voiceCache) return voiceCache;
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^en[-_]/i.test(v.lang));
+    if (!vs.length) return null;
+    const score = v => (/natural|neural/i.test(v.name) ? 40 : 0) + (/google/i.test(v.name) ? 30 : 0) + (/en[-_]US/i.test(v.lang) ? 10 : 0) + (/female|samantha|zira|aria|jenny/i.test(v.name) ? 5 : 0) + (v.localService ? 0 : 3);
+    vs.sort((a, b) => score(b) - score(a));
+    voiceCache = vs[0];
+  } catch (e) {}
+  return voiceCache;
+}
+try { speechSynthesis.addEventListener('voiceschanged', () => { voiceCache = null; pickVoice(); }); pickVoice(); } catch (e) {}
+const SND = {};
+let curVoice = null;
+function loadVoices() {
+  for (const k of Object.keys(LINES)) {
+    const a = new Audio('snd/' + k + '.mp3?v=' + ART_VER); a.preload = 'auto';
+    a.addEventListener('canplaythrough', () => { SND[k] = a; }, { once: true });
+    a.addEventListener('error', () => { SND[k] = null; }, { once: true });
+    a.load();
+  }
+}
+function say(key, { gap = 2500, priority = 1 } = {}) {
+  const line = LINES[key]; if (!line) return;
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  if (SND[key]) {
+    const busy = curVoice && !curVoice.paused && !curVoice.ended;
+    if (busy && priority < 2) return;
+    if (busy) { curVoice.pause(); curVoice.currentTime = 0; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    curVoice = SND[key]; curVoice.currentTime = 0; curVoice.volume = 1;
+    curVoice.play().catch(() => {});
+    caption = { text: line[1], t: 2.2 };
+    return;
+  }
+  try {
+    if (speechSynthesis.speaking && priority < 2) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(line[0]);
+    const tn = TONE[LINE_TONE[key] || 'happy'];
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = tn.rate; u.pitch = Math.min(2, tn.pitch + (Math.random() - 0.5) * 0.2); u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+  caption = { text: line[1], t: 2.2 };
+}
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+
+/* ================== 版面（畫面比例） ==================
+   天空 0~0.64 / 房屋底線 0.64 / 街道 0.60~0.90 / 前景 0.86~1.0；消防車底在 0.86 */
+const LAY = { houseBase: 0.64, houseH: 0.52, streetTop: 0.60, streetBot: 0.92, truckBase: 0.885, truckH: 0.23, fgTop: 0.86 };
+const TH = () => H * LAY.truckH;   // 消防車高度（相對尺度基準 1）
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu', mode: null,
+  truckX: 0.5, truckTargetX: 0.5, truckVX: 0, truckLean: 0,
+  step: 'seek',          // seek | lock | spray | ladderOut | ladderIn | seat | gap | roofMove | roofSquat | roofHold | roofStand | roofDrop | full | party | rest
+  stepT: 0, idleT: 0, missT: 0,
+  target: null,          // { hi, wi, x, y, animal, roof }
+  fire: 1, fireHit: false,
+  seats: [], rescuedTotal: 0, sinceRoof: 0, roofDue: 2,
+  ladder: 0, ladderAng: 0, ladderLen: 0, basket: null,
+  water: 0, waterLen: 0, waterLock: false,
+  cushion: 1, charged: false,
+  animalPos: null, animalVis: true,
+  t: 0, shake: 0, paused: false, lastSplash: 0,
+  stationX: 1.2, stationAnimals: [],
+  hats: [], fireworks: [], hatOnLight: null,
+  houseOrder: [0, 1, 2, 3, 4], houseFade: 1,
+};
+const particles = [], fxs = [];
+const HOUSE_IDS = ['TP001', 'TP002', 'TP003', 'TP004', 'TP005'];
+const HOUSE_EMO = ['🏠', '🏡', '🏘️', '🏚️', '🏫'];
+const hydrant = { x: 0.08, t: 0, sneeze: 0 };
+let fgBounce = 0, truckShake = 0;
+try { state.rescuedTotal = +localStorage.getItem('g6total') || 0; } catch (e) {}
+
+/* ================== 體感追蹤（與遊戲3 同一套：站位／舉手／蹲下） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1, lastSeen = 0;
+let personX = 0.5;
+let squat = false, armsUp = false, isSquatHeld = false;
+let standBaseY = 0, shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate: 'GPU' },
+    runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3,
+  });
+  pip.style.display = 'block';
+}
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = zoomBox;
+  let result;
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else result = poseLandmarker.detectForVideo(video, performance.now());
+  } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  const nowT = performance.now();
+  if (!lm) {
+    if (nowT - lastSeen > 700) { armsUp = false; squat = false; isSquatHeld = false; }
+    if (nowT - lastSeen > 2000) standBaseY = 0;
+    return;
+  }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    let s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, cx - s / 2)), by = Math.min(1 - s, Math.max(0, cy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  const shoulderY = (lm[11].y + lm[12].y) / 2;
+  const band = shoulderW * 0.5;
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  armsUp = visOK(15) && visOK(16) && (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
+  const hipY = (lm[23].y + lm[24].y) / 2, kneeY = (lm[25].y + lm[26].y) / 2;
+  const vis = Math.min(lm[23].visibility ?? 1, lm[24].visibility ?? 1, lm[25].visibility ?? 1, lm[26].visibility ?? 1);
+  if (vis > 0.55) {
+    const torso = Math.max(0.02, hipY - shoulderY);
+    const ratio = (kneeY - hipY) / torso;
+    if (isSquatHeld) { if (ratio > 0.72) isSquatHeld = false; } else { if (ratio < 0.48) isSquatHeld = true; }
+  } else {
+    if (!standBaseY) standBaseY = shoulderY;
+    else standBaseY += (shoulderY - standBaseY) * (shoulderY < standBaseY ? 0.5 : 0.02);
+    const drop = shoulderY - standBaseY, dband = shoulderW * 0.6;
+    if (isSquatHeld) { if (drop < dband * 0.55) isSquatHeld = false; } else { if (drop > dband) isSquatHeld = true; }
+  }
+  squat = isSquatHeld && !armsUp;
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.top = armsUp ? '20%' : squat ? '80%' : '50%';
+  pipDot.style.background = armsUp ? '#66ccff' : squat ? '#ffdd00' : '#00ff88';
+}
+
+/* ================== 觸控模式 ================== */
+let touching = false, touchHold = false;
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  if (state.step === 'seek') { touching = true; state.truckTargetX = clamp(e.clientX / W, 0.15, 0.85); }
+  else touchHold = true;    // 屋頂：按住＝蹲下；坐滿：按住＝舉手
+});
+canvas.addEventListener('pointermove', e => { if (touching) state.truckTargetX = clamp(e.clientX / W, 0.15, 0.85); });
+window.addEventListener('pointerup', () => { touching = false; touchHold = false; });
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+async function begin(mode) {
+  goFullscreen(); audioInit(); state.mode = mode;
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try { await setupBodyTracking(); }
+    catch (e) { loadingOverlay.style.display = 'none'; alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')'); state.mode = 'touch'; }
+    loadingOverlay.style.display = 'none';
+  }
+  startRound(true);
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+/* ================== 房屋與窗戶幾何 ================== */
+function houseRect(slot) {   // 五個槽位等分；回傳房屋圖的螢幕矩形
+  const id = HOUSE_IDS[state.houseOrder[slot]];
+  const hh = H * LAY.houseH * (id === 'TP002' ? 1.0 : 0.92), ar = has(id) ? ART[id].ar : 0.9;
+  let hw = hh * ar; const maxW = W / 5 * 0.98; let hhh = hh;
+  if (hw > maxW) { hhh = hh * maxW / hw; hw = maxW; }
+  const cx = W * (slot + 0.5) / 5, base = H * LAY.houseBase;
+  return { id, x: cx - hw / 2, y: base - hhh, w: hw, h: hhh, cx };
+}
+function windowPos(slot, wi) { const r = houseRect(slot), a = HOUSES[r.id].windows[wi]; return { x: r.x + a[0] * r.w, y: r.y + a[1] * r.h }; }
+function roofPos(slot) { const r = houseRect(slot), a = HOUSES[r.id].roof || [0.5, 0.05]; return { x: r.x + a[0] * r.w, y: r.y + a[1] * r.h }; }
+function roofSlot() { return state.houseOrder.indexOf(2); }   // TP003 所在槽位
+
+/* ================== 回合流程 ================== */
+function usedAnimals() { return state.seats.map(s => s.id); }
+function pickAnimal() {
+  const used = usedAnimals(), last = state.target && state.target.animal;
+  const pool = ANIMALS.filter(a => !used.includes(a.id) && (!last || a.id !== last.id));
+  return pick(pool.length ? pool : ANIMALS);
+}
+function newTarget() {
+  // 七成近、三成遠；不連續兩個最遠端
+  const cands = [];
+  for (let s = 0; s < 5; s++) { const n = HOUSES[houseRect(s).id].windows.length; for (let w = 0; w < n; w++) { const x = windowPos(s, w).x; if (x > W * 0.12 && x < W * 0.88) cands.push({ s, w, x }); } }   // 只挑消防車搆得到的窗
+  const near = cands.filter(c => Math.abs(c.x / W - state.truckX) < 0.28), far = cands.filter(c => Math.abs(c.x / W - state.truckX) >= 0.28);
+  let c = (Math.random() < 0.7 && near.length) ? pick(near) : pick(far.length ? far : near);
+  if (!state.target) { const mid = cands.filter(cc => Math.abs(cc.x / W - 0.5) > 0.18 && Math.abs(cc.x / W - 0.5) < 0.4); if (mid.length) c = pick(mid); }   // 第一個目標：離出發點一點距離，讓小孩先動一次
+  if (state.target && state.target.far && Math.abs(c.x / W - state.truckX) > 0.6 && near.length) c = pick(near);
+  const p = windowPos(c.s, c.w);
+  state.target = { slot: c.s, wi: c.w, x: p.x, y: p.y, animal: pickAnimal(), roof: false, far: Math.abs(c.x / W - state.truckX) >= 0.28 };
+  state.fire = 1; state.fireHit = false; state.waterLock = false; state.idleT = 0; state.missT = 0;
+  state.animalPos = { x: p.x, y: p.y, s: 1 }; state.animalVis = true;
+  setStep('seek');
+}
+function newRoofTarget() {
+  const s = roofSlot(), p = roofPos(s);
+  state.target = { slot: s, wi: -1, x: p.x, y: p.y, animal: pickAnimal(), roof: true };
+  state.animalPos = { x: p.x, y: p.y, s: 1 }; state.animalVis = true; state.cushion = 1; state.charged = false;
+  { const tw = TH() * (has('VH001') ? ART.VH001.ar : 1.8); state.truckTargetX = clamp((p.x - tw * 0.5 - TH() * 0.5) / W, 0.15, 0.85); }   // 氣墊對齊屋頂正下方
+  setStep('roofMove');
+}
+function setStep(s) { state.step = s; state.stepT = 0; }
+function startRound(first) {
+  state.phase = 'play'; state.seats = []; state.sinceRoof = 0; state.roofDue = 2 + Math.floor(Math.random() * 2);
+  state.houseOrder = [0, 1, 2, 3, 4].sort(() => Math.random() - 0.5); state.houseFade = first ? 1 : 0;
+  { const i = state.houseOrder.indexOf(2); if (i === 0 || i === 4) { const j = 1 + Math.floor(Math.random() * 3); [state.houseOrder[i], state.houseOrder[j]] = [state.houseOrder[j], state.houseOrder[i]]; } }   // 屋頂救援的房子放中間三槽，消防車才停得到正下方
+  state.hats = []; state.fireworks = []; state.hatOnLight = null; state.ladder = 0; state.water = 0;
+  if (first) { state.truckX = -0.2; state.truckTargetX = 0.5; say('s1', { gap: 0, priority: 2 }); }
+  newTarget();
+  if (first) setTimeout(() => say('s2', { gap: 0 }), 1800);
+}
+
+/* ================== 特效 ================== */
+function burst(sx, sy, n, pool, { up = 2, life = 0.8, size = 1 } = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = (0.6 + Math.random() * 1.4) * H * 0.22;
+    particles.push({ x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - up * H * 0.1, life: life * (0.7 + Math.random() * 0.6), max: life, txt: pick(pool), sz: (0.025 + Math.random() * 0.025) * H * size, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 8 });
+  }
+}
+function fxPop(id, fallback, x, y, h, { life = 0.8, rise = 0.3, pop = true } = {}) { fxs.push({ id, fallback, x, y, h, t: 0, life, rise, pop }); }
+function fireworksShow(n) {
+  for (let i = 0; i < n; i++) {
+    const x = W * (0.1 + Math.random() * 0.8), y = H * (0.05 + Math.random() * 0.3);
+    state.fireworks.push({ x, y, t: -i * 0.3, col: pick(['#ff5252', '#ffd740', '#40c4ff', '#69f0ae', '#ffab40']), r: H * (0.06 + Math.random() * 0.06) });
+    setTimeout(() => sfxFirework(), i * 300);
+  }
+}
+function splashAt(x) {
+  // 錯位水花：落點附近的反應
+  const y = H * LAY.truckBase;
+  fxPop('FX004', '💦', x, y, TH() * 0.3, { life: 0.7, rise: 0.1 });
+  sfxSplash();
+  if (Math.abs(x / W - hydrant.x) < 0.1 && hydrant.sneeze <= 0) { hydrant.sneeze = 0.8; sfxSneeze(); }
+  else if (Math.abs(x - state.truckX * W) < TH() * 0.8) truckShake = 0.5;
+  else fgBounce = 0.5;
+  say('s4', { gap: 7000 });
+}
+
+/* ================== 更新 ================== */
+function update(dt, nowMs) {
+  state.t += dt; state.stepT += dt;
+  if (caption.t > 0) caption.t -= dt;
+  if (state.mode === 'body') {
+    trackFrame();
+    const lost = poseLandmarker && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'play') ? 'block' : 'none';
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) { if (!tooCloseSince) tooCloseSince = nowMs; }
+    else if (shoulderW < 0.21 || lost) { tooCloseSince = 0; }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'play') {
+      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('s16', { gap: 0, priority: 2 }); }
+      state.paused = nowMs < pauseUntil;
+    } else state.paused = false;
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) { const remain = Math.ceil((pauseUntil - nowMs) / 1000); document.getElementById('pauseCount').textContent = remain > 0 ? remain : ''; }
+    if (wasPaused && !state.paused) { say('s17', { gap: 0 }); fxs.length = 0; particles.length = 0; state.fireworks = []; }   // 清場、保留進度
+    wasPaused = state.paused;
+  }
+  if (state.paused) { waterSfx.setVol(0); return; }
+  if (state.phase !== 'play') return;
+
+  // 輸入：依階段只讀一種訊號
+  const inSeek = state.step === 'seek';
+  if (inSeek && state.mode === 'body') state.truckTargetX = clamp(0.15 + personX * 0.70, 0.15, 0.85);
+  const squatNow = state.mode === 'body' ? squat : touchHold;
+  const armsNow = state.mode === 'body' ? armsUp : touchHold;
+
+  // 消防車移動（平滑＋後仰／回彈）
+  const prevX = state.truckX;
+  state.truckX += (state.truckTargetX - state.truckX) * Math.min(1, dt * 5);
+  state.truckVX = (state.truckX - prevX) / Math.max(dt, 1e-3);
+  state.truckLean += (clamp(-state.truckVX * 0.6, -0.12, 0.12) - state.truckLean) * Math.min(1, dt * 8);
+  if (truckShake > 0) truckShake -= dt;
+  if (fgBounce > 0) fgBounce -= dt;
+  if (hydrant.sneeze > 0) hydrant.sneeze -= dt;
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 16);
+  state.houseFade = Math.min(1, state.houseFade + dt * 1.5);
+  if (Math.random() < dt * 0.12) sfxSiren();
+
+  const tg = state.target;
+  const tx = tg ? tg.x : W / 2;
+  const cannonX = state.truckX * W + (TRUCK.cannon[0] - 0.5) * TH() * (has('VH001') ? ART.VH001.ar : 1.8);
+  let wantWater = 0, wantLen = TH() * 0.35;
+
+  switch (state.step) {
+    case 'seek': {
+      state.idleT += dt;
+      if (Math.abs(state.truckVX) > 0.02) state.idleT = 0;
+      if (state.idleT > 5) { say('s3', { gap: 9000 }); state.idleT = 2; }
+      // 測試水柱：短短的、規律伸縮；沒對準就落成水花
+      wantWater = 1; wantLen = TH() * (0.3 + 0.15 * Math.sin(state.t * 6));
+      state.missT += dt;
+      if (state.missT > 1.1) { state.missT = 0; if (Math.abs(cannonX - tx) > W * 0.07) splashAt(cannonX + TH() * 0.5); }
+      if (state.stepT > 1.2 && Math.abs(cannonX - tx) < W * 0.07) { setStep('lock'); state.truckTargetX = state.truckX + (tx - cannonX) / W; sfxLock(); say('s5', { gap: 0, priority: 2 }); }
+      break;
+    }
+    case 'lock': {   // 吸附到正下方
+      wantWater = 1; wantLen = TH() * 0.4;
+      if (state.stepT > 0.45) { setStep('spray'); state.waterLock = true; }
+      break;
+    }
+    case 'spray': {
+      wantWater = 1; const full = Math.hypot(tx - cannonX, (H * LAY.truckBase - TH() * (1 - TRUCK.cannon[1])) - tg.y);
+      wantLen = full;
+      if (state.stepT > 0.5) { state.fireHit = true; state.fire = Math.max(0, state.fire - dt * 0.55); }
+      if (state.fire <= 0 && state.stepT > 2.2) { fxPop('FX005', '💨', tx, tg.y - TH() * 0.1, TH() * 0.3, { life: 1.2, rise: 0.8, pop: false }); sfxHiss(); say('s6', { gap: 0 }); setStep('ladderOut'); sfxLadder(); setTimeout(() => say('s7', { gap: 0 }), 700); }
+      break;
+    }
+    case 'ladderOut': {
+      state.ladder = Math.min(1, state.stepT / 1.0);
+      if (state.stepT > 1.3) { state.animalVis = 'basket'; setStep('ladderIn'); }
+      break;
+    }
+    case 'ladderIn': {
+      state.ladder = Math.max(0, 1 - state.stepT / 0.9);
+      if (state.stepT > 1.0) { seatAnimal(); setStep('seat'); }
+      break;
+    }
+    case 'seat': { if (state.stepT > 0.8) setStep('gap'); break; }
+    case 'gap': {
+      if (state.stepT > 0.5) {
+        if (state.seats.length >= 5) { setStep('full'); say('s12', { gap: 0, priority: 2 }); }
+        else if (state.sinceRoof >= state.roofDue) { state.sinceRoof = 0; state.roofDue = 2 + Math.floor(Math.random() * 2); newRoofTarget(); }
+        else newTarget();
+      }
+      break;
+    }
+    case 'roofMove': {
+      if (Math.abs(state.truckX - state.truckTargetX) < 0.01 && state.stepT > 0.8) { setStep('roofSquat'); say('s9', { gap: 0, priority: 2 }); }
+      break;
+    }
+    case 'roofSquat': {
+      state.cushion += ((squatNow ? 0.35 : 1) - state.cushion) * Math.min(1, dt * 8);
+      if (squatNow) { if (state.stepT > 0.5 && !state.charged) { state.charged = true; sfxSqueeze(); setStep('roofHold'); } } else state.stepT = 0;
+      if (state.stepT > 6 && !squatNow) { say('s9', { gap: 8000 }); state.stepT = 0; }
+      break;
+    }
+    case 'roofHold': {   // 蓄力完成，等站起來
+      state.cushion += (0.3 + 0.04 * Math.sin(state.t * 14) - state.cushion) * Math.min(1, dt * 8);
+      if (state.stepT > 0.4) say('s10', { gap: 6000 });
+      if (!squatNow && state.stepT > 0.3) { setStep('roofDrop'); state.cushion = 1.3; sfxBoing(); say('s11', { gap: 0, priority: 2 }); state.dropT = 0; }
+      break;
+    }
+    case 'roofDrop': {
+      state.cushion += (1 - state.cushion) * Math.min(1, dt * 6);
+      // 動物：落下 → 彈兩下 → 進座位
+      const k = state.stepT, p = state.animalPos, cy = H * LAY.truckBase - TH() * 0.12, sx = cushionX();
+      if (k < 0.7) { p.x = lerp(tg.x, sx, k / 0.7); p.y = lerp(tg.y, cy, (k / 0.7) ** 2); }
+      else if (k < 1.5) { const u = (k - 0.7) / 0.8; p.y = cy - Math.abs(Math.sin(u * Math.PI * 2)) * TH() * (u < 0.5 ? 0.6 : 0.3); p.x = sx; p.rot = Math.sin(u * 12) * 0.4; }
+      else if (k < 2.0) { const u = (k - 1.5) / 0.5; const seat = seatPos(state.seats.length); p.x = lerp(sx, seat.x, u); p.y = lerp(cy, seat.y, u) - Math.sin(u * Math.PI) * TH() * 0.5; p.rot = 0; }
+      else { seatAnimal(); setStep('seat'); }
+      break;
+    }
+    case 'full': {
+      if (armsNow) { if (state.stepT > 0.5) { setStep('party'); sfxParty(); say('s13', { gap: 0, priority: 2 }); fireworksShow(5); launchHats(); state.shake = 8; } }
+      else state.stepT = 0;
+      if (!armsNow && Math.floor(state.t) % 7 === 0) say('s12', { gap: 6500 });
+      break;
+    }
+    case 'party': {
+      if (state.stepT > 1.6 && state.stepT < 1.7) fireworksShow(4);
+      if (state.stepT > 3.2 && !state._said14) { state._said14 = true; say('s14', { gap: 0 }); }
+      if (state.stepT > 4.5) { state._said14 = false; setStep('rest'); state.stationX = 1.2; state.hats = []; state.rescuedTotal += 5; try { localStorage.setItem('g6total', state.rescuedTotal); } catch (e) {} }
+      break;
+    }
+    case 'rest': {
+      state.stationX += ((state.stepT < 3.2 ? 0.84 : 1.25) - state.stationX) * Math.min(1, dt * 3);
+      const n = Math.floor((state.stepT - 0.8) / 0.35);
+      while (state.seats.length && state.stationAnimals.length < 5 && n > state.stationAnimals.length) { const s = state.seats.shift(); state.stationAnimals.push({ id: s.id, emo: s.emo, t: 0 }); sfxPop(); }
+      if (state.stepT > 3.6 && state.stepT < 3.7) { state.houseFade = 0; }
+      if (state.stepT > 4.2) { state.stationAnimals = []; say('s15', { gap: 0 }); startRound(false); }
+      break;
+    }
+  }
+  for (const a of state.stationAnimals) a.t += dt;
+
+  // 水柱長度／開關平滑
+  state.water += (wantWater - state.water) * Math.min(1, dt * 6);
+  state.waterLen += (wantLen - state.waterLen) * Math.min(1, dt * (state.step === 'spray' ? 4 : 8));
+  waterSfx.setVol(state.water > 0.2 ? (state.step === 'spray' ? 0.08 : 0.03) : 0);
+  if (state.phase === 'play' && !waterSfx.running) waterSfx.on();
+
+  // 帽子與煙火
+  for (const h of state.hats) { h.t += dt; h.x += h.vx * dt; h.y += h.vy * dt; h.vy += H * 1.2 * dt; h.rot += h.vr * dt; if (h.y > h.landY) { h.y = h.landY; h.vy = 0; h.vx *= 0.8; h.vr *= 0.8; } }
+  for (const f of state.fireworks) f.t += dt;
+  state.fireworks = state.fireworks.filter(f => f.t < 1.2);
+
+  for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += H * 0.9 * dt; p.life -= dt; p.rot += p.vr * dt; if (p.life <= 0) particles.splice(i, 1); }
+  for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; f.t += dt; if (f.t > f.life) fxs.splice(i, 1); }
+}
+function seatPos(i) {
+  const s = TRUCK.seats[Math.min(i, 4)], tw = TH() * (has('VH001') ? ART.VH001.ar : 1.8);
+  return { x: state.truckX * W + (s[0] - 0.5) * tw, y: H * LAY.truckBase - TH() * (1 - s[1]) };
+}
+function seatAnimal() {
+  const a = state.target.animal;
+  state.seats.push({ id: a.id, emo: a.emo, t: 0 });
+  state.animalVis = false; state.sinceRoof++;
+  sfxSeat(); sfxCheer(); say('s8', { gap: 0 });
+  const sp = seatPos(state.seats.length - 1);
+  burst(sp.x, sp.y, 8, ['✨', '💧', '⭐'], { up: 3 });
+  fxPop('FX006', '💧', state.truckX * W, H * LAY.truckBase - TH() * 1.05, TH() * 0.32, { life: 0.9, rise: 0.4 });
+}
+function launchHats() {
+  const base = H * LAY.truckBase, cx = state.truckX * W;
+  for (let i = 0; i < 6; i++) {
+    const landX = cx + (Math.random() - 0.5) * TH() * 1.6;
+    state.hats.push({ x: cx + (Math.random() - 0.5) * TH(), y: base - TH() * 0.9, vx: (landX - cx) * 0.5, vy: -H * (0.7 + Math.random() * 0.5), vr: (Math.random() - 0.5) * 12, rot: 0, t: 0, landY: i === 0 ? base - TH() * 0.95 : base - TH() * (0.2 + Math.random() * 0.5), onLight: i === 0 });
+  }
+}
+
+/* ================== 繪製 ================== */
+function drawBackground() {
+  const px = (state.truckX - 0.5);
+  // 天空
+  if (has('BG001')) { const ar = ART.BG001.ar, h = Math.max(H * LAY.houseBase + 10, W / ar), w = h * ar; ctx.drawImage(IMG.BG001, (W - w) / 2 - px * W * 0.01, 0, w, h); }
+  else { const g = ctx.createLinearGradient(0, 0, 0, H * 0.65); g.addColorStop(0, '#4fb3e8'); g.addColorStop(1, '#cfeeff'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.66); }
+  // 遠方城鎮（反向微位移）
+  if (has('BG002')) { const ar = ART.BG002.ar, w = W * 1.08, h = w / ar; ctx.drawImage(IMG.BG002, (W - w) / 2 - px * W * 0.03, H * LAY.houseBase - h * 0.95, w, h); }
+  else { ctx.fillStyle = '#9fd6c9'; for (let i = 0; i < 9; i++) { const bx = (i / 9) * W * 1.1 - px * W * 0.03 - W * 0.05, bh = H * (0.12 + (i % 3) * 0.05); ctx.fillRect(bx, H * LAY.houseBase - bh, W * 0.09, bh); } }
+}
+function drawHouses() {
+  const base = H * LAY.houseBase;
+  for (let s = 0; s < 5; s++) {
+    const r = houseRect(s);
+    ctx.globalAlpha = state.houseFade;
+    if (!pic(r.id, r.cx, base, r.h, { anchorBottom: true })) { ctx.fillStyle = ['#ffe082', '#a5d6a7', '#90caf9', '#ffab91', '#fff9c4'][s]; ctx.fillRect(r.x, r.y, r.w, r.h); emo(HOUSE_EMO[state.houseOrder[s]], r.cx, base - r.h / 2, r.h * 0.8); }
+    ctx.globalAlpha = 1;
+  }
+}
+function drawTargetWindow() {
+  const tg = state.target; if (!tg || state.houseFade < 1) return;
+  const bounce = (state.step === 'seek') ? Math.abs(Math.sin(state.t * 5)) * TH() * 0.08 : 0;
+  const x = tg.x, y = tg.y - bounce;
+  // 窗框亮圈（找窗階段）
+  if (state.step === 'seek' || state.step === 'lock') {
+    ctx.save(); ctx.lineWidth = TH() * 0.05; ctx.strokeStyle = '#fff'; ctx.shadowColor = '#ffd54f'; ctx.shadowBlur = TH() * 0.2;
+    ctx.beginPath(); ctx.roundRect(x - TH() * 0.32, y - TH() * 0.34, TH() * 0.64, TH() * 0.68, TH() * 0.1); ctx.stroke(); ctx.restore();
+    // 向下箭頭
+    const ay = y + TH() * 0.5 + Math.abs(Math.sin(state.t * 6)) * TH() * 0.12;
+    ctx.save(); ctx.fillStyle = '#ffeb3b'; ctx.strokeStyle = '#e65100'; ctx.lineWidth = TH() * 0.03;
+    ctx.beginPath(); ctx.moveTo(x - TH() * 0.18, ay); ctx.lineTo(x + TH() * 0.18, ay); ctx.lineTo(x, ay + TH() * 0.22); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillRect(x - TH() * 0.07, ay - TH() * 0.22, TH() * 0.14, TH() * 0.24); ctx.strokeRect(x - TH() * 0.07, ay - TH() * 0.22, TH() * 0.14, TH() * 0.24);
+    ctx.restore();
+  }
+  // 火苗（窗口）
+  if (!tg.roof && state.fire > 0) {
+    const id = state.fireHit ? 'FX002' : 'FX001', fb = state.fireHit ? '😳' : '🔥';
+    const sc = (0.22 + 0.04 * Math.sin(state.t * 9)) * (0.4 + 0.6 * state.fire);
+    const wob = state.fireHit ? Math.sin(state.t * 30) * 0.15 : Math.sin(state.t * 4) * 0.08;
+    sprite(id, fb, x + TH() * 0.18, y + TH() * 0.05, TH() * sc * 1.2, { anchorBottom: true, rot: wob });
+  }
+  // 小動物
+  if (state.animalVis === true) {
+    const p = state.animalPos, bob = Math.sin(state.t * 4) * TH() * 0.02;
+    const wave = (state.step === 'seek' || state.step === 'roofSquat' || state.step === 'roofMove') ? Math.sin(state.t * 6) * 0.08 : 0;
+    sprite(tg.animal.id, tg.animal.emo, p.x - (tg.roof ? 0 : TH() * 0.12), p.y + TH() * 0.12 + bob, TH() * (state.step === 'roofDrop' ? 0.4 : 0.3), { anchorBottom: true, rot: wave + (p.rot || 0) });
+  }
+}
+function drawTruck() {
+  const base = H * LAY.truckBase + (truckShake > 0 ? Math.sin(state.t * 40) * TH() * 0.02 : 0);
+  const cx = state.truckX * W + (truckShake > 0 ? Math.sin(state.t * 50) * TH() * 0.03 : 0);
+  const party = state.step === 'party' || state.step === 'rest';
+  const id = party ? 'VH002' : 'VH001';
+  const tw = TH() * (has(id) ? ART[id].ar : 1.8);
+  const bounce = party ? Math.abs(Math.sin(state.t * 8)) * TH() * 0.06 : 0;
+  // 影子
+  ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(cx, base + TH() * 0.02, tw * 0.48, TH() * 0.06, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  // 雲梯（畫在車後）
+  if (state.ladder > 0.01 && state.target) {
+    const px = cx + (TRUCK.pivot[0] - 0.5) * tw, py = base - TH() * (1 - TRUCK.pivot[1]);
+    const dx = state.target.x - px, dy = state.target.y + TH() * 0.1 - py;
+    const ang = Math.atan2(dx, -dy), L = Math.hypot(dx, dy) * state.ladder + TH() * 0.3;
+    state.ladderAng = ang; state.ladderLen = L;
+    if (has('VH003')) picLink('VH003', px, py, ang, L);
+    else picBeam('VH003', '🪜', px, py, ang, L, null);
+    // 籃子裡的動物
+    if (state.animalVis === 'basket') { const bx = px + Math.sin(ang) * (L - TH() * 0.1), by = py - Math.cos(ang) * (L - TH() * 0.1); sprite(state.target.animal.id, state.target.animal.emo, bx, by + TH() * 0.1, TH() * 0.26, { anchorBottom: true }); }
+  }
+  ctx.save(); ctx.translate(cx, base - bounce); ctx.rotate(state.truckLean);
+  if (!pic(id, 0, 0, TH(), { anchorBottom: true })) emo('🚒', 0, 0, TH(), { anchorBottom: true });
+  ctx.restore();
+  // 乘客
+  state.seats.forEach((s, i) => {
+    s.t += 0; const sp = seatPos(i), jig = party ? Math.abs(Math.sin(state.t * 8 + i)) * TH() * 0.08 : Math.sin(state.t * 3 + i) * TH() * 0.01;
+    ctx.save(); ctx.beginPath(); ctx.arc(sp.x, sp.y - bounce - jig, TH() * TRUCK.seatR, 0, Math.PI * 2); ctx.clip();
+    sprite(s.id, s.emo, sp.x, sp.y - bounce - jig - TH() * 0.01, TH() * TRUCK.seatR * 2.6);
+    ctx.restore();
+  });
+  // 眼睛看向目標（簡化瞳孔）
+  if (state.target && !party && TRUCK.eye) {
+    const ex = cx + (TRUCK.eye[0] - 0.5) * tw, ey = base - TH() * (1 - TRUCK.eye[1]) - bounce;
+    const dx = clamp((state.target.x - ex) / W * 2, -1, 1);
+    ctx.fillStyle = '#1d3a5a'; ctx.beginPath(); ctx.arc(ex + dx * TH() * 0.02, ey, TH() * 0.022, 0, Math.PI * 2); ctx.fill();
+  }
+  // 水砲＋扇形水幕（派對）
+  if (party && state.step === 'party') {
+    const ox = cx + (TRUCK.cannon[0] - 0.5) * tw, oy = base - TH() * (1 - TRUCK.cannon[1]) - bounce;
+    sprite('VH004', '🔫', ox, oy + TH() * 0.1, TH() * 0.5, { anchorBottom: true, rot: -0.3 });
+    const k = Math.min(1, state.stepT / 0.6);
+    sprite('FX008', '💦', ox, oy - TH() * 0.1, TH() * 1.7 * k, { anchorBottom: true, alpha: Math.min(1, k * 1.5) * (state.stepT > 3.8 ? Math.max(0, 1 - (state.stepT - 3.8) / 0.7) : 1) });
+  }
+  // 水柱（一般）
+  if (state.water > 0.05 && !party) {
+    const ox = cx + (TRUCK.cannon[0] - 0.5) * tw, oy = base - TH() * (1 - TRUCK.cannon[1]);
+    let ang = 0;
+    if (state.step === 'spray' || state.step === 'lock') { const dx = state.target.x - ox, dy = state.target.y - oy; ang = Math.atan2(dx, -dy); }
+    else ang = 0.12 + Math.sin(state.t * 3) * 0.05;
+    picBeam('FX003', '💧', ox, oy, ang, state.waterLen, TH() * 0.22, state.water);
+  }
+}
+function cushionX() { const tw = TH() * (has('VH001') ? ART.VH001.ar : 1.8); return state.truckX * W + tw * 0.5 + TH() * 0.5; }
+function drawCushion() {
+  if (!(state.step.startsWith('roof'))) return;
+  const cx = cushionX(), y = H * LAY.truckBase;
+  const sq = state.cushion;   // 1 正常、0.3 壓扁、1.3 彈開
+  const w = TH() * 0.75 * (2 - sq) * 0.9, h = TH() * 0.32 * sq;
+  if (!pic('TP007', cx, y, h, { anchorBottom: true, w })) { ctx.fillStyle = '#ffca28'; ctx.beginPath(); ctx.ellipse(cx, y - h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.fill(); }
+}
+function drawHydrant() {
+  const x = hydrant.x * W, y = H * LAY.truckBase + TH() * 0.05;
+  const sn = hydrant.sneeze;
+  const sx = sn > 0 ? (sn > 0.5 ? 1.15 : 0.85) : 1, sy = sn > 0 ? (sn > 0.5 ? 0.8 : 1.2) : 1, rot = sn > 0 ? Math.sin(sn * 40) * 0.2 : 0;
+  sprite('FX009', '🧯', x, y, TH() * 0.3, { anchorBottom: true, sx, sy, rot });
+  if (sn > 0 && sn < 0.5) burst(x, y - TH() * 0.2, 1, ['💦'], { up: 2, life: 0.4 });
+}
+function drawForeground() {
+  const by = fgBounce > 0 ? -Math.abs(Math.sin(fgBounce * 12)) * TH() * 0.06 : 0;
+  const px = (state.truckX - 0.5);
+  if (has('BG004')) { const ar = ART.BG004.ar, w = W * 1.06, h = w / ar; ctx.drawImage(IMG.BG004, (W - w) / 2 + px * W * 0.04, H - h * 0.42 + by, w, h); }
+  else { ctx.fillStyle = '#66bb6a'; ctx.fillRect(0, H * 0.93 + by, W, H * 0.07); }
+}
+function drawStreet() {
+  if (has('BG003')) { const im = IMG.BG003, iw = im.naturalWidth, ih = im.naturalHeight; ctx.drawImage(im, iw * 0.22, ih * 0.1, iw * 0.78, ih * 0.8, 0, H * LAY.streetTop, W, H * (LAY.streetBot - LAY.streetTop)); }   // 左側 22% 有去背破洞，只取右側路面帶
+  else { ctx.fillStyle = '#ecdbb8'; ctx.fillRect(0, H * LAY.streetTop, W, H * 0.06); ctx.fillStyle = '#5f6a7d'; ctx.fillRect(0, H * (LAY.streetTop + 0.06), W, H * (LAY.streetBot - LAY.streetTop - 0.06)); }
+}
+function drawStation() {
+  if (state.stationX > 1.15) return;
+  const x = state.stationX * W, base = H * LAY.houseBase;
+  sprite('TP006', '🏪', x, base, TH() * 1.25, { anchorBottom: true });
+  state.stationAnimals.forEach((a, i) => { const wx = x + (i - 2) * TH() * 0.26, wy = base - TH() * 0.55 - Math.abs(Math.sin(a.t * 5)) * TH() * 0.04; sprite(a.id, a.emo, wx, wy, TH() * 0.24, { anchorBottom: true, rot: Math.sin(a.t * 6) * 0.1 }); });
+}
+function drawHats() {
+  for (const h of state.hats) sprite('FX007', '⛑️', h.x, h.y, TH() * 0.16, { rot: h.rot });
+}
+function drawFireworks() {
+  for (const f of state.fireworks) {
+    if (f.t < 0) continue;
+    const k = f.t / 1.2, r = f.r * (0.3 + k * 0.7);
+    ctx.globalAlpha = 1 - k; ctx.fillStyle = f.col;
+    for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; ctx.beginPath(); ctx.arc(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r, f.r * 0.14 * (1 - k * 0.5), 0, Math.PI * 2); ctx.fill(); }
+    ctx.globalAlpha = 1;
+  }
+}
+function drawFx() {
+  for (const f of fxs) {
+    const k = f.t / f.life, sc = f.pop ? (k < 0.25 ? k / 0.25 : 1) : 1 + k * 0.4, al = f.pop ? (k < 0.65 ? 1 : 1 - (k - 0.65) / 0.35) : 1 - k;
+    sprite(f.id, f.fallback, f.x, f.y - f.rise * f.h * k, f.h * sc, { alpha: al, anchorBottom: f.id === 'FX004' });
+  }
+  for (const p of particles) emo(p.txt, p.x, p.y, p.sz, { rot: p.rot, alpha: Math.max(0, p.life / p.max) });
+}
+function drawHUD() {
+  // 乘客座位（左上）
+  const r = H * 0.035, gap = r * 2.5, x0 = W * 0.03 + r, y0 = H * 0.06;
+  for (let i = 0; i < 5; i++) {
+    const x = x0 + i * gap, s = state.seats[i];
+    ctx.fillStyle = s ? '#fff' : 'rgba(255,255,255,.35)'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(x, y0, r * (s && state.step === 'seat' && i === state.seats.length - 1 ? 1.25 : 1), 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    if (s) { ctx.save(); ctx.beginPath(); ctx.arc(x, y0, r * 0.92, 0, Math.PI * 2); ctx.clip(); sprite(s.id, s.emo, x, y0 - r * 0.1, r * 2.2); ctx.restore(); }
+  }
+  // 操作提示（右上）：同一時間只一種
+  let hint = null;
+  if (state.step === 'seek' && state.idleT > 3) hint = ['◀ 🧍 ▶', '左右移動'];
+  else if (state.step === 'roofSquat') hint = ['🧎 ⬇', '蹲下'];
+  else if (state.step === 'roofHold') hint = ['🧍 ⬆', '站起來'];
+  else if (state.step === 'full') hint = ['🙌 ⬆', state.mode === 'body' ? '雙手舉高' : '按住畫面'];
+  if (hint) {
+    const v = Math.min(W, H), pulse = 1 + 0.06 * Math.sin(state.t * 6);
+    ctx.save(); ctx.translate(W * 0.5, H * 0.1); ctx.scale(pulse, pulse);
+    ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.beginPath(); ctx.roundRect(-v * 0.13, -v * 0.055, v * 0.26, v * 0.11, v * 0.03); ctx.fill();
+    ctx.font = `bold ${v * 0.05}px "Segoe UI Emoji","Microsoft JhengHei",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#1d3a5a';
+    ctx.fillText(hint[0], 0, -v * 0.018); ctx.font = `bold ${v * 0.028}px "Microsoft JhengHei","Noto Sans TC",sans-serif`; ctx.fillText(hint[1], 0, v * 0.032);
+    ctx.restore();
+  }
+  // 累計救援（右下小字）
+  ctx.save(); ctx.font = `bold ${H * 0.03}px "Microsoft JhengHei",sans-serif`; ctx.textAlign = 'right'; ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 4;
+  ctx.fillText('🐾 總共救了 ' + (state.rescuedTotal + state.seats.length) + ' 隻', W * 0.98, H * 0.07); ctx.restore();
+  // 字幕
+  if (caption.t > 0) {
+    const v = Math.min(W, H);
+    ctx.globalAlpha = Math.min(1, caption.t * 2);
+    ctx.font = `bold ${v * 0.05}px "Microsoft JhengHei","Noto Sans TC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(caption.text).width + v * 0.06;
+    ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.beginPath(); ctx.roundRect(W / 2 - tw / 2, H * 0.95 - v * 0.04, tw, v * 0.08, v * 0.04); ctx.fill();
+    ctx.fillStyle = '#1d3a5a'; ctx.fillText(caption.text, W / 2, H * 0.95);
+    ctx.globalAlpha = 1;
+  }
+}
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const shx = state.shake > 0 ? (Math.random() - 0.5) * state.shake * H * 0.003 : 0;
+  ctx.translate(shx, 0);
+  drawBackground();
+  drawHouses();
+  drawStation();
+  drawStreet();
+  drawCushion();
+  drawTargetWindow();
+  drawHydrant();
+  drawTruck();
+  drawFireworks();
+  drawHats();
+  drawFx();
+  drawForeground();
+  drawHUD();
+}
+
+/* ================== 主迴圈 ================== */
+function onResize() {
+  W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+}
+window.addEventListener('resize', onResize);
+onResize();
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (state.phase !== 'menu') { update(dt, now); draw(); }
+  requestAnimationFrame(loop);
+}
+loadArt().then(() => { if (has('BG001')) document.getElementById('startBg').style.backgroundImage = 'url(pic/opt/BG001.webp?v=' + ART_VER + ')'; });
+loadVoices();
+requestAnimationFrame(loop);
+
+// 測試勾子：分頁在背景時 rAF 不跑，用這個直接推進模擬（只給自動化驗證用）
+window.__dbg = { state, particles, fxs, IMG, say, HOUSES, TRUCK, houseRect, windowPos };
+window.__sim = (sec, input = {}) => {
+  if (input.personX != null) personX = input.personX;
+  if (input.squat != null) { squat = input.squat; isSquatHeld = input.squat; }
+  if (input.armsUp != null) armsUp = input.armsUp;
+  if (input.hold != null) touchHold = input.hold;
+  if (input.targetX != null) state.truckTargetX = input.targetX;
+  const steps = Math.round(sec * 60);
+  for (let i = 0; i < steps; i++) update(1 / 60, performance.now() + i * 16.7);
+  draw();
+  return { step: state.step, stepT: +state.stepT.toFixed(2), truckX: +state.truckX.toFixed(3), target: state.target && { x: +(state.target.x / W).toFixed(3), roof: state.target.roof, animal: state.target.animal.id }, fire: +state.fire.toFixed(2), seats: state.seats.map(s => s.id), ladder: +state.ladder.toFixed(2), cushion: +state.cushion.toFixed(2), station: state.stationAnimals.length, total: state.rescuedTotal };
+};
+</script>
+</body>
+</html>

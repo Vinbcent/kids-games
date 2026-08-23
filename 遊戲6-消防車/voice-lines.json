@@ -1,0 +1,20 @@
+{
+  "_scene": "You are the cheerful narrator of a toddler's fire truck rescue video game, like a friendly fire-chief buddy talking to a 4-year-old. Playful, warm, energetic, clearly articulated, like a friendly kids' TV host. Short sentences with clear emotion.",
+  "s1":  { "text": "Fire truck, ready!", "dir": "Big announcing voice like a fire station alarm turning into a cheer, fast and excited, rising on 'ready!'." },
+  "s2":  { "text": "Move under the window!", "dir": "Clear friendly instruction, medium pace, encouraging, slight emphasis on 'under'." },
+  "s3":  { "text": "Follow the bouncing window!", "dir": "Playful sing-song, bouncy rhythm on 'bouncing', inviting." },
+  "s4":  { "text": "Splash! Try this window!", "dir": "A giggly 'Splash!' like getting splashed with water, then warm encouragement, no disappointment." },
+  "s5":  { "text": "Great aim! Water on!", "dir": "Proud quick cheer on 'Great aim!', then a punchy command 'Water on!'." },
+  "s6":  { "text": "Fire is out!", "dir": "Relieved and happy, bright, a little stretched 'out!'." },
+  "s7":  { "text": "Ladder up!", "dir": "Rising pitch like something going up, energetic and short." },
+  "s8":  { "text": "Animal safe!", "dir": "Warm and proud, sweet, like a hug in a voice." },
+  "s9":  { "text": "Crouch down!", "dir": "Fun playful instruction, voice goes down low on 'down' like squatting." },
+  "s10": { "text": "Now stand up!", "dir": "Excited anticipation, voice rises up high on 'up!'." },
+  "s11": { "text": "Boing! Nice catch!", "dir": "A big springy stretched 'Boooing!', then a delighted 'Nice catch!'." },
+  "s12": { "text": "Hands up for the big splash!", "dir": "Exciting build-up, clear instruction, rising on 'big splash!'." },
+  "s13": { "text": "Super splash party!", "dir": "Shout it like a party starting, super excited, stretched 'Suuuper'." },
+  "s14": { "text": "What a rescue team!", "dir": "Proud and admiring, big warm smile, slower and grand." },
+  "s15": { "text": "New rescue, let's go!", "dir": "Fresh and energetic, fast, like starting a new adventure." },
+  "s16": { "text": "Step back, please!", "dir": "Clear and firm but kind, slower pace, like a caring grown-up." },
+  "s17": { "text": "All clear, let's rescue!", "dir": "Relieved and bright, fast and happy, rising at the end." }
+}

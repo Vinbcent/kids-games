@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#7fd0ef">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🚑 救護車嗶寶</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #7fd0ef; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; z-index: 15; pointer-events: none; display: none;
+         color: #fff; text-shadow: 0 2px 6px rgba(0,40,70,.5); font-weight: bold; }
+  #hudL { position: absolute; top: 2.2vmin; left: 2.4vmin; font-size: clamp(16px, 4.4vmin, 40px); letter-spacing: .5px; }
+  #hudL span { margin-right: 1.4vmin; display: inline-block; transition: transform .15s; }
+  #hudL span.pop { transform: scale(1.5); }
+  #hudR { position: absolute; top: 2.4vmin; right: 2.6vmin; font-size: clamp(13px, 3.6vmin, 30px); color: #fff0c0; }
+  #hudBarWrap { position: absolute; top: 1.6vmin; left: 50%; transform: translateX(-50%);
+                width: min(52vw, 380px); height: clamp(18px, 3.4vmin, 28px);
+                background: rgba(0,0,0,.28); border-radius: 999px; overflow: hidden; border: 2px solid rgba(255,255,255,.35); }
+  #hudBarFill { height: 100%; width: 0%; border-radius: 999px;
+                background: linear-gradient(90deg, #ff6f8a, #ffd54f); transition: width .12s linear; }
+  #hudBarSeg { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 9.6%, rgba(0,0,0,.22) 9.6% 10%); }
+  #hudBarText { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+                font-size: clamp(11px, 2.2vmin, 18px); }
+  #hudBarWrap.full { animation: glow .5s ease-in-out infinite alternate; }
+  @keyframes glow { from { box-shadow: 0 0 6px #ffd54f } to { box-shadow: 0 0 22px #fff176, 0 0 40px #ffd54f } }
+  #hudMag { position: absolute; top: 6vmin; left: 50%; transform: translateX(-50%);
+            font-size: clamp(13px, 3vmin, 24px); color: #fff; }
+
+  /* 鏡頭預覽小視窗 */
+  #pip { position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000; }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear, top .1s linear; }
+  #pipHide { position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px; }
+
+  .overlay { position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff; }
+  #startOverlay { background: linear-gradient(180deg, #5ec0e8 0%, #bfe6ff 45%, #9fe080 78%, #6fae3e 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay .bg { position: absolute; inset: 0; background: center/cover no-repeat; z-index: -1; }
+  #startOverlay .bg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,30,60,.15), rgba(0,30,60,.45)); }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 3px 14px rgba(0,40,80,.6); }
+  #startOverlay .hero { height: clamp(70px, 26vmin, 220px); animation: drive 1.4s ease-in-out infinite; filter: drop-shadow(0 1vmin 1.5vmin rgba(0,0,0,.35)); }
+  #startOverlay .car-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: drive 1.4s ease-in-out infinite; display: none; }
+  @keyframes drive { 0%,100% { transform: translateX(-2vmin) rotate(-2deg) } 50% { transform: translateX(2vmin) rotate(2deg) } }
+  .btn { margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer; box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35); }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff6f8a, #e23a5e); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #fff8ec; max-width: 92%; line-height: 1.5; text-shadow: 0 1px 4px rgba(0,40,80,.7); }
+
+  #rotateHint { display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.7); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin; pointer-events: none; }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(20,60,90,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer { position: fixed; inset: auto 0 18% 0; z-index: 25; display: none; text-align: center; pointer-events: none; }
+  #findPlayer .bubble { display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold; padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite; }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  #tooClose { position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none; background: rgba(180, 40, 0, .3); }
+  #tooClose .bubble { background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold; padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite; }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  #countdown { position: fixed; inset: 0; z-index: 28; display: none; align-items: center; justify-content: center; pointer-events: none; }
+  #countdown span { font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff8800, 0 4px 10px rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div id="hudL"><span id="hScore">🏆 0</span><span id="hCoin">🍬 0</span><span id="hRescue">🚑 0</span></div>
+  <div id="hudR"><span id="hKm">0.0 KM</span></div>
+  <div id="hudBarWrap"><div id="hudBarFill"></div><div id="hudBarSeg"></div><div id="hudBarText">變身能量</div></div>
+  <div id="hudMag"></div>
+</div>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🚑</div>
+  <p id="loadingText">正在準備出發…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="bg" id="startBg"></div>
+  <img class="hero" id="heroImg" src="pic/opt/CH001.webp" alt="" onerror="this.style.display='none';document.getElementById('heroFallback').style.display='block'">
+  <div class="car-big" id="heroFallback">🚑</div>
+  <h1>救護車嗶寶</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">左右移動身體開嗶寶換車道、吃糖果愛心🍬❤️、閃開三角錐🚧（撞到會翻滾超好笑😆）！<br>看到受傷的小車車🤕就開過去救它！集滿能量<b>雙手高舉</b>就變身機器人衝刺🤖<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script>
+/* 救護車嗶寶・新美術版（2026-08-23 重製）
+   - 引擎：2D Canvas 偽 3D 跑道（馬路往消失點收斂、跑道物件依距離縮放由遠而近）
+   - 美術：Codex 生成素材（pic/opt/*.webp），企劃 plan.md、場景 scene.md、清單 assets.json
+   - 旁白：Gemini TTS 音檔（snd/*.mp3），缺檔退回瀏覽器語音
+   - 體感：與原版 index.html 完全相同（左右移動換道、雙手高舉變身） */
+const ART_VER = 1;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = window.innerWidth, H = window.innerHeight, DPR = 1;
+
+/* ================== 素材 ================== */
+const ART = {
+  BG001: { file: 'BG001.webp' },                                        // 遠景橫幅（天空、遠山、城市天際線）
+  CH001: { file: 'CH001.webp' }, CH002: { file: 'CH002.webp' }, CH003: { file: 'CH003.webp' },   // 嗶寶：直行／轉彎／被撞暈
+  CH004: { file: 'CH004.webp' }, CH005: { file: 'CH005.webp' },         // 機器人：背面衝刺／正面登場
+  VH101: { file: 'VH101.webp' }, VH102: { file: 'VH102.webp' },         // 橘色小轎車：受傷／治好
+  VH201: { file: 'VH201.webp' }, VH202: { file: 'VH202.webp' },         // 藍色廂型車
+  VH301: { file: 'VH301.webp' }, VH302: { file: 'VH302.webp' },         // 黃色旅行車
+  OB001: { file: 'OB001.webp' }, OB002: { file: 'OB002.webp' }, OB003: { file: 'OB003.webp' },   // 三角錐／石頭／護欄
+  IT001: { file: 'IT001.webp' }, IT002: { file: 'IT002.webp' }, IT003: { file: 'IT003.webp' },   // 糖果／愛心糖／星星糖
+  IT004: { file: 'IT004.webp' }, IT005: { file: 'IT005.webp' },         // 杯子蛋糕／磁鐵
+  TP001: { file: 'TP001.webp' }, TP002: { file: 'TP002.webp' }, TP003: { file: 'TP003.webp' },   // 小房子／高房子／醫院
+  TP004: { file: 'TP004.webp' }, TP005: { file: 'TP005.webp' },         // 樹／路燈
+  FX001: { file: 'FX001.webp' }, FX002: { file: 'FX002.webp' }, FX003: { file: 'FX003.webp' },   // 雲／撞擊星星／治療十字愛心
+  FX004: { file: 'FX004.webp' }, FX005: { file: 'FX005.webp' },         // 煙火／速度線
+};
+const IMG = {};
+function loadArt() {
+  return Promise.all(Object.entries(ART).map(([id, a]) => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[id] = im; a.ar = im.naturalWidth / im.naturalHeight; res(); };
+    im.onerror = () => { IMG[id] = null; res(); };
+    im.src = 'pic/opt/' + a.file + '?v=' + ART_VER;
+  })));
+}
+const has = id => !!IMG[id];
+// 以「中心點 + 高度」畫圖（寬度依長寬比）；flip 水平鏡像；rot 繞中心旋轉；anchorBottom 時 cy 是底部
+function pic(id, cx, cy, h, { flip = false, rot = 0, alpha = 1, anchorBottom = false, w = null } = {}) {
+  const im = IMG[id]; if (!im) return false;
+  const ww = w != null ? w : h * ART[id].ar;
+  if (w != null) h = w / ART[id].ar;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(cx, anchorBottom ? cy - h / 2 : cy);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(im, -ww / 2, -h / 2, ww, h);
+  ctx.restore();
+  return true;
+}
+// 沒圖時的退路：畫 emoji（素材還沒到位也能玩、能測）
+function emo(txt, cx, cy, h, { rot = 0, alpha = 1, anchorBottom = false } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(cx, anchorBottom ? cy - h / 2 : cy); if (rot) ctx.rotate(rot);
+  ctx.font = `${h * 0.9}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(txt, 0, 0); ctx.restore();
+}
+function sprite(id, fallback, cx, cy, h, opt) { if (!pic(id, cx, cy, h, opt)) emo(fallback, cx, cy, h, opt); }
+
+/* ================== 音效（Web Audio 合成） ================== */
+let AC = null;
+/* ---- 音訊衛生（全系列共用補丁 2026-08-23）----
+   1. 所有聲音接到 MASTER 主音量，分頁切到背景／投放被搶焦點時立刻靜音、回來再開
+   2. AudioContext 不是 running（被系統暫停）時不排任何音——否則恢復瞬間會全部疊在一起爆出來
+   3. 同時發聲上限 14 個，超過就丟掉（事件連發不會無限疊加）
+   4. 循環音全部登記在 AUDIO_LOOPS，背景時一律關掉；語音佇列也清掉 */
+let MASTER = null, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = []; try { speechSynthesis.cancel(); } catch (e) {} if (curVoice) { try { curVoice.pause(); } catch (e) {} } }
+    else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); audioGuardInstall(); } }
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweep(f0, f1, dur, type, vol, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, AC.currentTime + when);
+  o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + when + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur + 0.05);
+  o.connect(g); g.connect(AUDIO_DEST()); audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.1);
+}
+function sfxCoin()      { [784, 988, 1319].forEach((f, i) => tone(f, 0.14, 'triangle', 0.22, i * 0.05)); }
+function sfxHeart()     { [659, 880, 1175, 1568].forEach((f, i) => tone(f, 0.16, 'sine', 0.2, i * 0.06)); }
+function sfxCrash()     { sweep(500, 90, 0.4, 'sawtooth', 0.3); tone(160, 0.2, 'square', 0.28, 0.05); tone(110, 0.25, 'square', 0.22, 0.18); }
+function sfxBoing()     { sweep(180, 600, 0.18, 'sine', 0.28); sweep(600, 200, 0.22, 'sine', 0.24); }
+function sfxRescue()    { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'sine', 0.22, i * 0.1)); tone(1319, 0.4, 'triangle', 0.18, 0.4); }
+function sfxMagnet()    { sweep(300, 900, 0.3, 'sine', 0.2); tone(1200, 0.2, 'triangle', 0.16, 0.25); }
+function sfxTransform() { sweep(220, 1200, 0.5, 'sawtooth', 0.22); [880, 1175, 1568].forEach((f, i) => tone(f, 0.18, 'square', 0.18, 0.5 + i * 0.1)); }
+function sfxUntransform() { sweep(900, 300, 0.4, 'triangle', 0.18); tone(523, 0.2, 'sine', 0.16, 0.4); }
+function sfxSmash()     { tone(900, 0.06, 'square', 0.22); tone(500, 0.12, 'square', 0.18, 0.05); tone(260, 0.16, 'sawtooth', 0.16, 0.11); }
+function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxAlarm()     { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); }); }
+function sfxSiren()     { tone(740, 0.3, 'sine', 0.18); tone(560, 0.3, 'sine', 0.18, 0.3); }
+function sfxFirework()  { sweep(200, 1400, 0.25, 'sine', 0.12); tone(1800, 0.1, 'triangle', 0.1, 0.25); }
+function noiseLoop(filterType, freq, vol) {
+  let src = null, gain = null, filt = null;
+  const Hd = {
+    on() {
+      if (!AC || src) return;
+      const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+      filt = AC.createBiquadFilter(); filt.type = filterType; filt.frequency.value = freq;
+      gain = AC.createGain(); gain.gain.value = 0;
+      src.connect(filt); filt.connect(gain); gain.connect(AUDIO_DEST());
+      src.start();
+      gain.gain.linearRampToValueAtTime(vol, AC.currentTime + 0.3);
+    },
+    setFreq(f) { if (filt) filt.frequency.setTargetAtTime(f, AC.currentTime, 0.1); },
+    off() {
+      if (!src) return;
+      gain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.2);
+      const n = src; src = null;
+      setTimeout(() => { try { n.stop(); } catch (e) {} }, 300);
+    },
+    get running() { return !!src; },
+  };
+  AUDIO_LOOPS.push(Hd); return Hd;
+}
+const engineSfx = noiseLoop('lowpass', 280, 0.06);
+
+/* ================== 旁白 ================== */
+const LINES = {
+  s1: ['Three, two, one... rescue time!', '三、二、一，救援出發！'],
+  s2: ['Move side to side to change lanes!', '左右移動來換車道'],
+  s3: ['A little car needs help!', '有小車需要幫忙！'],
+  s4: ['Great rescue!', '救援成功！'],
+  s5: ['You made them feel better!', '小車車好多了！'],
+  s6: ['Super ambulance!', '超級救護車！'],
+  s7: ['Hero driver!', '救援小英雄！'],
+  s8: ['Sweet heart! Double points!', '愛心雙倍分！'],
+  s9: ['Magnet power!', '磁鐵吸吸吸！'],
+  s10: ['Power is full! Hands up!', '能量滿了，雙手舉高！'],
+  s11: ["Hands up when you're ready!", '準備好就舉高手！'],
+  s12: ['Robot rescue mode! Go, go, go!', '機器人救援模式！'],
+  s13: ['Boom! Clear the way!', '砰！障礙飛走啦！'],
+  s14: ['Back to ambulance mode!', '嗶寶變回來了！'],
+  s15: ['Oops! Silly spin!', '哎呀，轉圈圈！'],
+  s16: ['All good! Keep going!', '沒事，繼續出發！'],
+  s17: ['Five cars are safe! Hooray!', '成功救援五台車！'],
+  s18: ['Too close! Step back, please!', '太近了，請退後一點'],
+  s19: ["Perfect! Let's go!", '距離剛剛好，繼續出發！'],
+};
+const TONE = { excited: { rate: 1.12, pitch: 1.45 }, happy: { rate: 1.05, pitch: 1.3 }, calm: { rate: 1.0, pitch: 1.1 }, warn: { rate: 0.95, pitch: 0.9 } };
+const LINE_TONE = { s1: 'happy', s2: 'calm', s3: 'happy', s4: 'excited', s5: 'happy', s6: 'excited', s7: 'excited', s8: 'excited', s9: 'excited', s10: 'excited', s11: 'calm', s12: 'excited', s13: 'excited', s14: 'happy', s15: 'excited', s16: 'happy', s17: 'excited', s18: 'warn', s19: 'happy' };
+let caption = { text: '', t: 0 };
+const lastSay = {};
+let voiceCache = null;
+function pickVoice() {
+  if (voiceCache) return voiceCache;
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^en[-_]/i.test(v.lang));
+    if (!vs.length) return null;
+    const score = v => (/natural|neural/i.test(v.name) ? 40 : 0) + (/google/i.test(v.name) ? 30 : 0) + (/en[-_]US/i.test(v.lang) ? 10 : 0) + (/female|samantha|zira|aria|jenny/i.test(v.name) ? 5 : 0) + (v.localService ? 0 : 3);
+    vs.sort((a, b) => score(b) - score(a));
+    voiceCache = vs[0];
+  } catch (e) {}
+  return voiceCache;
+}
+try { speechSynthesis.addEventListener('voiceschanged', () => { voiceCache = null; pickVoice(); }); pickVoice(); } catch (e) {}
+const SND = {};
+let curVoice = null;
+function loadVoices() {
+  for (const k of Object.keys(LINES)) {
+    const a = new Audio('snd/' + k + '.mp3?v=' + ART_VER); a.preload = 'auto';
+    a.addEventListener('canplaythrough', () => { SND[k] = a; }, { once: true });
+    a.addEventListener('error', () => { SND[k] = null; }, { once: true });
+    a.load();
+  }
+}
+function say(key, { gap = 2500, priority = 1 } = {}) {
+  const line = LINES[key]; if (!line) return;
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  if (SND[key]) {
+    const busy = curVoice && !curVoice.paused && !curVoice.ended;
+    if (busy && priority < 2) return;
+    if (busy) { curVoice.pause(); curVoice.currentTime = 0; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    curVoice = SND[key]; curVoice.currentTime = 0; curVoice.volume = 1;
+    curVoice.play().catch(() => {});
+    caption = { text: line[1], t: 2.2 };
+    return;
+  }
+  try {
+    if (speechSynthesis.speaking && priority < 2) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(line[0]);
+    const tn = TONE[LINE_TONE[key] || 'happy'];
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = tn.rate; u.pitch = Math.min(2, tn.pitch + (Math.random() - 0.5) * 0.2); u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+  caption = { text: line[1], t: 2.2 };
+}
+const pick = a => a[Math.floor(Math.random() * a.length)];
+function praise() { say(pick(['s4', 's5', 's6', 's7']), { gap: 0 }); }
+
+/* ================== 世界座標（偽 3D） ==================
+   z：沿馬路往前的距離（世界單位），玩家固定在 Z_PLAYER，物件從 Z_FAR 往 0 走
+   x：橫向，車道中心 -1 / 0 / 1，馬路半寬 ROAD_HALF
+   投影：s = FOCAL / z；螢幕 y = 地平線 + CAM_H*s；螢幕 x = 中心 + (x - camX)*s */
+const LANE_W = 1.0, ROAD_HALF = 1.75, LANES = [-1, 0, 1];
+const Z_NEAR = 1.0, Z_PLAYER = 2.3, Z_FAR = 70, SEG = 1.0;
+const HORIZON = 0.40, CAM_H = 1.25, CAM_FOLLOW = 0.55;
+let FOCAL = 500;
+function proj(x, z) {
+  const s = FOCAL / z;
+  return { sx: W / 2 + (x - camX) * s, sy: H * HORIZON + CAM_H * s + shakeY, s };
+}
+let camX = 0, shakeY = 0;
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu', mode: null,
+  laneX: 0, targetLane: 0,
+  speed: 0.6, dist: 0,
+  score: 0, coins: 0, rescued: 0, best: 0,
+  charge: 0, robot: 0, robotIntro: 0, invuln: 0, crash: 0, crashSpin: 0, crashTurns: 1, crashDir: 1,
+  bob: 0, t: 0, shake: 0, paused: false,
+  rows: 0, fullSaid: false, fullSince: 0, smashSaid: false, recentCrash: [],
+  flash: 0, slow: 0, milestoneT: 0,
+};
+const items = [], scenery = [], particles = [], fxs = [], clouds = [];
+let roadScroll = 0, spawnTimer = 0, sirenTimer = 0, magnetT = 0, scenDist = 0, bgScroll = 0;
+try { state.best = +localStorage.getItem('g4best') || 0; } catch (e) {}
+
+/* ================== 體感追蹤（與原版相同） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1, lastSeen = 0;
+let personX = 0.5, armsUp = false, shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task', delegate: 'GPU' },
+    runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3,
+  });
+  pip.style.display = 'block';
+}
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = zoomBox;
+  let result;
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  const nowT = performance.now();
+  if (!lm) { if (nowT - lastSeen > 700) armsUp = false; return; }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const bcx = (minX + maxX) / 2, bcy = (minY + maxY) / 2;
+    const s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, bcx - s / 2)), by = Math.min(1 - s, Math.max(0, bcy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  const shoulderY = (lm[11].y + lm[12].y) / 2;
+  const band = shoulderW * 0.5;
+  armsUp = visOK(15) && visOK(16) && (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.top = armsUp ? '20%' : '50%';
+  pipDot.style.background = armsUp ? '#ff66cc' : '#00ff88';
+}
+
+/* ================== 觸控模式 ================== */
+let touching = false, tapTransform = false;
+function touchUpdate(e) { state.targetLane = Math.max(-1, Math.min(1, (e.clientX / W - 0.5) * 2.2)); }
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  if (e.clientY < H * 0.3) { tapTransform = true; return; }
+  touching = true; touchUpdate(e);
+});
+canvas.addEventListener('pointermove', e => { if (touching) touchUpdate(e); });
+window.addEventListener('pointerup', () => { touching = false; });
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen(); audioInit(); state.mode = mode;
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+  if (mode === 'body') {
+    loadingOverlay.style.display = 'flex';
+    try { await setupBodyTracking(); }
+    catch (e) { loadingOverlay.style.display = 'none'; alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')'); state.mode = 'touch'; }
+    loadingOverlay.style.display = 'none';
+  }
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function resetWorld() {
+  items.length = 0; particles.length = 0; fxs.length = 0; scenery.length = 0;
+  state.laneX = 0; state.targetLane = 0; state.speed = 0.6; state.dist = 0;
+  state.score = 0; state.coins = 0; state.rescued = 0; state.charge = 0;
+  state.robot = 0; state.robotIntro = 0; state.invuln = 0; state.crash = 0; state.rows = 0;
+  state.fullSaid = false; state.fullSince = 0; state.recentCrash = []; state.slow = 0; state.milestoneT = 0;
+  magnetT = 0; spawnTimer = 1.2; scenDist = 0; roadScroll = 0;
+  // 預先鋪一段路邊景物
+  for (let z = Z_NEAR + 2; z < Z_FAR; z += 4.5) spawnScenery(z);
+}
+function startCountdown() {
+  state.phase = 'countdown';
+  resetWorld();
+  document.getElementById('hud').style.display = 'block';
+  engineSfx.on();
+  const el = document.getElementById('countdown'); const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '出發！'];
+  say('s1', { gap: 0, priority: 2 });
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i]; num.style.animation = 'none'; void num.offsetWidth;
+      tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2); i++; setTimeout(step, 900);
+    } else { el.style.display = 'none'; state.phase = 'play'; state.t = 0; }
+  };
+  step();
+}
+
+/* ================== 生成 ================== */
+const COIN_KINDS = [
+  { sub: 'candy', id: 'IT001', emo: '🍬' }, { sub: 'heart', id: 'IT002', emo: '❤️' },
+  { sub: 'star', id: 'IT003', emo: '⭐' }, { sub: 'cupcake', id: 'IT004', emo: '🧁' },
+];
+const OB_KINDS = [{ id: 'OB001', emo: '🚧', h: 0.85 }, { id: 'OB002', emo: '🪨', h: 0.75 }, { id: 'OB003', emo: '🚧', h: 0.9, wide: true }];
+const HURT_KINDS = [{ hurt: 'VH101', ok: 'VH102', emo: '🚗' }, { hurt: 'VH201', ok: 'VH202', emo: '🚙' }, { hurt: 'VH301', ok: 'VH302', emo: '🚕' }];
+let hurtIdx = 0, lastRowKind = '';
+function pushItem(it) { it.z = Z_FAR - 2; it.bob = Math.random() * 6; it.hit = false; items.push(it); }
+function spawnRow() {
+  state.rows++;
+  const warm = state.rows < 8;                  // 暖身：只有單顆糖果與簡單路線
+  const r = Math.random();
+  const laneI = Math.floor(Math.random() * 3);
+  // 連續撞到→下一排優先給糖果
+  const hurtSoon = state.recentCrash.length >= 2 && lastRowKind !== 'coin';
+  if (!warm && !hurtSoon && r < 0.11 && lastRowKind !== 'hurt') {
+    const k = HURT_KINDS[hurtIdx++ % 3];
+    pushItem({ kind: 'hurt', lane: LANES[laneI], k, healed: false, ht: 0 });
+    lastRowKind = 'hurt';
+    say('s3', { gap: 9000 });
+  } else if (!warm && !hurtSoon && r < 0.17 && lastRowKind !== 'magnet') {
+    pushItem({ kind: 'magnet', lane: LANES[laneI] });
+    lastRowKind = 'magnet';
+  } else if (!warm && !hurtSoon && r < 0.50) {
+    const blocked = Math.random() < 0.35 ? 2 : 1;
+    const order = [0, 1, 2].sort(() => Math.random() - 0.5).slice(0, blocked);
+    for (const li of order) { const ob = pick(OB_KINDS); pushItem({ kind: 'cone', lane: LANES[li], ob }); }
+    const free = [0, 1, 2].find(li => !order.includes(li));
+    if (free != null && Math.random() < 0.7) pushItem({ kind: 'coin', lane: LANES[free], ck: pick(COIN_KINDS) });
+    lastRowKind = 'cone';
+  } else if (state.rows >= 3 && Math.random() < 0.4) {
+    // 引導路線：同一種道具沿相鄰車道排成短弧線，鼓勵連續左右移動
+    const ck = pick(COIN_KINDS.filter(c => c.sub !== 'heart'));
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    let ln = dir > 0 ? -1 : 1;
+    for (let i = 0; i < 3; i++) { const it = { kind: 'coin', lane: ln, ck }; pushItem(it); it.z += i * 3.2; ln += dir; }
+    lastRowKind = 'coin';
+    if (state.rows < 12) say('s2', { gap: 99999 });
+  } else {
+    const ck = pick(COIN_KINDS);
+    pushItem({ kind: 'coin', lane: LANES[laneI], ck });
+    if (!warm && Math.random() < 0.5) pushItem({ kind: 'coin', lane: LANES[(laneI + 1) % 3], ck });
+    lastRowKind = 'coin';
+  }
+}
+const SCEN_KINDS = [
+  { id: 'TP001', emo: '🏠', h: 2.1, w: 1.4 }, { id: 'TP002', emo: '🏢', h: 3.0, w: 1.1 }, { id: 'TP003', emo: '🏥', h: 2.9, w: 1.8 },
+  { id: 'TP004', emo: '🌳', h: 2.0, w: 0 }, { id: 'TP005', emo: '🪔', h: 2.1, w: 0 }, { id: 'TP004', emo: '🌳', h: 1.8, w: 0 },
+];
+let scenSeq = 0, lastHospital = -99;
+function spawnScenery(z) {
+  // 左右交錯；醫院偶爾出現；路燈固定節奏
+  const side = scenSeq % 2 === 0 ? -1 : 1; scenSeq++;
+  let k;
+  const hurtAhead = items.some(it => it.kind === 'hurt' && !it.healed && it.z > Z_FAR - 30);   // 救援事件附近優先放醫院
+  if (scenSeq % 3 === 0) k = SCEN_KINDS[4];
+  else if (scenSeq - lastHospital > 6 && (hurtAhead || Math.random() < 0.07)) { k = SCEN_KINDS[2]; lastHospital = scenSeq; }
+  else k = pick([SCEN_KINDS[0], SCEN_KINDS[1], SCEN_KINDS[3], SCEN_KINDS[5]]);
+  const off = k === SCEN_KINDS[4] ? 0.55 : 0.8 + Math.random() * 1.4;
+  scenery.push({ side, z, k, x: side * (ROAD_HALF + 0.35 + off + (k.w || 0) / 2) });
+}
+
+/* ================== 特效 ================== */
+function burst(sx, sy, n, pool, { up = 2, life = 0.9, size = 1 } = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = (0.8 + Math.random() * 1.6) * H * 0.25;
+    particles.push({ x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - up * H * 0.12, life: life * (0.7 + Math.random() * 0.6), max: life, txt: pick(pool), sz: (0.03 + Math.random() * 0.03) * H * size, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 8 });
+  }
+}
+function burstFx(id, fallback, sx, sy, h, { life = 0.8, rise = 0 } = {}) { fxs.push({ id, fallback, x: sx, y: sy, h, t: 0, life, rise }); }
+function fireworks(n = 3) {
+  for (let i = 0; i < n; i++) {
+    const x = W * (0.15 + Math.random() * 0.7), y = H * (0.06 + Math.random() * 0.26);
+    fxs.push({ id: 'FX004', fallback: '🎆', x, y, h: H * (0.18 + Math.random() * 0.12), t: -i * 0.25, life: 1.0, rise: 0, pop: true });
+    setTimeout(() => sfxFirework(), i * 250);
+  }
+}
+
+/* ================== 事件 ================== */
+function screenOf(it) { const p = proj(it.lane * LANE_W, it.z); return p; }
+function addCharge(v) {
+  state.charge = Math.min(1, state.charge + v);
+  if (state.charge >= 1 && !state.fullSaid) { state.fullSaid = true; state.fullSince = state.t; say('s10', { gap: 0 }); }
+}
+function collect(it) {
+  it.hit = true;
+  const p = screenOf(it);
+  if (it.kind === 'coin') {
+    state.coins++; state.score += 10; addCharge(0.08); sfxCoin();
+    burst(p.sx, p.sy - 0.4 * p.s, 6, [it.ck.emo, '✨'], { life: 0.7 });
+    if (it.ck.sub === 'heart') { state.score += 10; addCharge(0.1); sfxHeart(); say('s8', { gap: 6000 }); }
+  } else if (it.kind === 'magnet') {
+    magnetT = 6; addCharge(0.1); sfxMagnet();
+    burst(p.sx, p.sy - 0.4 * p.s, 12, ['🧲', '✨']); say('s9', { gap: 3000 });
+  } else if (it.kind === 'hurt') {
+    state.rescued++; state.score += 50; addCharge(0.3); sfxRescue();
+    it.healed = true; it.ht = 0; it.hit = false; it.z = Math.max(it.z, Z_PLAYER + 0.5);   // 治好後固定在玩家前方，接著開走
+    burstFx('FX003', '✚', p.sx, p.sy - 1.5 * p.s, 0.95 * p.s, { life: 1.0, rise: 0.5 });
+    burst(p.sx, p.sy - 0.5 * p.s, 10, ['❤️', '✨', '🩹'], { up: 4 });
+    fireworks(2); state.slow = 0.5;
+    if (state.rescued % 5 === 0) { sfxMilestone(); say('s17', { gap: 0, priority: 2 }); state.milestoneT = 2.5; fireworks(state.rescued % 10 === 0 ? 6 : 4); }
+    else praise();
+    if (state.rescued > state.best) { state.best = state.rescued; try { localStorage.setItem('g4best', state.best); } catch (e) {} }
+    popHud('hRescue');
+  }
+}
+function hitObstacle(it) {
+  it.hit = true;
+  const p = screenOf(it);
+  if (state.robot > 0 || state.invuln > 0) {
+    state.score += 5; it.smashed = true; it.vy = 5 + Math.random() * 4; it.vx = (Math.random() - 0.5) * 6; it.spin = (Math.random() - 0.5) * 10; it.y = 0;
+    sfxSmash(); state.shake = Math.max(state.shake, 5);
+    burst(p.sx, p.sy - 0.3 * p.s, 8, ['💥', '⭐']);
+    if (state.robot > 0 && !state.smashSaid) { state.smashSaid = true; say('s13', { gap: 0 }); }
+  } else {
+    state.crash = 1.25; state.crashSpin = 0; state.invuln = 2.0; state.shake = 12;
+    state.crashTurns = pick([1, 1, 2]); state.crashDir = Math.random() < 0.5 ? 1 : -1;
+    state.recentCrash.push(state.t);
+    sfxCrash(); setTimeout(() => { if (AC) sfxBoing(); }, 250);
+    burst(p.sx, p.sy - 0.4 * p.s, 12, ['💥', '💫', '⭐'], { up: 5 }); say('s15', { gap: 1500 });
+  }
+}
+function popHud(id) { const el = document.getElementById(id); el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 350); }
+
+/* ================== 更新 ================== */
+function update(dt, nowMs) {
+  state.t += dt;
+  if (caption.t > 0) caption.t -= dt;
+  if (state.mode === 'body') {
+    trackFrame();
+    if (state.phase === 'play') state.targetLane = Math.max(-1, Math.min(1, (personX - 0.5) * 2.4));   // 倒數時交給示範動畫
+    const lost = poseLandmarker && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'play') ? 'block' : 'none';
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) { if (!tooCloseSince) tooCloseSince = nowMs; }
+    else if (shoulderW < 0.21 || lost) { tooCloseSince = 0; }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'play') {
+      if (tooCloseNow && nowMs >= pauseUntil) { pauseUntil = nowMs + 5000; sfxAlarm(); say('s18', { gap: 0, priority: 2 }); }
+      state.paused = nowMs < pauseUntil;
+    } else state.paused = false;
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) { const remain = Math.ceil((pauseUntil - nowMs) / 1000); document.getElementById('pauseCount').textContent = remain > 0 ? remain : ''; }
+    if (wasPaused && !state.paused) {
+      say('s19', { gap: 0 });
+      for (const it of items) if (!it.hit && !it.healed && it.z < Z_PLAYER + 14) it.z += 14;   // 推回安全預告距離
+    }
+    wasPaused = state.paused;
+  }
+
+  state.laneX += (state.targetLane - state.laneX) * Math.min(1, dt * 6);
+  state.bob = Math.sin(state.t * 9) * 0.5 + Math.sin(state.t * 13) * 0.3;
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 16);
+  if (state.flash > 0) state.flash -= dt;
+  if (state.milestoneT > 0) state.milestoneT -= dt;
+
+  // 循環音每格對齊狀態（不靠邊緣觸發）
+  if (state.paused) { engineSfx.setFreq(180); return; }
+  if (state.phase === 'play' && !engineSfx.running) engineSfx.on();
+
+  const wantTransform = (state.mode === 'body' ? armsUp : tapTransform); tapTransform = false;
+  if (wantTransform && state.charge >= 1 && state.robot <= 0 && state.crash <= 0) {
+    state.robot = 6; state.robotIntro = 0.9; state.charge = 0; state.invuln = Math.max(state.invuln, 6.5);
+    state.fullSaid = false; state.smashSaid = false; state.flash = 0.5;
+    sfxTransform(); fireworks(3); state.shake = 8; say('s12', { gap: 0, priority: 2 });
+  }
+  if (state.charge >= 1 && state.fullSaid && state.fullSince && state.t - state.fullSince > 7) { state.fullSince = 0; say('s11', { gap: 0 }); }
+  if (state.robot > 0) { state.robot -= dt; if (state.robot <= 0) { state.robot = 0; sfxUntransform(); say('s14', { gap: 0 }); state.flash = 0.3; } }
+  if (state.robotIntro > 0) state.robotIntro -= dt;
+  if (state.invuln > 0) state.invuln -= dt;
+  if (magnetT > 0) magnetT -= dt;
+  if (state.slow > 0) state.slow -= dt;
+  if (state.crash > 0) { state.crash -= dt; state.crashSpin += dt * (Math.PI * 2 * state.crashTurns / 1.1); if (state.crash <= 0) { state.crash = 0; say('s16', { gap: 4000 }); } }
+  state.recentCrash = state.recentCrash.filter(t => state.t - t < 8);
+
+  let targetSpeed = 0.6 + Math.min(0.45, state.dist * 0.0033);
+  if (state.recentCrash.length >= 2) targetSpeed *= 0.8;   // 連續撞到→暗中降速
+  if (state.robot > 0) targetSpeed *= 1.55;
+  if (state.crash > 0) targetSpeed *= 0.25;
+  if (state.slow > 0) targetSpeed *= 0.5;                   // 救援瞬間短暫放慢
+  if (state.robotIntro > 0) targetSpeed *= 0.4;
+  state.speed += (targetSpeed - state.speed) * Math.min(1, dt * 3);
+  state.dist += state.speed * dt * 2.2;
+  const moveSpeed = state.phase === 'play' ? state.speed * 22 : 0;   // 世界單位／秒（倒數時不前進）
+  roadScroll += moveSpeed * dt;
+  bgScroll += moveSpeed * dt * 0.002;
+  engineSfx.setFreq(220 + state.speed * 240);
+  camX += (state.laneX * LANE_W * CAM_FOLLOW - camX) * Math.min(1, dt * 5);
+
+  sirenTimer -= dt; if (sirenTimer <= 0) { sfxSiren(); sirenTimer = 3.5 + Math.random() * 3; }
+
+  spawnTimer -= dt;
+  const interval = Math.max(0.55, 1.0 - state.dist * 0.004);
+  if (spawnTimer <= 0 && state.phase === 'play') { spawnRow(); spawnTimer = interval; }
+
+  // 路邊景物
+  scenDist += moveSpeed * dt;
+  if (scenDist > 4.5) { scenDist -= 4.5; spawnScenery(Z_FAR + 1); }
+  for (let i = scenery.length - 1; i >= 0; i--) { const sc = scenery[i]; sc.z -= moveSpeed * dt; if (sc.z < Z_NEAR - 0.5) scenery.splice(i, 1); }
+
+  // 跑道物件
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.z -= moveSpeed * dt; it.bob += dt * 6;
+    if (it.kind === 'hurt') {
+      if (it.healed) { it.ht += dt; it.z += (moveSpeed + 4 + 12 * Math.min(1, it.ht)) * dt; it.lane += ((it.lane < 0 ? -1.9 : 1.9) - it.lane) * Math.min(1, dt * 0.9); }   // 治好→一邊彈跳一邊往前開去路邊（相對玩家永遠往遠方走）
+      else it.z -= -moveSpeed * 0.35 * dt;   // 受傷車本身慢慢往前開（相對速度變慢，好救）
+    }
+    if (magnetT > 0 && it.kind === 'coin' && !it.hit && it.z < Z_PLAYER + 25) it.lane += (state.laneX - it.lane) * Math.min(1, dt * 4);
+    if (!it.hit && !it.healed && it.z < Z_PLAYER + 0.7 && it.z > Z_PLAYER - 0.9) {
+      const tol = it.kind === 'cone' ? 0.5 : 0.66;   // 道具判定寬鬆、障礙保守
+      const near = Math.abs(it.lane - state.laneX) < tol;
+      const magnetGrab = magnetT > 0 && it.kind === 'coin';
+      if (near || magnetGrab) { if (it.kind === 'cone') hitObstacle(it); else collect(it); }
+    }
+    if (it.smashed) { it.st = (it.st || 0) + dt; it.z += (moveSpeed + 9) * dt; it.vy -= dt * 6; it.y += it.vy * dt; it.lane += it.vx * dt; it.rot = (it.rot || 0) + it.spin * dt; }   // 撞飛：往遠方翻滾飛走、淡出
+    const gone = it.z < Z_NEAR - 0.5 || it.z > Z_FAR + 2 || (it.smashed && it.st > 1.3) || (it.hit && !it.smashed) || (it.healed && it.ht > 4);
+    if (gone) items.splice(i, 1);
+  }
+
+  // 粒子（螢幕座標）
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += H * 0.9 * dt; p.life -= dt; p.rot += p.vr * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; f.t += dt; if (f.t > f.life) fxs.splice(i, 1); }
+  for (const c of clouds) { c.x -= c.v * dt * (1 + state.speed * 0.3); if (c.x < -0.25) { c.x = 1.25; c.y = 0.03 + Math.random() * 0.18; } }
+}
+
+/* ================== 繪製 ================== */
+function quad(x1a, ya, x2a, x1b, yb, x2b, color, alpha = 1) {
+  ctx.globalAlpha = alpha; ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(x1a, ya); ctx.lineTo(x2a, ya); ctx.lineTo(x2b, yb); ctx.lineTo(x1b, yb); ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+function drawBackground() {
+  const hy = H * HORIZON + shakeY;
+  if (has('BG001')) {
+    const im = IMG['BG001'], ar = ART.BG001.ar;
+    // 遠景橫幅：底邊貼地平線略下，高度蓋滿上方；隨車道位置與里程極慢平移
+    const bh = hy * 1.12, bw = Math.max(W * 1.3, bh * ar);
+    const off = ((bgScroll * 0.15 + camX * 0.04) % 1 + 1) % 1;
+    const x0 = -(bw - W) / 2 - (off - 0.5) * (bw - W) * 0.6;
+    ctx.drawImage(im, x0, hy - bh, bw, bh);
+  } else {
+    const g = ctx.createLinearGradient(0, 0, 0, hy); g.addColorStop(0, '#4fb3e8'); g.addColorStop(1, '#cfeeff');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, hy + 2);
+    ctx.fillStyle = '#8fd08a';
+    for (let i = 0; i < 7; i++) { const cx = ((i / 7 + 0.07 - bgScroll * 0.02 - camX * 0.01) % 1 + 1) % 1 * W * 1.2 - W * 0.1; ctx.beginPath(); ctx.ellipse(cx, hy + 4, W * 0.18, H * 0.07, 0, Math.PI, 0); ctx.fill(); }
+  }
+  for (const c of clouds) sprite('FX001', '☁️', c.x * W - camX * 0.03 * W, c.y * H, H * c.h, { alpha: 0.95 });
+}
+function drawRoad() {
+  const segs = [];
+  let z0 = Z_NEAR;
+  while (z0 < Z_FAR) {
+    const k = Math.floor((z0 + roadScroll) / SEG);
+    const z1 = Math.min(Z_FAR, (k + 1) * SEG - roadScroll + 1e-4);
+    segs.push([z0, z1, k]); z0 = z1;
+  }
+  // 地面底色
+  const hy = H * HORIZON + shakeY;
+  ctx.fillStyle = '#ecdbb8'; ctx.fillRect(0, hy, W, H - hy);
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const [za, zb, k] = segs[i];
+    const pa = proj(0, za), pb = proj(0, zb);
+    const par = k & 1;
+    const fog = Math.min(0.55, Math.max(0, (zb - 20) / (Z_FAR - 20)) * 0.55);
+    // 人行道（奶油色兩階交替）＋外側草綠
+    ctx.fillStyle = par ? '#f3e4c4' : '#ecdbb8'; ctx.fillRect(0, pb.sy, W, pa.sy - pb.sy + 1);
+    const g0 = ROAD_HALF + 1.6;
+    quad(-W, pa.sy + 1, pa.sx - g0 * pa.s, -W, pb.sy, pb.sx - g0 * pb.s, par ? '#8ed46a' : '#83cb60');
+    quad(pa.sx + g0 * pa.s, pa.sy + 1, W * 2, pb.sx + g0 * pb.s, pb.sy, W * 2, par ? '#8ed46a' : '#83cb60');
+    // 馬路（藍灰柏油）
+    quad(pa.sx - ROAD_HALF * pa.s, pa.sy + 1, pa.sx + ROAD_HALF * pa.s, pb.sx - ROAD_HALF * pb.s, pb.sy, pb.sx + ROAD_HALF * pb.s, par ? '#5f6a7d' : '#58637a');
+    // 路緣：亮藍綠條 + 白色邊線
+    const e0 = ROAD_HALF, e1 = ROAD_HALF + 0.08, e2 = ROAD_HALF + 0.26;
+    quad(pa.sx - e1 * pa.s, pa.sy + 1, pa.sx - e0 * pa.s, pb.sx - e1 * pb.s, pb.sy, pb.sx - e0 * pb.s, '#ffffff', 0.9);
+    quad(pa.sx + e0 * pa.s, pa.sy + 1, pa.sx + e1 * pa.s, pb.sx + e0 * pb.s, pb.sy, pb.sx + e1 * pb.s, '#ffffff', 0.9);
+    quad(pa.sx - e2 * pa.s, pa.sy + 1, pa.sx - e1 * pa.s, pb.sx - e2 * pb.s, pb.sy, pb.sx - e1 * pb.s, par ? '#5fd0c8' : '#6fd9d0');
+    quad(pa.sx + e1 * pa.s, pa.sy + 1, pa.sx + e2 * pa.s, pb.sx + e1 * pb.s, pb.sy, pb.sx + e2 * pb.s, par ? '#5fd0c8' : '#6fd9d0');
+    // 車道虛線
+    if (!par) for (const lx of [-0.5, 0.5]) quad(pa.sx + (lx - 0.035) * pa.s, pa.sy + 1, pa.sx + (lx + 0.035) * pa.s, pb.sx + (lx - 0.035) * pb.s, pb.sy, pb.sx + (lx + 0.035) * pb.s, '#ffffff', 0.85);
+    if (fog > 0) { ctx.globalAlpha = fog; ctx.fillStyle = '#dfeffb'; ctx.fillRect(0, pb.sy, W, pa.sy - pb.sy + 1); ctx.globalAlpha = 1; }
+  }
+}
+function drawScenery(sc) {
+  const p = proj(sc.x, sc.z);
+  const h = sc.k.h * p.s;
+  const fog = Math.min(0.6, Math.max(0, (sc.z - 25) / (Z_FAR - 25)) * 0.7);
+  sprite(sc.k.id, sc.k.emo, p.sx, p.sy, h, { anchorBottom: true, alpha: 1 - fog, flip: sc.side > 0 });
+}
+function drawItem(it) {
+  const p = proj(it.lane * LANE_W, it.z);
+  const fog = Math.min(0.5, Math.max(0, (it.z - 30) / (Z_FAR - 30)) * 0.6);
+  if (it.kind === 'coin') {
+    const fl = Math.sin(it.bob) * 0.12 + 0.25;
+    ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.32 * p.s, 0.08 * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    sprite(it.ck.id, it.ck.emo, p.sx, p.sy - fl * p.s, 0.7 * p.s, { anchorBottom: true, alpha: 1 - fog });
+  } else if (it.kind === 'magnet') {
+    const fl = Math.sin(it.bob) * 0.12 + 0.25;
+    sprite('IT005', '🧲', p.sx, p.sy - fl * p.s, 0.8 * p.s, { anchorBottom: true, alpha: 1 - fog });
+  } else if (it.kind === 'cone') {
+    const y = it.smashed ? it.y : 0;
+    sprite(it.ob.id, it.ob.emo, p.sx, p.sy - y * p.s, it.ob.h * p.s, { anchorBottom: !it.smashed, rot: it.rot || 0, alpha: it.smashed ? Math.max(0, 1 - it.st / 1.3) : 1 - fog });
+  } else if (it.kind === 'hurt') {
+    const id = it.healed ? it.k.ok : it.k.hurt;
+    const jump = it.healed ? Math.abs(Math.sin(it.ht * 9)) * 0.35 * Math.max(0, 1 - it.ht / 2) : 0;
+    const wob = it.healed ? 0 : Math.sin(it.bob * 1.3) * 0.04;
+    const al = it.healed ? Math.max(0, 1 - Math.max(0, it.ht - 3)) : 1 - fog;
+    sprite(id, it.k.emo, p.sx, p.sy - jump * p.s, 1.1 * p.s, { anchorBottom: true, rot: wob, alpha: al });
+    if (!it.healed) {
+      // SOS 由程式畫（閃爍）；近處加柔和光圈提示目標車道
+      if (Math.sin(state.t * 8) > 0) emo('🆘', p.sx, p.sy - 1.45 * p.s, 0.5 * p.s);
+      if (it.z < Z_PLAYER + 18) { ctx.globalAlpha = 0.25 + 0.15 * Math.sin(state.t * 6); ctx.fillStyle = '#fff59d'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.55 * p.s, 0.14 * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+    }
+  }
+}
+const TURN_IMG_LEFT = true;   // CH002 實圖是往左轉（看得到車右側）；往右時鏡像
+function drawPlayer() {
+  const p = proj(state.laneX * LANE_W, Z_PLAYER);
+  const bobY = Math.max(0, state.bob) * 0.03 * p.s;
+  const turn = state.targetLane - state.laneX;
+  // 影子
+  ctx.globalAlpha = 0.28; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.62 * p.s, 0.13 * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+  if (state.robotIntro > 0) {
+    // 變身瞬間：正面帥氣登場（放大彈出）
+    const k = 1 - state.robotIntro / 0.9, sc = 1 + Math.sin(k * Math.PI) * 0.35;
+    sprite('CH005', '🤖', p.sx, p.sy - bobY, 2.0 * p.s * sc, { anchorBottom: true });
+    return;
+  }
+  if (state.robot > 0) {
+    sprite('CH004', '🤖', p.sx, p.sy - bobY - 0.05 * p.s, 1.9 * p.s, { anchorBottom: true, rot: turn * 0.18 });
+    return;
+  }
+  if (state.crash > 0) {
+    const k = state.crash / 1.25, lift = Math.sin((1 - k) * Math.PI) * 0.5;
+    sprite('CH003', '😵', p.sx, p.sy - lift * p.s - 0.6 * p.s, 1.2 * p.s, { rot: state.crashSpin * state.crashDir });
+    // 撞擊星星：一圈星星以嗶寶為中心旋轉
+    if (has('FX002')) pic('FX002', p.sx, p.sy - lift * p.s - 0.65 * p.s, 1.75 * p.s, { rot: state.t * 2.5, alpha: 0.95 });
+    else { const ang = state.t * 6; emo('💫', p.sx + Math.cos(ang) * 0.5 * p.s, p.sy - 1.2 * p.s - lift * p.s, 0.6 * p.s); }
+    return;
+  }
+  const blink = state.invuln > 0 && Math.floor(state.t * 12) % 2 === 0;
+  if (Math.abs(turn) > 0.18 && has('CH002')) pic('CH002', p.sx, p.sy - bobY, 1.2 * p.s, { anchorBottom: true, flip: (turn > 0) === TURN_IMG_LEFT, alpha: blink ? 0.55 : 1 });
+  else sprite('CH001', '🚑', p.sx, p.sy - bobY, 1.2 * p.s, { anchorBottom: true, rot: turn * 0.12, alpha: blink ? 0.55 : 1 });
+}
+function drawFx() {
+  for (const f of fxs) {
+    if (f.t < 0) continue;
+    const k = f.t / f.life;
+    const sc = f.pop ? (k < 0.3 ? k / 0.3 : 1) : 1 + k * 0.5;
+    const al = f.pop ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : 1 - k;
+    sprite(f.id, f.fallback, f.x, f.y - f.rise * f.h * k, f.h * sc, { alpha: al });
+  }
+  for (const p of particles) emo(p.txt, p.x, p.y, p.sz, { rot: p.rot, alpha: Math.max(0, p.life / p.max) });
+}
+function drawOverlay() {
+  // 機器人衝刺：速度線（脈動）
+  if (state.robot > 0 && state.robotIntro <= 0) {
+    const al = 0.22 + 0.14 * Math.sin(state.t * 20);
+    if (!pic('FX005', W / 2, H / 2, H * 1.15, { alpha: al, w: W * 1.15 })) {
+      ctx.save(); ctx.globalAlpha = al * 0.6; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3;
+      for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2 + state.t * 2; ctx.beginPath(); ctx.moveTo(W / 2 + Math.cos(a) * W * 0.35, H / 2 + Math.sin(a) * H * 0.35); ctx.lineTo(W / 2 + Math.cos(a) * W, H / 2 + Math.sin(a) * H); ctx.stroke(); }
+      ctx.restore();
+    }
+  }
+  if (state.flash > 0) { ctx.globalAlpha = Math.min(0.7, state.flash * 1.4); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+  if (state.milestoneT > 0) {
+    const k = Math.min(1, (2.5 - state.milestoneT) * 3), sc = 1 + Math.sin(state.t * 10) * 0.06;
+    ctx.save(); ctx.translate(W / 2, H * 0.3); ctx.scale(sc * k, sc * k);
+    ctx.font = `bold ${H * 0.1}px "Microsoft JhengHei","Noto Sans TC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = H * 0.012; ctx.strokeStyle = '#b8002e'; ctx.strokeText(`🚑 救了 ${state.rescued} 台車！`, 0, 0); ctx.fillStyle = '#ffeb3b'; ctx.fillText(`🚑 救了 ${state.rescued} 台車！`, 0, 0);
+    ctx.restore();
+  }
+  if (caption.t > 0) {
+    const v = Math.min(W, H);
+    ctx.globalAlpha = Math.min(1, caption.t * 2);
+    ctx.font = `bold ${v * 0.05}px "Microsoft JhengHei","Noto Sans TC",sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(caption.text).width + v * 0.06;
+    ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.beginPath(); ctx.roundRect(W / 2 - tw / 2, H * 0.88 - v * 0.04, tw, v * 0.08, v * 0.04); ctx.fill();
+    ctx.fillStyle = '#1d3a5a'; ctx.fillText(caption.text, W / 2, H * 0.88);
+    ctx.globalAlpha = 1;
+  }
+}
+function draw() {
+  shakeY = state.shake > 0 ? (Math.random() - 0.5) * state.shake * H * 0.004 : 0;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBackground();
+  drawRoad();
+  // 遠→近排序：景物、跑道物件、玩家
+  const list = [];
+  for (const sc of scenery) list.push({ z: sc.z, f: () => drawScenery(sc) });
+  for (const it of items) list.push({ z: it.z, f: () => drawItem(it) });
+  list.push({ z: Z_PLAYER, f: drawPlayer });
+  list.sort((a, b) => b.z - a.z);
+  for (const d of list) d.f();
+  if (state.phase === 'countdown') {
+    // 示範：左右箭頭 + 嗶寶跟著滑（-1 → 0 → 1）
+    const k = (state.t % 3.6) / 3.6, seq = [-1, 0, 1, 0];
+    const i = Math.floor(k * 4), f = k * 4 - i, a = seq[i], b = seq[(i + 1) % 4];
+    state.targetLane = a + (b - a) * Math.min(1, f * 1.6);
+    const p = proj(0, Z_PLAYER), bounce = Math.sin(state.t * 6) * 0.05 * p.s;
+    ctx.save(); ctx.globalAlpha = 0.9; ctx.font = `bold ${0.5 * p.s}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#1d3a5a'; ctx.lineWidth = 0.05 * p.s;
+    for (const [sx, t] of [[p.sx - 1.75 * p.s - bounce, '◀'], [p.sx + 1.75 * p.s + bounce, '▶']]) { ctx.strokeText(t, sx, p.sy - 0.6 * p.s); ctx.fillText(t, sx, p.sy - 0.6 * p.s); }
+    ctx.restore();
+  }
+  drawFx();
+  drawOverlay();
+}
+
+/* ================== HUD ================== */
+const hScore = document.getElementById('hScore'), hCoin = document.getElementById('hCoin'), hRescue = document.getElementById('hRescue'), hKm = document.getElementById('hKm');
+const hBarFill = document.getElementById('hudBarFill'), hBarText = document.getElementById('hudBarText'), hBarWrap = document.getElementById('hudBarWrap'), hMag = document.getElementById('hudMag');
+function syncHUD() {
+  if (state.phase !== 'play') return;
+  hScore.textContent = '🏆 ' + state.score;
+  hCoin.textContent = '🍬 ' + state.coins;
+  hRescue.textContent = '🚑 ' + state.rescued + (state.best > state.rescued ? ' / 最佳 ' + state.best : '');
+  hKm.textContent = state.dist.toFixed(1) + ' KM';
+  hBarFill.style.width = (state.charge * 100) + '%';
+  hBarWrap.classList.toggle('full', state.charge >= 1 && state.robot <= 0);
+  if (state.robot > 0) hBarText.textContent = '🤖 機器人衝刺！ ' + state.robot.toFixed(1) + 's';
+  else if (state.charge >= 1) hBarText.textContent = state.mode === 'body' ? '✋ 雙手高舉變身！' : '👆 點上方變身！';
+  else hBarText.textContent = '變身能量';
+  hMag.textContent = magnetT > 0 ? '🧲 磁鐵 ' + magnetT.toFixed(1) + 's' : '';
+}
+
+/* ================== 主迴圈 ================== */
+function onResize() {
+  W = window.innerWidth; H = window.innerHeight; DPR = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  FOCAL = (0.86 - HORIZON) * H * Z_PLAYER / CAM_H;   // 讓玩家落在畫面高度 86%
+}
+window.addEventListener('resize', onResize);
+onResize();
+for (let i = 0; i < 4; i++) clouds.push({ x: Math.random() * 1.3 - 0.15, y: 0.03 + Math.random() * 0.2, h: 0.07 + Math.random() * 0.05, v: 0.012 + Math.random() * 0.012 });
+
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  if (state.phase !== 'menu') { update(dt, now); draw(); syncHUD(); }
+  requestAnimationFrame(loop);
+}
+loadArt().then(() => {
+  if (has('BG001')) document.getElementById('startBg').style.backgroundImage = 'url(pic/opt/BG001.webp?v=' + ART_VER + ')';
+});
+loadVoices();
+requestAnimationFrame(loop);
+
+// 測試勾子：分頁在背景時 rAF 不跑，用這個直接推進模擬（只給自動化驗證用，遊戲本身不呼叫）
+window.__dbg = { state, items, scenery, particles, fxs, IMG, say, get magnetT() { return magnetT; } };
+window.__sim = (sec, input = {}) => {
+  Object.assign(state, input);
+  if (input.armsUp != null) armsUp = input.armsUp;
+  if (input.tap) tapTransform = true;
+  const steps = Math.round(sec * 60);
+  for (let i = 0; i < steps; i++) update(1 / 60, performance.now() + i * 16.7);
+  draw();
+  return { phase: state.phase, lane: +state.laneX.toFixed(2), speed: +state.speed.toFixed(2), dist: +state.dist.toFixed(1), score: state.score, coins: state.coins, rescued: state.rescued, charge: +state.charge.toFixed(2), robot: +state.robot.toFixed(1), crash: +state.crash.toFixed(2), magnet: +magnetT.toFixed(1), items: items.map(it => ({ k: it.kind, l: +it.lane.toFixed(1), z: +it.z.toFixed(1), hit: it.hit, healed: it.healed })), scenery: scenery.length };
+};
+</script>
+</body>
+</html>

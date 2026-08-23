@@ -2,7 +2,7 @@
 # 終端機版「請 GPT 做設計」：用 Codex CLI 跑文字任務（企劃／場景設計／素材清單／設定圖），產出直接寫進遊戲資料夾
 #
 # 用法（Git Bash）：
-#   素材工作流/tools/gpt.sh "遊戲N-名稱" plan      # 做企劃   → plan.md
+#   素材工作流/tools/gpt.sh "遊戲N-名稱" plan      # 做企劃   → plan.md（codex 以最後回覆交全文，腳本存檔；Windows 沙箱不放行寫檔）
 #   素材工作流/tools/gpt.sh "遊戲N-名稱" scene     # 做場景設計 → scene.md
 #   素材工作流/tools/gpt.sh "遊戲N-名稱" assets    # 做素材清單 → assets.gpt.json（Claude 再補「輸出」欄轉成 assets.json）
 #   素材工作流/tools/gpt.sh "遊戲N-名稱" ref REF001 "挖土機角色設定圖：正側面主圖＋正面＋三個表情"   # 設定圖 → pic/_ref/REF001.png
@@ -22,13 +22,29 @@ run_text() { # $1=prompt $2=sandbox
   timeout 900 codex exec "$1" -C "$W" -s "$2" --skip-git-repo-check -o "$(cygpath -w "$OUT")" </dev/null >/dev/null 2>&1
   cat "$OUT"
 }
+# Windows 版 codex 的 workspace-write 沙箱實測不放行寫檔（patch rejected），所以文件類任務一律請它把「完整內容」當最後回覆，
+# 由這裡存檔；順手剝掉最外層的 ``` 圍欄。$1=prompt $2=目標檔名
+run_doc() {
+  timeout 900 codex exec "$1" -C "$W" -s read-only --skip-git-repo-check -o "$(cygpath -w "$OUT")" </dev/null >/dev/null 2>&1
+  python - "$(cygpath -w "$OUT")" "$(cygpath -w "$DIR/$2")" <<'PY'
+import sys,re
+s=open(sys.argv[1],encoding='utf-8').read().strip()
+m=re.match(r'^```[a-zA-Z]*\n(.*)\n```\s*$', s, re.S)
+if m: s=m.group(1)
+open(sys.argv[2],'w',encoding='utf-8').write(s+'\n')
+print(f'→ {sys.argv[2]}  ({len(s)} 字)')
+PY
+  head -c 400 "$DIR/$2"; echo; echo ...
+}
+FINAL='你的「最後一則回覆」必須是這份文件的完整內容本身（從第一行標題到最後一行），前後不要加任何說明、問候或程式碼圍欄；不要嘗試寫檔，工作區是唯讀的。'
+
 case "$TASK" in
   plan)
-    run_text "$DOCS 請做企劃：照 04 第五節的企劃書格式寫出完整 Markdown，直接寫成檔案 plan.md（覆蓋）。寫完用一行回報你寫了幾個章節。" workspace-write ;;
+    run_doc "$DOCS 請做企劃：照 04 第五節的企劃書格式寫出完整 Markdown。$FINAL" plan.md ;;
   scene)
-    run_text "$DOCS 請做場景設計：照 04 第六節格式，以 plan.md 為準，直接寫成檔案 scene.md（覆蓋）。寫完用一行回報。" workspace-write ;;
+    run_doc "$DOCS 請做場景設計：照 04 第六節格式，以 plan.md 為準，寫出完整 Markdown。$FINAL" scene.md ;;
   assets)
-    run_text "$DOCS 請做素材清單：照 04 第三節 schema，以 plan.md 與 scene.md 為準，輸出可直接 parse 的 JSON，直接寫成檔案 assets.gpt.json（覆蓋）。每個 prompt 都要引用對應的設定圖檔名（REFxxx.png），結尾一律加上洋紅底那句，輸出欄一律 {}。寫完用一行回報張數與批數。" workspace-write ;;
+    run_doc "$DOCS 請做素材清單：照 04 第三節 schema，以 plan.md 與 scene.md 為準，輸出可直接 parse 的 JSON。每個 prompt 都要引用對應的設定圖檔名（REFxxx.png），結尾一律加上洋紅底那句，輸出欄一律 {}。$FINAL" assets.gpt.json ;;
   ref)
     ID="$1"; DESC="$2"
     before=$(ls -d ~/.codex/generated_images/*/ 2>/dev/null | sort)

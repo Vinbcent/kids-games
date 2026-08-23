@@ -44,7 +44,7 @@ while IFS=$'\t' read -r id prompt; do
   png=$(ls -t "$newdir"*.png 2>/dev/null | head -1)
   if [ -z "$png" ]; then echo "   FAIL $id：沒有產出圖（看 $LOG）" | tee -a "$LOG"; fail=$((fail+1)); continue; fi
   dim=$(ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "$png"); w=${dim%,*}; h=${dim#*,}
-  if [ "$(( w<h ? w : h ))" -lt 900 ]; then echo "   FAIL $id：短邊 $w x $h 太小" | tee -a "$LOG"; fail=$((fail+1)); continue; fi
+  if [ "$(( w>h ? w : h ))" -lt 1000 ]; then echo "   FAIL $id：尺寸 $w x $h 太小" | tee -a "$LOG"; fail=$((fail+1)); continue; fi
   cp "$png" "$out" && echo "   OK   $id  ${w}x${h}" | tee -a "$LOG"; ok=$((ok+1))
 done < "$LOG.list"
 echo "完成：成功 $ok／失敗 $fail／跳過 $skip → $DIR/pic/_raw   （接著跑 build.ps1 去背縮圖）"

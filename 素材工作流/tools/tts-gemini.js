@@ -20,8 +20,10 @@ let key = process.env.GEMINI_API_KEY;
 if (!key) { const f = path.join(os.homedir(), '.gemini_api_key'); if (fs.existsSync(f)) key = fs.readFileSync(f, 'utf8').trim(); }
 if (!key) { console.error('找不到 API key：設 GEMINI_API_KEY 或建立 ~/.gemini_api_key'); process.exit(2); }
 
-const SCENE = "You are the cheerful narrator of a toddler's excavator video game, talking to a 4-year-old. Playful, warm, energetic, clearly articulated, like a friendly kids' TV host.";
 const lines = JSON.parse(fs.readFileSync(linesPath, 'utf8'));
+// 場景描述：lines.json 可用 "_scene" 覆寫（各遊戲不同）；沒寫就用通用版
+const SCENE = lines._scene || "You are the cheerful narrator of a toddler's video game, talking to a 4-year-old. Playful, warm, energetic, clearly articulated, like a friendly kids' TV host.";
+delete lines._scene;
 fs.mkdirSync(outDir, { recursive: true });
 
 function pcmToWav(pcm, rate = 24000) {   // L16 mono → WAV
@@ -44,7 +46,7 @@ async function gen(model, id, { text, dir }) {
   if (!r.ok) { const t = await r.text(); const e = new Error(`${model} HTTP ${r.status}: ${t.slice(0, 200)}`); e.status = r.status; throw e; }
   const j = await r.json();
   const part = j.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-  if (!part) throw new Error('回應裡沒有音訊: ' + JSON.stringify(j).slice(0, 200));
+  if (!part) { const e = new Error('回應裡沒有音訊: ' + JSON.stringify(j).slice(0, 200)); e.noAudio = true; throw e; }
   const mime = part.inlineData.mimeType || '';
   const rate = +(mime.match(/rate=(\d+)/)?.[1] || 24000);
   return { buf: Buffer.from(part.inlineData.data, 'base64'), mime, rate };
@@ -55,13 +57,15 @@ async function gen(model, id, { text, dir }) {
   for (const [id, spec] of Object.entries(lines)) {
     const mp3 = path.join(outDir, id + '.mp3');
     if (fs.existsSync(mp3)) { skip++; continue; }
-    let out;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try { out = await gen(model, id, spec); break; }
+    let out, safe = false;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try { out = await gen(model, id, spec, safe); break; }
       catch (e) {
         if (e.status === 404 && model !== MODELS[1]) { console.log(`  ${model} 不存在，改用 ${MODELS[1]}`); model = MODELS[1]; continue; }
+        if (e.status === 429 && attempt >= 1 && model !== MODELS[1]) { console.log(`  ${id}: 429 額度用完，改用 ${MODELS[1]}（額度分開算）`); model = MODELS[1]; continue; }
         if (e.status === 429 || e.status >= 500) { const wait = 15 * (attempt + 1); console.log(`  ${id}: ${e.message.slice(0, 80)} → 等 ${wait}s 重試`); await new Promise(r => setTimeout(r, wait * 1000)); continue; }
-        throw e;
+        if (e.noAudio) { console.log(`  ${id}: ${e.message.slice(0, 120)} → ${safe ? '再試一次' : '改用中性情境重試'}`); safe = true; continue; }   // SAFETY／空回應：換中性情境，不中止整批
+        console.log(`  ${id}: ${e.message.slice(0, 120)}`); break;
       }
     }
     if (!out) { console.log(`FAIL ${id}`); continue; }

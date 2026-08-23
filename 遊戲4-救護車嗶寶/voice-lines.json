@@ -1,0 +1,22 @@
+{
+  "_scene": "You are the cheerful narrator of a toddler's ambulance rescue video game, like an energetic rescue-team buddy talking to a 4-year-old. Playful, warm, energetic, clearly articulated, like a friendly kids' TV host. Short sentences with clear emotion.",
+  "s1":  { "text": "Three, two, one... rescue time!", "dir": "Count 'Three... two... one...' slowly and clearly with a pause between each number, then burst out 'rescue time!' fast and super excited, rising pitch." },
+  "s2":  { "text": "Move side to side to change lanes!", "dir": "Friendly and inviting, medium pace, sing-song 'side to side', rising intonation at the end." },
+  "s3":  { "text": "A little car needs help!", "dir": "Quick and alert like spotting something, a little gasp of concern but still upbeat, pitch rising on 'help'." },
+  "s4":  { "text": "Great rescue!", "dir": "Big proud cheer, fast and bright, like celebrating a goal." },
+  "s5":  { "text": "You made them feel better!", "dir": "Warm and sweet, medium pace, smiling, relieved and proud." },
+  "s6":  { "text": "Super ambulance!", "dir": "Shout it like a superhero announcement, stretched 'Suuuper', big and fun." },
+  "s7":  { "text": "Hero driver!", "dir": "Short admiring cheer, high energy, giggly at the end." },
+  "s8":  { "text": "Sweet heart! Double points!", "dir": "Delighted surprise on 'Sweet heart!', then fast and bouncy on 'Double points!'." },
+  "s9":  { "text": "Magnet power!", "dir": "Dramatic and fun, stretched 'Maaagnet', then a punchy 'power!'." },
+  "s10": { "text": "Power is full! Hands up!", "dir": "Excited announcement on 'Power is full!', then an encouraging, clear instruction 'Hands up!' with rising pitch." },
+  "s11": { "text": "Hands up when you're ready!", "dir": "Gentle, patient and playful, medium pace, no pressure, smiling." },
+  "s12": { "text": "Robot rescue mode! Go, go, go!", "dir": "Slightly robotic-fun on 'Robot rescue mode!', then fast chanting 'Go, go, go!' each louder than the last." },
+  "s13": { "text": "Boom! Clear the way!", "dir": "A big explosive 'Boom!', then fast and triumphant." },
+  "s14": { "text": "Back to ambulance mode!", "dir": "Cheerful and a little out of breath like after a fun run, medium pace, happy." },
+  "s15": { "text": "Oops! Silly spin!", "dir": "A surprised 'Oops!', then giggling through 'Silly spin!', clearly laughing, not worried." },
+  "s16": { "text": "All good! Keep going!", "dir": "Reassuring and bouncy, quick, encouraging like cheering someone on." },
+  "s17": { "text": "Five cars are safe! Hooray!", "dir": "Slow and proud on 'Five cars are safe!', then a huge joyful 'Hooray!' rising high." },
+  "s18": { "text": "Too close! Step back, please!", "dir": "Clear and firm but kind, slower pace, like a caring grown-up, slight pause before 'please'." },
+  "s19": { "text": "Perfect! Let's go!", "dir": "Relieved and bright, fast and happy, rising at the end." }
+}

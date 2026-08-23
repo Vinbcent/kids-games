@@ -390,3 +390,33 @@ Project 對話 ──blob <a download>──► Downloads ──shell──► r
 - 鏤空素材（柵欄縫、眼窩、肋骨縫）邊緣 flood-fill 到不了 → `tools/chroma-global.py <遊戲> <ID> [容差]` 全域洋紅去背。
 - GPT 的文件產出在 **Canvas**（`.ProseMirror`）、JSON 在**唯讀 CodeMirror**（虛擬捲動）——取回方式見 memory／`game3-remake-insights`。
 - 工作分頁在背景時 `setTimeout` 被節流，頁內等待壓在 15 秒內；遊戲驗證用程式內 `__sim()` 勾子直接推進 update()。
+
+---
+
+## ⌨️ 終端機版（2026-08-23 起的標準做法）
+
+**分工不變**（GPT 企劃／場景／設定圖／素材設計／生圖、Claude 程式、Gemini 旁白），但**全部改在終端機跑，不再用瀏覽器自動化**。
+三個訂閱各 $20 就夠：Codex CLI 用 ChatGPT Plus 登入（`codex login`，不用 API key）、Claude Code 用 Claude Pro、Gemini TTS 走 API 免費級（不扣款、有每日次數）。
+
+| 以前（瀏覽器） | 現在（終端機） |
+|---|---|
+| ChatGPT Project Instructions | 遊戲資料夾的 **`AGENTS.md`**（codex 自動讀；角色、畫風、鐵則、規格路徑） |
+| Project Sources（六份規格＋企劃＋設定圖） | **repo 檔案本身**：`project-resources/*.md`、`遊戲N/plan.md`、`scene.md`、`assets.json`；設定圖 `pic/_ref/REF*.png` 用 `-i` 附上 |
+| 在對話裡貼 prompt 生圖、blob 下載、靠下載順序對 ID | `tools/gen-images.sh`：讀 `assets.json` 逐張 `codex exec '$imagegen …'`，圖直接存成 `pic/_raw/<ID>.png` |
+| Canvas 文件用 DOM 轉 Markdown 抓回 | `tools/gpt.sh <遊戲> plan|scene|assets|ref|ask`：codex 直接把檔案寫進遊戲資料夾 |
+| AI Studio 網頁 TTS（下載被擋、分頁節流） | `tools/tts-gemini.js <遊戲>/voice-lines.json <遊戲>/snd`（金鑰放 `~/.gemini_api_key`，不進 repo） |
+
+一輪流程：
+```
+1. 複製 遊戲3 的 AGENTS.md 到新遊戲資料夾，改【畫風】；寫 G?-現況與重製方向.md（引擎、素材預算）
+2. tools/gpt.sh 遊戲N plan   → 看 plan.md
+3. tools/gpt.sh 遊戲N scene  → 看 scene.md
+4. tools/gpt.sh 遊戲N ref REF001 "角色設定圖描述" / REF101 "場景設定圖描述" → 看 pic/_ref
+5. tools/gpt.sh 遊戲N assets → Claude 補「輸出」欄轉成 assets.json
+6. tools/gen-images.sh 遊戲N → tools/build.ps1 → contact sheet 驗收（鏤空素材再跑 chroma-global.py）
+7. voice-lines.json（台詞＋演出指示）→ tools/tts-gemini.js → snd/*.mp3
+8. Claude 接線、改版號、推上線，你在電視上玩
+```
+
+實測（2026-08-23）：`codex exec` 文字任務 20~60 秒；`$imagegen` 一張約 60 秒、1254×1254；`-i REF001.png` 附設定圖後畫風一致；
+**prompt 要放在 `-i` 前面**（`-i` 會把後面的參數都當圖檔），路徑用 `cygpath -w` 轉成 Windows 格式，每個呼叫加 `</dev/null`。

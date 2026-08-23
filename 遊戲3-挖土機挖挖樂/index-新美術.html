@@ -122,7 +122,7 @@
    - 引擎：2D Canvas，橫式單畫面、鏡頭不動、上下分層（天空／工地台／馬路／地底剖面）
    - 原則：任何素材載不到就退回程式繪圖，遊戲永遠能玩
    ================================================================ */
-const ART_VER = 3;
+const ART_VER = 4;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -163,7 +163,7 @@ const ART = {
   VH401: { file: 'VH401.webp' }, VH402: { file: 'VH402.webp' },
   VH501: { file: 'VH501.webp' }, VH502: { file: 'VH502.webp' },   // 警車（原版就有，重製時補回）
   VH601: { file: 'VH601.webp' }, VH602: { file: 'VH602.webp' },   // 跑車（超快很難挖到）
-  TP001: { file: 'TP001.webp' }, TP002: { file: 'TP002.webp' },
+  TP001: { file: 'TP001.webp' }, TP002: { file: 'TP002.webp' }, TP003: { file: 'TP003.webp' },   // TP003 三角錐：終端機版 Codex 生圖第一張
   FX001: { file: 'FX001.webp' }, FX002: { file: 'FX002.webp' }, FX003: { file: 'FX003.webp' },
   FX004: { file: 'FX004.webp' }, FX005: { file: 'FX005.webp' }, FX006: { file: 'FX006.webp' },
   FX007: { file: 'FX007.webp' }, FX008: { file: 'FX008.webp' }, FX009: { file: 'FX009.webp' },
@@ -1339,6 +1339,7 @@ function draw() {
   // 馬路帶 + 工地台（高架橋在馬路「後面」，車子要畫在它們前面才不會被橋擋住）
   if (IMG.BG000) { drawBand('road'); drawBand('deck'); }
   if (has('TP002')) { pic('TP002', v * 0.12, H * 0.36 + v * 0.005, v * 0.055, { anchorBottom: true }); pic('TP002', W - v * 0.12, H * 0.36 + v * 0.005, v * 0.055, { anchorBottom: true, flip: true }); }
+  if (has('TP003')) { pic('TP003', v * 0.22, H * 0.36 + v * 0.004, v * 0.045, { anchorBottom: true }); pic('TP003', W - v * 0.22, H * 0.36 + v * 0.004, v * 0.045, { anchorBottom: true }); }
   // 坑口延伸到馬路的部分（車輪落下的視覺）
   for (const h of holes) if (h.depth > 0.42) {
     const x = h.x * W, mw = h.w * W;

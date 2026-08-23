@@ -133,7 +133,7 @@
    - 美術：Codex 生成素材（pic/opt/*.webp），企劃 plan.md、場景 scene.md、清單 assets.json
    - 旁白：Gemini TTS 音檔（snd/*.mp3），缺檔退回瀏覽器語音
    - 體感：與原版 index.html 完全相同（左右移動換道、雙手高舉變身） */
-const ART_VER = 2;
+const ART_VER = 3;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = window.innerWidth, H = window.innerHeight, DPR = 1;
@@ -523,7 +523,7 @@ const COIN_KINDS = [
   { sub: 'candy', id: 'IT001', emo: '🍬' }, { sub: 'heart', id: 'IT002', emo: '❤️' },
   { sub: 'star', id: 'IT003', emo: '⭐' }, { sub: 'cupcake', id: 'IT004', emo: '🧁' },
 ];
-const OB_KINDS = [{ id: 'OB001', emo: '🚧', h: 0.85 }, { id: 'OB002', emo: '🪨', h: 0.75 }, { id: 'OB003', emo: '🚧', h: 0.9, wide: true }];
+const OB_KINDS = [{ id: 'OB001', emo: '🚧', h: 0.55 }, { id: 'OB002', emo: '🪨', h: 0.48 }, { id: 'OB003', emo: '🚧', h: 0.4, wide: true }];   // 護欄長寬比 2.45 → 寬 0.98，剛好一個車道
 const HURT_KINDS = [{ hurt: 'VH101', ok: 'VH102', emo: '🚗' }, { hurt: 'VH201', ok: 'VH202', emo: '🚙' }, { hurt: 'VH301', ok: 'VH302', emo: '🚕' }];
 let hurtIdx = 0, lastRowKind = '';
 function pushItem(it) { it.z = Z_FAR - 2; it.bob = Math.random() * 6; it.hit = false; items.push(it); }
@@ -616,7 +616,7 @@ function collect(it) {
   } else if (it.kind === 'hurt') {
     state.rescued++; state.score += 50; addCharge(0.3); sfxRescue();
     it.healed = true; it.ht = 0; it.hit = false; it.z = Math.max(it.z, Z_PLAYER + 0.5);   // 治好後固定在玩家前方，接著開走
-    burstFx('FX003', '✚', p.sx, p.sy - 1.5 * p.s, 0.95 * p.s, { life: 1.0, rise: 0.5 });
+    burstFx('FX003', '✚', p.sx, p.sy - 1.2 * p.s, 0.85 * p.s, { life: 1.0, rise: 0.5 });
     burst(p.sx, p.sy - 0.5 * p.s, 10, ['❤️', '✨', '🩹'], { up: 4 });
     fireworks(2); state.slow = 0.5;
     if (state.rescued % 5 === 0) { sfxMilestone(); say('s17', { gap: 0, priority: 2 }); state.milestoneT = 2.5; fireworks(state.rescued % 10 === 0 ? 6 : 4); }
@@ -816,11 +816,11 @@ function drawItem(it) {
   const fog = Math.min(0.5, Math.max(0, (it.z - 30) / (Z_FAR - 30)) * 0.6);
   if (it.kind === 'coin') {
     const fl = Math.sin(it.bob) * 0.12 + 0.25;
-    ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.32 * p.s, 0.08 * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
-    sprite(it.ck.id, it.ck.emo, p.sx, p.sy - fl * p.s, 0.7 * p.s, { anchorBottom: true, alpha: 1 - fog });
+    ctx.globalAlpha = 0.25; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.24 * p.s, 0.06 * p.s, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    sprite(it.ck.id, it.ck.emo, p.sx, p.sy - fl * p.s, 0.5 * p.s, { anchorBottom: true, alpha: 1 - fog });
   } else if (it.kind === 'magnet') {
     const fl = Math.sin(it.bob) * 0.12 + 0.25;
-    sprite('IT005', '🧲', p.sx, p.sy - fl * p.s, 0.8 * p.s, { anchorBottom: true, alpha: 1 - fog });
+    sprite('IT005', '🧲', p.sx, p.sy - fl * p.s, 0.55 * p.s, { anchorBottom: true, alpha: 1 - fog });
   } else if (it.kind === 'cone') {
     const y = it.smashed ? it.y : 0;
     sprite(it.ob.id, it.ob.emo, p.sx, p.sy - y * p.s, it.ob.h * p.s, { anchorBottom: !it.smashed, rot: it.rot || 0, alpha: it.smashed ? Math.max(0, 1 - it.st / 1.3) : 1 - fog });
@@ -829,7 +829,7 @@ function drawItem(it) {
     const jump = it.healed ? Math.abs(Math.sin(it.ht * 9)) * 0.35 * Math.max(0, 1 - it.ht / 2) : 0;
     const wob = it.healed ? 0 : Math.sin(it.bob * 1.3) * 0.04;
     const al = it.healed ? Math.max(0, 1 - Math.max(0, it.ht - 3)) : 1 - fog;
-    sprite(id, it.k.emo, p.sx, p.sy - jump * p.s, 1.1 * p.s, { anchorBottom: true, rot: wob, alpha: al });
+    sprite(id, it.k.emo, p.sx, p.sy - jump * p.s, 0.8 * p.s, { anchorBottom: true, rot: wob, alpha: al });
     if (!it.healed) {
       // 目標車道光圈（畫在車底，先畫）＋ SOS 大紅牌（程式畫，脈動不閃滅，遠處也看得到）
       drawSOS(p, it);
@@ -840,9 +840,9 @@ function drawSOS(p, it) {
   const pulse = 1 + 0.12 * Math.sin(state.t * 7);
   // 車道光圈：亮黃、脈動，越近越明顯
   const k = Math.min(1, Math.max(0, (Z_PLAYER + 26 - it.z) / 20));
-  if (k > 0) { ctx.globalAlpha = (0.3 + 0.2 * Math.sin(state.t * 6)) * k; ctx.fillStyle = '#ffee58'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.75 * p.s * pulse, 0.2 * p.s * pulse, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+  if (k > 0) { ctx.globalAlpha = (0.3 + 0.2 * Math.sin(state.t * 6)) * k; ctx.fillStyle = '#ffee58'; ctx.beginPath(); ctx.ellipse(p.sx, p.sy, 0.6 * p.s * pulse, 0.16 * p.s * pulse, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
   // SOS 牌：最小也要看得清楚（遠處用螢幕像素下限），白邊紅底白字
-  const hh = Math.max(H * 0.055, 0.42 * p.s) * pulse, ww = hh * 1.9, cy = p.sy - 1.35 * p.s - hh * 0.6, r = hh * 0.3;
+  const hh = Math.max(H * 0.055, 0.38 * p.s) * pulse, ww = hh * 1.9, cy = p.sy - 1.0 * p.s - hh * 0.6, r = hh * 0.3;
   ctx.save();
   ctx.translate(p.sx, cy);
   ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.roundRect(-ww / 2 - hh * 0.1, -hh / 2 - hh * 0.1, ww + hh * 0.2, hh + hh * 0.2, r + hh * 0.1); ctx.fill();

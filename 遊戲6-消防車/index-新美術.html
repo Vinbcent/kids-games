@@ -100,7 +100,7 @@
            坐滿 5 隻→雙手高舉→全員水花派對→休息站→新一輪。沒有失敗、沒有時間壓力。
    - 體感：整個人左右站位（主操作）、蹲下（屋頂）、雙手高舉（派對）——三個訊號分階段隔離。
    - 美術：Codex 生成素材（pic/opt/*.webp）；旁白 Gemini TTS（snd/*.mp3），缺檔退回瀏覽器語音。 */
-const ART_VER = 1;
+const ART_VER = 2;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = window.innerWidth, H = window.innerHeight, DPR = 1;
@@ -112,6 +112,7 @@ const ART = {
   TP001: { file: 'TP001.webp' }, TP002: { file: 'TP002.webp' }, TP003: { file: 'TP003.webp' }, TP004: { file: 'TP004.webp' }, TP005: { file: 'TP005.webp' },
   TP006: { file: 'TP006.webp' }, TP007: { file: 'TP007.webp' },
   CH101: { file: 'CH101.webp' }, CH201: { file: 'CH201.webp' }, CH301: { file: 'CH301.webp' }, CH401: { file: 'CH401.webp' }, CH501: { file: 'CH501.webp' }, CH601: { file: 'CH601.webp' },
+  CH102: { file: 'CH102.webp' }, CH202: { file: 'CH202.webp' }, CH302: { file: 'CH302.webp' }, CH402: { file: 'CH402.webp' }, CH502: { file: 'CH502.webp' }, CH602: { file: 'CH602.webp' },   // 等待救援的緊張影格
   FX001: { file: 'FX001.webp' }, FX002: { file: 'FX002.webp' }, FX003: { file: 'FX003.webp' }, FX004: { file: 'FX004.webp' }, FX005: { file: 'FX005.webp' },
   FX006: { file: 'FX006.webp' }, FX007: { file: 'FX007.webp' }, FX008: { file: 'FX008.webp' }, FX009: { file: 'FX009.webp' },
 };
@@ -127,8 +128,8 @@ const HOUSES = {   // 依實圖量的窗戶中心
 };
 const LADDER = { a: [0.03, 0.92], b: [0.90, 0.15] };   // VH003 基座端 → 籃子端（相對圖片）
 const ANIMALS = [
-  { id: 'CH101', emo: '🐱', name: '小貓' }, { id: 'CH201', emo: '🐶', name: '小狗' }, { id: 'CH301', emo: '🐰', name: '小兔' },
-  { id: 'CH401', emo: '🐥', name: '小鴨' }, { id: 'CH501', emo: '🦔', name: '小刺蝟' }, { id: 'CH601', emo: '🐿️', name: '小松鼠' },
+  { id: 'CH101', worried: 'CH102', emo: '🐱', name: '小貓' }, { id: 'CH201', worried: 'CH202', emo: '🐶', name: '小狗' }, { id: 'CH301', worried: 'CH302', emo: '🐰', name: '小兔' },
+  { id: 'CH401', worried: 'CH402', emo: '🐥', name: '小鴨' }, { id: 'CH501', worried: 'CH502', emo: '🦔', name: '小刺蝟' }, { id: 'CH601', worried: 'CH602', emo: '🐿️', name: '小松鼠' },
 ];
 const IMG = {};
 function loadArt() {
@@ -714,7 +715,7 @@ function update(dt, nowMs) {
   for (const f of state.fireworks) f.t += dt;
   state.fireworks = state.fireworks.filter(f => f.t < 1.2);
 
-  for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += H * 0.9 * dt; p.life -= dt; p.rot += p.vr * dt; if (p.life <= 0) particles.splice(i, 1); }
+  for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.x += p.vx * dt; p.y += p.vy * dt; if (p.max < 1.2) p.vy += H * 0.9 * dt; p.life -= dt; p.rot += p.vr * dt; if (p.life <= 0) particles.splice(i, 1); }
   for (let i = fxs.length - 1; i >= 0; i--) { const f = fxs[i]; f.t += dt; if (f.t > f.life) fxs.splice(i, 1); }
 }
 function seatPos(i) {
@@ -772,18 +773,28 @@ function drawTargetWindow() {
     ctx.fillRect(x - TH() * 0.07, ay - TH() * 0.22, TH() * 0.14, TH() * 0.24); ctx.strokeRect(x - TH() * 0.07, ay - TH() * 0.22, TH() * 0.14, TH() * 0.24);
     ctx.restore();
   }
-  // 火苗（窗口）
+  // 火苗（窗口）：暖色光暈脈動＋黑煙上飄，賣一點「危險感」
   if (!tg.roof && state.fire > 0) {
     const id = state.fireHit ? 'FX002' : 'FX001', fb = state.fireHit ? '😳' : '🔥';
-    const sc = (0.22 + 0.04 * Math.sin(state.t * 9)) * (0.4 + 0.6 * state.fire);
+    const sc = (0.26 + 0.05 * Math.sin(state.t * 9)) * (0.4 + 0.6 * state.fire);
     const wob = state.fireHit ? Math.sin(state.t * 30) * 0.15 : Math.sin(state.t * 4) * 0.08;
-    sprite(id, fb, x + TH() * 0.18, y + TH() * 0.05, TH() * sc * 1.2, { anchorBottom: true, rot: wob });
+    const fx = x + TH() * 0.18, fy = y + TH() * 0.05;
+    if (!state.fireHit) {
+      const g = ctx.createRadialGradient(fx, fy - TH() * 0.15, 0, fx, fy - TH() * 0.15, TH() * (0.4 + 0.08 * Math.sin(state.t * 7)));
+      g.addColorStop(0, 'rgba(255,140,0,.4)'); g.addColorStop(1, 'rgba(255,140,0,0)');
+      ctx.fillStyle = g; ctx.fillRect(fx - TH() * 0.55, fy - TH() * 0.7, TH() * 1.1, TH() * 1.1);
+      if (Math.random() < 0.06) particles.push({ x: fx + (Math.random() - 0.5) * TH() * 0.15, y: fy - TH() * 0.3, vx: (Math.random() - 0.5) * H * 0.02, vy: -H * (0.05 + Math.random() * 0.04), life: 1.4, max: 1.4, txt: Math.random() < 0.6 ? '💨' : '🔸', sz: H * 0.03, rot: 0, vr: 1.5 });
+    }
+    sprite(id, fb, fx, fy, TH() * sc * 1.2, { anchorBottom: true, rot: wob });
   }
-  // 小動物
+  // 小動物：等待時用緊張影格（微微發抖），被接住（roofDrop 落到氣墊後）就切回開心版
   if (state.animalVis === true) {
     const p = state.animalPos, bob = Math.sin(state.t * 4) * TH() * 0.02;
-    const wave = (state.step === 'seek' || state.step === 'roofSquat' || state.step === 'roofMove') ? Math.sin(state.t * 6) * 0.08 : 0;
-    sprite(tg.animal.id, tg.animal.emo, p.x - (tg.roof ? 0 : TH() * 0.12), p.y + TH() * 0.12 + bob, TH() * (state.step === 'roofDrop' ? 0.4 : 0.3), { anchorBottom: true, rot: wave + (p.rot || 0) });
+    const waiting = ['seek', 'lock', 'spray', 'ladderOut', 'roofMove', 'roofSquat', 'roofHold'].includes(state.step) || (state.step === 'roofDrop' && state.stepT < 0.7);
+    const id = waiting ? (tg.animal.worried || tg.animal.id) : tg.animal.id;
+    const tremble = waiting ? Math.sin(state.t * 22) * 0.035 : 0;
+    const wave = waiting ? 0 : Math.sin(state.t * 6) * 0.08;
+    sprite(id, tg.animal.emo, p.x - (tg.roof ? 0 : TH() * 0.12) + (waiting ? Math.sin(state.t * 18) * TH() * 0.008 : 0), p.y + TH() * 0.12 + bob, TH() * (state.step === 'roofDrop' ? 0.4 : 0.3), { anchorBottom: true, rot: tremble + wave + (p.rot || 0) });
   }
 }
 function drawTruck() {

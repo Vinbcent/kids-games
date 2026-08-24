@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a2a">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🚀 超級火箭冒險（新美術）</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a2a; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.5); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  #startOverlay { background: radial-gradient(ellipse at 50% 30%, #1a1a5e 0%, #0a0a2a 70%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; text-shadow: 0 0 30px #6688ff; }
+  #startOverlay .rocket-big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: float 2.5s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-1.5vmin) } }
+  .btn {
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.35);
+  }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.35); }
+  #btnBody  { background: linear-gradient(180deg, #ff8a00, #ff4e00); }
+  #btnTouch { background: linear-gradient(180deg, #00b8ff, #0066ff); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #aab; max-width: 88%; line-height: 1.5; }
+
+  #loadingOverlay { background: rgba(10,10,42,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff8800;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🛸</div>
+  <p id="loadingText">正在準備太空任務…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="rocket-big">🚀</div>
+  <h1>超級火箭冒險</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">用身體玩：把手機放在電視上方、鏡頭朝向自己。<br>左右移動控制火箭、雙手舉高衝刺；一路收集星星，越飛越高！<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const ART_VER = 1;
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+const VMIN = () => Math.min(W, H);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+const RY = () => H * 0.72;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const pick = a => a[Math.floor(Math.random() * a.length)];
+
+/* ================== 素材 ================== */
+const ART = {};
+for (let i = 1; i <= 12; i++) ART['CH' + String(i).padStart(3, '0')] = {};
+for (const id of ['IT001', 'IT002', 'OB001', 'BG001', 'BG002',
+  'FX001', 'FX002', 'FX003', 'FX004', 'FX005', 'FX006', 'FX007', 'FX008',
+  'FX101', 'FX102', 'FX103', 'FX104', 'FX105', 'FX106', 'FX107']) ART[id] = {};
+const IMG = {};
+function loadArt() {
+  return Promise.all(Object.keys(ART).map(id => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[id] = im; ART[id].ar = im.naturalWidth / im.naturalHeight; res(); };
+    im.onerror = () => { IMG[id] = null; res(); };
+    im.src = 'pic/opt/' + id + '.webp?v=' + ART_VER;
+  })));
+}
+const has = id => !!IMG[id];
+function pic(id, cx, cy, h, { flip = false, rot = 0, alpha = 1, w = null, sx = 1, sy = 1 } = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let ww = w != null ? w : h * ART[id].ar;
+  if (w != null) h = w / ART[id].ar;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  ctx.scale(sx, sy);
+  ctx.drawImage(im, -ww / 2, -h / 2, ww, h);
+  ctx.restore();
+  return true;
+}
+function emo(txt, cx, cy, h, { rot = 0, alpha = 1, flip = false } = {}) {
+  ctx.save(); ctx.globalAlpha *= alpha;
+  ctx.translate(cx, cy); if (rot) ctx.rotate(rot); if (flip) ctx.scale(-1, 1);
+  ctx.font = `${h * 0.9}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(txt, 0, 0); ctx.restore();
+}
+function sprite(id, fallback, cx, cy, h, opt) { if (!pic(id, cx, cy, h, opt)) emo(fallback, cx, cy, h, opt); }
+
+/* ================== 音效（Web Audio 合成）＋ 音訊衛生（全系列共用補丁） ================== */
+let AC = null, MASTER = null, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = []; try { speechSynthesis.cancel(); } catch (e) {} if (curVoice) { try { curVoice.pause(); } catch (e) {} } }
+    else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() { if (!AC) { AC = new (window.AudioContext || window.webkitAudioContext)(); audioGuardInstall(); } }
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweep(f0, f1, dur, type, vol, when = 0) {
+  if (!audioCanPlay()) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, AC.currentTime + when);
+  o.frequency.exponentialRampToValueAtTime(f1, AC.currentTime + when + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur + 0.05);
+  o.connect(g); g.connect(AUDIO_DEST()); audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.1);
+}
+function noiseLoop(filterType, freq, vol) {
+  let src = null, gain = null, filt = null;
+  const Hd = {
+    on() {
+      if (!AC || src) return;
+      const buf = AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      src = AC.createBufferSource(); src.buffer = buf; src.loop = true;
+      filt = AC.createBiquadFilter(); filt.type = filterType; filt.frequency.value = freq;
+      gain = AC.createGain(); gain.gain.value = 0;
+      src.connect(filt); filt.connect(gain); gain.connect(AUDIO_DEST());
+      src.start();
+      gain.gain.linearRampToValueAtTime(vol, AC.currentTime + 0.3);
+    },
+    setVol(v) { if (gain) gain.gain.setTargetAtTime(v, AC.currentTime, 0.1); },
+    off() { if (!src) return; gain.gain.linearRampToValueAtTime(0, AC.currentTime + 0.2); const n = src; src = null; setTimeout(() => { try { n.stop(); } catch (e) {} }, 300); },
+    get running() { return !!src; },
+  };
+  AUDIO_LOOPS.push(Hd); return Hd;
+}
+const boostSfx = noiseLoop('bandpass', 900, 0.22);
+const PENTA = [523, 587, 659, 784, 880, 1047];
+function sfxCollect() { const n = pick(PENTA); tone(n, 0.15, 'sine', 0.3); tone(n * 1.5, 0.2, 'sine', 0.2, 0.07); }
+function sfxGift() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.25, 'triangle', 0.25, i * 0.08)); }
+function sfxMilestone() { [659, 784, 880, 1047, 880, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'square', 0.12, i * 0.12)); }
+function sfxUpgrade() { sweep(300, 1400, 0.6, 'sawtooth', 0.14); [880, 1175, 1568].forEach((f, i) => tone(f, 0.25, 'triangle', 0.18, 0.5 + i * 0.1)); }
+function sfxFirework() { sweep(200, 1400, 0.25, 'sine', 0.12); tone(1800, 0.1, 'triangle', 0.1, 0.25); }
+function sfxHiccup() { sweep(500, 900, 0.1, 'square', 0.2); sweep(900, 250, 0.25, 'sine', 0.22, 0.12); }
+function sfxAlarm() { [0, 0.4, 0.8].forEach(d => { tone(880, 0.2, 'square', 0.28, d); tone(587, 0.2, 'square', 0.28, d + 0.2); }); }
+function sfxBoom() {
+  if (!audioCanPlay()) return;
+  const dur = 0.6;
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 600;
+  const g = AC.createGain(); g.gain.value = 0.6;
+  src.connect(f); f.connect(g); g.connect(AUDIO_DEST()); audioVoiceStart(); src.start();
+  tone(120, 0.5, 'sine', 0.4);
+}
+function sfxLaunch() {
+  if (!audioCanPlay()) return;
+  const dur = 2.2;
+  const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(200, AC.currentTime);
+  f.frequency.exponentialRampToValueAtTime(2000, AC.currentTime + dur);
+  const g = AC.createGain(); g.gain.value = 0.5;
+  src.connect(f); f.connect(g); g.connect(AUDIO_DEST()); audioVoiceStart(); src.start();
+}
+
+/* ================== 旁白（Gemini TTS mp3；備援 SpeechSynthesis） ================== */
+const LINES = {
+  s1:  ['Three, two, one, blast off!', '三、二、一，發射！'],
+  s2:  ['Move side to side!', '左右移動！'],
+  s3:  ['Hands up! Turbo boost!', '雙手舉高，衝刺！'],
+  s4:  ['Nice catch!', '接得好！'],
+  s5:  ['Surprise box!', '驚喜禮物盒！'],
+  s6:  ['Watch out! Silly bomb!', '小心壞壞炸彈！'],
+  s7:  ['Boom! Three silly spins!', '碰！翻滾三圈！'],
+  s8:  ['Up to the clouds!', '飛上雲海！'],
+  s9:  ['Rainbow sky! Rocket upgrade!', '彩虹高空，火箭升級！'],
+  s10: ['Hello, outer space!', '外太空，你好！'],
+  s11: ['Moon and candy planets!', '月球與糖果星球！'],
+  s12: ['You flew super high!', '你飛得超級高！'],
+  s13: ['Amazing flying!', '飛得太棒了！'],
+  s14: ['Rainbow pop!', '彩虹蹦出來！'],
+  s15: ['Ice cream storm!', '冰淇淋風暴！'],
+  s16: ['Puppy orbit!', '小狗繞火箭！'],
+  s17: ['A space friend!', '太空朋友來了！'],
+  s18: ['Rocket hiccup!', '火箭打嗝啦！'],
+  s19: ['Too close! Step back, please!', '太靠近了，請往後退！'],
+  s20: ["Great! Let's fly!", '很好，繼續飛！'],
+  s21: ['Come back, pilot!', '小小駕駛員，回來吧！'],
+};
+let caption = { text: '', t: 0 };
+const lastSay = {};
+let voiceCache = null;
+function pickVoice() {
+  if (voiceCache) return voiceCache;
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^en[-_]/i.test(v.lang));
+    if (!vs.length) return null;
+    const score = v => (/natural|neural/i.test(v.name) ? 40 : 0) + (/google/i.test(v.name) ? 30 : 0) + (/en[-_]US/i.test(v.lang) ? 10 : 0) + (v.localService ? 0 : 3);
+    vs.sort((a, b) => score(b) - score(a));
+    voiceCache = vs[0];
+  } catch (e) {}
+  return voiceCache;
+}
+try { speechSynthesis.addEventListener('voiceschanged', () => { voiceCache = null; pickVoice(); }); pickVoice(); } catch (e) {}
+const SND = {};
+let curVoice = null;
+function loadVoices() {
+  for (const k of Object.keys(LINES)) {
+    const a = new Audio('snd/' + k + '.mp3?v=' + ART_VER); a.preload = 'auto';
+    a.addEventListener('canplaythrough', () => { SND[k] = a; }, { once: true });
+    a.addEventListener('error', () => { SND[k] = null; }, { once: true });
+    a.load();
+  }
+}
+function say(key, { gap = 2500, priority = 1 } = {}) {
+  const line = LINES[key]; if (!line) return;
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  if (SND[key]) {
+    const busy = curVoice && !curVoice.paused && !curVoice.ended;
+    if (busy && priority < 2) return;
+    if (busy) { curVoice.pause(); curVoice.currentTime = 0; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    curVoice = SND[key]; curVoice.currentTime = 0; curVoice.volume = 1;
+    curVoice.play().catch(() => {});
+    caption = { text: line[1], t: 2.2 };
+    return;
+  }
+  try {
+    if (speechSynthesis.speaking && priority < 2) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(line[0]);
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = 1.05; u.pitch = Math.min(2, 1.25 + (Math.random() - 0.5) * 0.2); u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+  caption = { text: line[1], t: 2.2 };
+}
+
+/* ================== 高度層設定 ================== */
+/* heightStars（累積新星星）決定高度層：炸彈震掉持有星星，但高度永不倒退 */
+const BANDS = [
+  { name: '糖果城市', icon: '🏙️', at: 0,  sky: ['#4fa8e8', '#8fd0f4', '#c9ecfa'], decor: [['FX002', .35], ['FX003', .65]] },
+  { name: '鬆軟雲海', icon: '☁️', at: 10, sky: ['#3d97e0', '#7cc4ef', '#e8f6fd'], decor: [['FX001', .6], ['FX002', .25], ['FX003', .15]] },
+  { name: '彩虹高空', icon: '🌈', at: 20, sky: ['#2e7fd6', '#5fb3e8', '#aee4f8'], decor: [['FX004', .3], ['FX001', .7]] },
+  { name: '閃亮外太空', icon: '🪐', at: 30, sky: ['#0d1b5e', '#1c3a94', '#3a63c4'], decor: [['FX007', .5], ['FX005', .5]] },
+  { name: '月球糖果星系', icon: '🌕', at: 40, sky: ['#101347', '#232a7a', '#3f55b5'], decor: [['FX006', .35], ['FX008', .4], ['FX007', .15], ['FX005', .1]] },
+];
+const bandOf = hs => hs >= 40 ? 4 : hs >= 30 ? 3 : hs >= 20 ? 2 : hs >= 10 ? 1 : 0;
+const BAND_SAY = { 1: 's8', 2: 's9', 3: 's10', 4: 's11' };
+function hexLerp(a, b, k) {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16));
+  const pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(lerp(v, pb[i], k)).toString(16).padStart(2, '0')).join('');
+}
+
+/* ================== 遊戲狀態 ================== */
+const state = {
+  phase: 'menu',          // menu | countdown | launch | fly
+  mode: null,             // body | touch
+  rocketX: 0.5, targetX: 0.5,
+  boost: false, boostLevel: 0, speed: 1,
+  starsHeld: 0,           // 持有星星（炸彈會震掉）
+  heightStars: 0,         // 累積取得的全新星星（只加不減，決定高度）
+  band: 0,                // 目前高度層
+  skyMix: 1,              // 轉場天空混色 0→1
+  skyFrom: BANDS[0].sky, skyTo: BANDS[0].sky,
+  transT: 0,              // 高度轉場剩餘秒數（>0 = 轉場中，不生炸彈）
+  hiccup: 0,              // 打嗝秀演出剩餘秒數
+  hiccupDone: false,      // 這次轉場已經打嗝過
+  giftShow: null,         // { kind, t }
+  paradeT: 0,             // 第 50 顆宇宙大巡遊
+  groundY: 0, t: 0, shake: 0,
+  spin: 0, dizzyT: 0, invulnT: 0, gag: null, gagT: 0,
+  squash: 1,              // 壓扁彈回（打嗝/笑點）
+  tutorial: 0,            // 已生教學星數 0/1/2；99 = 教學完
+  firstCatch: false, bombSeen: false,
+  paused: false,
+  idleSayT: 0,
+};
+const COLOR_SETS = [['CH001', 'CH002', 'CH003', 'CH004'], ['CH005', 'CH006', 'CH007', 'CH008'], ['CH009', 'CH010', 'CH011', 'CH012']];
+// 每張影格「車身（不含火焰）佔圖片高度的比例」——衝刺影格火焰很長，等高畫會讓車身縮小，用這個表正規化（依 contact sheet 目測，實玩再微調）
+const BODYF = { CH001: .76, CH002: .86, CH003: .95, CH004: .55, CH005: .76, CH006: .82, CH007: .95, CH008: .45, CH009: .76, CH010: .82, CH011: .95, CH012: .5 };
+const setOf = hs => Math.floor(hs / 20) % 3;
+const GIFT_KINDS = ['rainbow', 'icecream', 'puppy', 'balloon', 'ufo', 'starrain'];
+const GIFT_SAY = { rainbow: 's14', icecream: 's15', puppy: 's16', balloon: 's17', ufo: 's17', starrain: 's13' };
+
+const items = [];       // { x, y, type:'star'|'gift'|'bomb', size, wob, noHeight }  noHeight=撿回的星星只補持有數
+const decors = [];      // 背景景物 { id, x, y, h, sp, drift, rot, rotSp, flip, alpha }
+const fxs = [];         // 前景特效 { id, fb, x, y, h, vx, vy, rot, rotSp, life, maxLife, grow }
+const particles = [];   // 程式粒子
+const bgStars = [];     // 太空小星點
+for (let i = 0; i < 70; i++) bgStars.push({ x: Math.random(), y: Math.random(), s: Math.random() * 2 + 0.5, tw: Math.random() * 6 });
+let lastItemSpawn = 0, lastDecorSpawn = 0, skylineY = 0;
+
+/* ================== 體感追蹤（MediaPipe Pose ＋ 智慧變焦） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1, lastSeen = 0;
+let personX = 0.5, handsUp = false, shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO', numPoses: 1,
+    minPoseDetectionConfidence: 0.3, minPosePresenceConfidence: 0.3, minTrackingConfidence: 0.3,
+  });
+  pip.style.display = 'block';
+}
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = zoomBox;
+  let result;
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  const nowT = performance.now();
+  if (!lm) {
+    if (nowT - lastSeen > 700) { handsUp = false; pipDot.style.background = '#00ff88'; }
+    return;
+  }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const zcx = (minX + maxX) / 2, zcy = (minY + maxY) / 2;
+    let s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, zcx - s / 2)), by = Math.min(1 - s, Math.max(0, zcy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  handsUp = visOK(15) && visOK(16) && visOK(0) && lm[15].y < lm[0].y && lm[16].y < lm[0].y;
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.background = handsUp ? '#ffdd00' : '#00ff88';
+}
+
+/* ================== 觸控模式 ================== */
+let touching = false;
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'fly') return;
+  touching = true;
+  state.targetX = e.clientX / W;
+});
+canvas.addEventListener('pointermove', e => { if (touching) state.targetX = e.clientX / W; });
+canvas.addEventListener('pointerup', () => touching = false);
+canvas.addEventListener('touchstart', e => { if (state.mode === 'touch' && e.touches.length >= 2) state.boost = true; });
+canvas.addEventListener('touchend', e => { if (state.mode === 'touch' && e.touches.length < 2) state.boost = false; });
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen();
+  audioInit();
+  loadVoices();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+  loadingOverlay.style.display = 'flex';
+  const jobs = [loadArt()];
+  if (mode === 'body') jobs.push(setupBodyTracking().catch(e => {
+    alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+    state.mode = 'touch';
+  }));
+  await Promise.all(jobs);
+  loadingOverlay.style.display = 'none';
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function startCountdown() {
+  state.phase = 'countdown';
+  state.groundY = 0;
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '發射！'];
+  say('s1', { gap: 0, priority: 2 });
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      num.style.animation = 'none'; void num.offsetWidth;
+      tone(i < 3 ? 440 : 880, i < 3 ? 0.3 : 0.8, 'square', 0.2);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'launch';
+      state.t = 0; state.shake = 14;
+      sfxLaunch();
+      for (let k = 0; k < 6; k++) fxPuff(state.rocketX * W + (Math.random() - 0.5) * VMIN() * 0.3, H * 0.9, VMIN() * (0.12 + Math.random() * 0.1));
+    }
+  };
+  step();
+}
+
+/* ================== 生成 ================== */
+function rocketH() { return VMIN() * 0.24; }
+function noBombs() { return state.transT > 0 || state.giftShow || state.paradeT > 0 || state.invulnT > 0 || state.spin > 0; }
+function spawnItem(now) {
+  const interval = state.boostLevel > 0.5 ? 450 : 850;
+  if (now - lastItemSpawn < interval) return;
+  lastItemSpawn = now;
+  // 教學：前兩顆星固定出現在火箭附近、左右交替
+  if (state.tutorial < 2) {
+    const side = state.tutorial === 0 ? -1 : 1;
+    items.push({ x: clamp(state.rocketX + side * 0.16, 0.1, 0.9), y: -0.1, type: 'star', wob: Math.random() * 6 });
+    state.tutorial++;
+    if (state.tutorial === 1) say('s2', { gap: 15000 });
+    return;
+  }
+  const r = Math.random();
+  let type = 'star';
+  const bombOnScreen = items.some(it => it.type === 'bomb');
+  if (r < 0.10) type = 'gift';
+  else if (r < 0.26 && state.heightStars >= 5 && !bombOnScreen && !noBombs()) type = 'bomb';
+  let x = (type !== 'bomb' && Math.random() < 0.7)
+    ? state.rocketX + (Math.random() * 2 - 1) * 0.35
+    : Math.random();
+  // 炸彈不突襲：不生在火箭正上方一小條範圍內
+  if (type === 'bomb' && Math.abs(x - state.rocketX) < 0.1) x = clamp(state.rocketX + (x < state.rocketX ? -0.18 : 0.18), 0.08, 0.92);
+  x = clamp(x, 0.08, 0.92);
+  items.push({ x, y: -0.1, type, wob: Math.random() * 6 });
+  if (type === 'bomb' && !state.bombSeen) { state.bombSeen = true; say('s6', { gap: 20000 }); }
+}
+function spawnDecor(now) {
+  const band = BANDS[state.band];
+  const bigOnScreen = decors.filter(d => ['FX006', 'FX007', 'FX008'].includes(d.id)).length;
+  if (now - lastDecorSpawn < 2600) return;
+  lastDecorSpawn = now;
+  let r = Math.random(), id = band.decor[band.decor.length - 1][0];
+  for (const [d, w] of band.decor) { if (r < w) { id = d; break; } r -= w; }
+  if (['FX006', 'FX007', 'FX008'].includes(id) && bigOnScreen >= 2) return;
+  const big = ['FX004', 'FX006', 'FX007', 'FX008'].includes(id);
+  const side = Math.random() < 0.5;
+  decors.push({
+    id, fb: { FX001: '☁️', FX002: '🎈', FX003: '🐦', FX004: '🌈', FX005: '🛸', FX006: '🌕', FX007: '🪐', FX008: '🍭' }[id],
+    x: big ? (side ? 0.14 + Math.random() * 0.14 : 0.72 + Math.random() * 0.14) : (side ? 0.05 + Math.random() * 0.22 : 0.73 + Math.random() * 0.22),
+    y: -0.3,
+    h: VMIN() * (big ? 0.34 + Math.random() * 0.14 : 0.10 + Math.random() * 0.07),
+    sp: big ? 0.28 + Math.random() * 0.08 : 0.38 + Math.random() * 0.1,
+    drift: (Math.random() - 0.5) * 12,
+    rot: 0, rotSp: (Math.random() - 0.5) * 0.15,
+    flip: Math.random() < 0.5,
+    alpha: big ? 0.9 : 1,
+  });
+}
+function burst(x, y, n, opts = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+    particles.push({
+      x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2,
+      life: 1, size: opts.emoji ? 22 + Math.random() * 14 : 3 + Math.random() * 4,
+      color: opts.color || `hsl(${Math.random() * 360},100%,65%)`,
+      emoji: opts.emoji ? pick(opts.emoji) : null,
+    });
+  }
+}
+function fxAdd(id, fb, x, y, h, o = {}) {
+  fxs.push({ id, fb, x, y, h, vx: o.vx || 0, vy: o.vy || 0, rot: o.rot || 0, rotSp: o.rotSp || 0, life: o.life || 1, maxLife: o.life || 1, grow: o.grow || 0, flip: o.flip || false, orbit: o.orbit || null, stick: o.stick || false });
+}
+function fxPuff(x, y, h) { fxAdd('FX101', '💨', x, y, h, { vy: -20, life: 0.9, grow: 0.6, rotSp: (Math.random() - 0.5) * 0.6 }); }
+function fireworks(n = 5) {
+  for (let k = 0; k < n; k++) {
+    setTimeout(() => {
+      const x = W * (0.12 + Math.random() * 0.76), y = H * (0.1 + Math.random() * 0.32);
+      fxAdd('FX104', '🎆', x, y, VMIN() * (0.16 + Math.random() * 0.14), { life: 1.1, grow: 1.2, rot: Math.random() * 6.28 });
+      burst(x, y, 24);
+      sfxFirework();
+    }, k * 220);
+  }
+}
+
+/* ================== 禮物驚喜 ================== */
+function startGiftShow() {
+  const kind = pick(GIFT_KINDS);
+  state.giftShow = { kind, t: 3.2 };
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
+  say('s5', { gap: 4000 });
+  setTimeout(() => say(GIFT_SAY[kind], { gap: 4000 }), 900);
+  const rx = state.rocketX * W, ry = RY(), R = VMIN() * 0.28;
+  if (kind === 'rainbow') {
+    fxAdd('FX105', '🌈', rx, ry, VMIN() * 0.26, { life: 3, orbit: { r: R, sp: 2.6, ph: 0 } });
+  } else if (kind === 'icecream') {
+    for (let i = 0; i < 6; i++) {
+      const side = i % 2 ? 0.1 : 0.9;
+      fxAdd('FX106', '🍦', W * side + (Math.random() - 0.5) * W * 0.1, H * (0.2 + i * 0.12), VMIN() * 0.12, { life: 3, vy: 30 * (i % 2 ? 1 : -1), rotSp: (Math.random() - 0.5) * 2 });
+    }
+  } else if (kind === 'puppy') {
+    fxAdd('FX107', '🐶', rx, ry, VMIN() * 0.16, { life: 3, orbit: { r: R * 1.1, sp: 3.2, ph: Math.PI } });
+  } else if (kind === 'balloon') {
+    for (let i = 0; i < 4; i++) fxAdd('FX002', '🎈', -W * 0.08 - i * W * 0.14, H * (0.25 + (i % 2) * 0.14), VMIN() * (0.13 + Math.random() * 0.05), { life: 4, vx: W * 0.22, vy: Math.sin(i) * 12 });
+  } else if (kind === 'ufo') {
+    fxAdd('FX005', '🛸', W * 1.1, H * 0.3, VMIN() * 0.2, { life: 4, vx: -W * 0.2, vy: 14, rotSp: 0.4 });
+  } else { // starrain：純表演星星雨，不影響數字
+    for (let i = 0; i < 12; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * 0.1 - Math.random() * H * 0.3, VMIN() * (0.05 + Math.random() * 0.04), { life: 4, vy: H * 0.28, rotSp: (Math.random() - 0.5) });
+  }
+}
+
+/* ================== 撞炸彈 ================== */
+function bombHit(ix, iy) {
+  sfxBoom();
+  fxAdd('FX102', '💥', ix, iy, VMIN() * 0.3, { life: 0.7, grow: 1.6 });
+  burst(ix, iy, 22, { color: '#ff8844' });
+  state.shake = 22;
+  state.spin = Math.PI * 6;          // 翻滾三圈
+  state.dizzyT = 2.2;
+  state.invulnT = 2.0;
+  state.gag = pick(['squash', 'puff', 'wrongstars']);
+  state.gagT = 1.6;
+  const rx = state.rocketX * W, ry = RY();
+  fxAdd('FX103', '💫', rx, ry, rocketH() * 1.15, { life: 2.0, stick: true, rotSp: state.gag === 'wrongstars' ? -4.5 : 4.5 });
+  const lost = Math.min(3, state.starsHeld);
+  state.starsHeld -= lost;
+  for (let k = 0; k < lost; k++) {
+    items.push({ x: clamp(state.rocketX + (k - (lost - 1) / 2) * 0.14 + (Math.random() - 0.5) * 0.05, 0.08, 0.92), y: 0.55 + Math.random() * 0.1, type: 'star', wob: Math.random() * 6, noHeight: true });
+  }
+  say('s7', { gap: 3500, priority: 2 });
+}
+
+/* ================== 收星星／升層 ================== */
+function collectStar(it, ix, iy) {
+  state.starsHeld++;
+  sfxCollect();
+  burst(ix, iy, 12, { color: '#ffdd44' });
+  if (!state.firstCatch) { state.firstCatch = true; say('s4', { gap: 0 }); }
+  if (it.noHeight) return;             // 撿回的星星只補持有數
+  state.heightStars++;
+  const hs = state.heightStars;
+  if (hs === 2) setTimeout(() => say('s3', { gap: 30000 }), 700);
+  if (hs % 10 === 0) {
+    const nb = bandOf(hs);
+    if (nb !== state.band) startBandTransition(nb);
+    else if (hs === 50) startParade();
+    else { sfxMilestone(); fireworks(4); say('s13', { gap: 5000 }); }
+    // 換色：第 20、40，之後每 20 循環
+    if (hs % 20 === 0) { sfxUpgrade(); state.shake = Math.max(state.shake, 8); }
+  }
+}
+function startBandTransition(nb) {
+  state.skyFrom = BANDS[state.band].sky.slice();
+  state.skyTo = BANDS[nb].sky.slice();
+  state.skyMix = 0;
+  state.band = nb;
+  state.transT = 3.2;
+  state.hiccupDone = false;
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
+  sfxMilestone(); fireworks(5);
+  say(BAND_SAY[nb] || 's13', { gap: 0, priority: 2 });
+}
+function startParade() {
+  state.paradeT = 6;
+  for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
+  sfxMilestone(); fireworks(8);
+  say('s12', { gap: 0, priority: 2 });
+  for (let i = 0; i < 10; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * (0.1 + Math.random() * 0.4), VMIN() * (0.05 + Math.random() * 0.04), { life: 5, vy: H * 0.26, rotSp: (Math.random() - 0.5) });
+  for (const [i, id] of [['FX006', '🌕'], ['FX008', '🍭'], ['FX007', '🪐'], ['FX005', '🛸']].entries()) {
+    fxAdd(id[0], id[1], (i % 2 ? W * 1.12 : -W * 0.12), H * (0.15 + i * 0.12), VMIN() * 0.2, { life: 5.5, vx: (i % 2 ? -1 : 1) * W * 0.16 });
+  }
+}
+
+/* ================== 更新 ================== */
+function update(dt, now) {
+  state.t += dt;
+
+  // ---- 控制來源 ----
+  if (state.mode === 'body') {
+    trackFrame();
+    state.targetX = personX;
+    state.boost = handsUp;
+    const nowMs = performance.now();
+    const tracking = !!poseLandmarker;
+    const lost = tracking && nowMs - lastSeen > 2500;
+    document.getElementById('findPlayer').style.display = (lost && state.phase === 'fly') ? 'block' : 'none';
+    if (lost && state.phase === 'fly') { state.idleSayT += dt; if (state.idleSayT > 4) { say('s21', { gap: 9000 }); state.idleSayT = 0; } }
+    else state.idleSayT = 0;
+
+    if (shoulderW > 0.26 && nowMs - lastSeen < 500) {
+      if (!tooCloseSince) tooCloseSince = nowMs;
+    } else if (shoulderW < 0.21 || lost) {
+      tooCloseSince = 0;
+    }
+    const tooCloseNow = !!tooCloseSince && nowMs - tooCloseSince > 400;
+    if (state.phase === 'fly') {
+      if (tooCloseNow && nowMs >= pauseUntil) {
+        pauseUntil = nowMs + 5000;
+        sfxAlarm();
+        say('s19', { gap: 0, priority: 2 });
+      }
+      state.paused = nowMs < pauseUntil;
+    } else {
+      state.paused = false;
+    }
+    document.getElementById('tooClose').style.display = state.paused ? 'flex' : 'none';
+    if (state.paused) {
+      const remain = Math.ceil((pauseUntil - nowMs) / 1000);
+      document.getElementById('pauseCount').textContent = remain > 0 ? remain : '';
+    }
+    if (wasPaused && !state.paused) {
+      say('s20', { gap: 0 });
+      // 解除時清場：移除炸彈、重設生成間隔，避免解除瞬間被撞
+      for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
+      lastItemSpawn = performance.now() + 800;
+    }
+    wasPaused = state.paused;
+  }
+
+  // 平滑跟隨
+  const margin = 0.07;
+  const tx = clamp(state.targetX, margin, 1 - margin);
+  state.rocketX += (tx - state.rocketX) * Math.min(1, dt * 5);
+
+  // 衝刺（轉場時暫停一般衝刺 → 換成打嗝秀）
+  const inTrans = state.transT > 0;
+  const wantBoost = state.boost && state.phase === 'fly' && !state.paused && !inTrans;
+  state.boostLevel += ((wantBoost ? 1 : 0) - state.boostLevel) * Math.min(1, dt * 3);
+  if (wantBoost && !boostSfx.running) boostSfx.on();
+  if (!wantBoost && boostSfx.running) boostSfx.off();
+  state.speed = 1 + state.boostLevel * 1.8;
+
+  // 打嗝秀：轉場中舉手觸發一次
+  if (inTrans && state.boost && !state.hiccupDone && state.hiccup <= 0 && !state.paused) {
+    state.hiccupDone = true;
+    state.hiccup = 1.4;
+    say('s18', { gap: 0 });
+  }
+  if (state.hiccup > 0) {
+    state.hiccup = Math.max(0, state.hiccup - dt);
+    if (state.hiccup > 0.9) state.squash = lerp(state.squash, 1.06, dt * 8);       // 努力噴火
+    else if (state.hiccup > 0.55) {                                                 // 打嗝壓扁
+      if (state.squash > 0.8) { sfxHiccup(); fxPuff(state.rocketX * W, RY() + rocketH() * 0.55, VMIN() * 0.12); }
+      state.squash = lerp(state.squash, 0.72, dt * 14);
+    } else state.squash = lerp(state.squash, 1, dt * 10);                           // 彈回
+  } else if (state.gag === 'squash' && state.gagT > 0) {
+    state.squash = state.gagT > 0.8 ? lerp(state.squash, 0.75, dt * 10) : lerp(state.squash, 1, dt * 8);
+  } else {
+    state.squash = lerp(state.squash, 1, dt * 8);
+  }
+  if (state.gagT > 0) {
+    state.gagT = Math.max(0, state.gagT - dt);
+    if (state.gag === 'puff' && state.gagT < 1.1 && state.gagT + dt >= 1.1) fxPuff(state.rocketX * W, RY() - rocketH() * 0.5, VMIN() * 0.1);
+    if (state.gagT === 0) state.gag = null;
+  }
+
+  if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 12);
+  if (state.spin > 0) state.spin = Math.max(0, state.spin - dt * 9);
+  if (state.dizzyT > 0) state.dizzyT = Math.max(0, state.dizzyT - dt);
+  if (state.invulnT > 0) state.invulnT = Math.max(0, state.invulnT - dt);
+  if (state.transT > 0) { state.transT = Math.max(0, state.transT - dt); state.skyMix = Math.min(1, state.skyMix + dt / 2.2); }
+  else state.skyMix = Math.min(1, state.skyMix + dt / 2.2);
+  if (state.paradeT > 0) state.paradeT = Math.max(0, state.paradeT - dt);
+  if (state.giftShow) { state.giftShow.t -= dt; if (state.giftShow.t <= 0) { state.giftShow = null; lastItemSpawn = performance.now() + 600; } }
+
+  // ---- 發射動畫 ----
+  if (state.phase === 'launch') {
+    state.groundY += dt * 0.5 * (0.5 + state.t * 0.8);
+    if (Math.random() < 0.2) fxPuff(state.rocketX * W + (Math.random() - 0.5) * VMIN() * 0.2, H * (0.86 + state.groundY), VMIN() * 0.1);
+    if (state.groundY > 1.3) state.phase = 'fly';
+  }
+
+  // ---- 生成 ----
+  if (state.phase === 'fly' && !state.paused && !state.giftShow && state.paradeT <= 0) spawnItem(now);
+  if (state.phase === 'fly' && !state.paused) spawnDecor(now);
+
+  // ---- 掉落 ----
+  const aspect = Math.min(1, Math.max(0.55, H / W));
+  const fall = state.paused ? 0 : 0.25 * aspect * state.speed;
+  const rx = state.rocketX * W, ry = RY();
+  const catchR = Math.max(55, VMIN() * 0.16);
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i];
+    it.y += fall * dt;
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const iy = it.y * H;
+    const dx = ix - rx, dy = iy - ry;
+    if (!state.paused && Math.hypot(dx, dy) < catchR) {
+      if (it.type === 'bomb') {
+        if (state.transT > 0) continue;   // 轉場中暫停碰撞懲罰（星星照接）
+        if (state.invulnT > 0) continue;
+        items.splice(i, 1);
+        bombHit(ix, iy);
+        continue;
+      }
+      items.splice(i, 1);
+      if (it.type === 'gift') { sfxGift(); burst(ix, iy, 10, { emoji: ['🌈', '🦄', '🍭', '🎈', '🍦', '⚽'] }); startGiftShow(); }
+      else collectStar(it, ix, iy);
+    } else if (it.y > 1.15) {
+      items.splice(i, 1);
+    }
+  }
+
+  // ---- 背景 ----
+  for (const s of bgStars) {
+    s.y += fall * dt * 0.3 * (s.s / 2);
+    if (s.y > 1) { s.y = 0; s.x = Math.random(); }
+  }
+  for (let i = decors.length - 1; i >= 0; i--) {
+    const d = decors[i];
+    d.y += fall * dt * d.sp;
+    d.x += d.drift * dt / W;
+    d.rot += d.rotSp * dt;
+    if (d.y > 1.4) decors.splice(i, 1);
+  }
+  // 城市天際線：第 0 層貼底，轉場離開後往下滑走
+  if (state.band === 0) skylineY = lerp(skylineY, 0, dt * 2);
+  else skylineY += fall * dt * 0.5 + dt * 0.2;
+
+  // ---- 特效 ----
+  for (let i = fxs.length - 1; i >= 0; i--) {
+    const f = fxs[i];
+    f.life -= dt;
+    if (f.stick) {
+      f.x = state.rocketX * W; f.y = RY() - rocketH() * 0.35;
+    } else if (f.orbit) {
+      f.orbit.ph += f.orbit.sp * dt;
+      f.x = state.rocketX * W + Math.cos(f.orbit.ph) * f.orbit.r;
+      f.y = RY() + Math.sin(f.orbit.ph) * f.orbit.r * 0.7;
+    } else {
+      f.x += f.vx * dt; f.y += f.vy * dt;
+    }
+    f.rot += f.rotSp * dt;
+    if (f.grow) f.h *= 1 + f.grow * dt;
+    if (f.life <= 0) fxs.splice(i, 1);
+  }
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.12; p.life -= dt * 1.2;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  if (caption.t > 0) caption.t -= dt;
+}
+
+/* ================== 繪圖 ================== */
+function drawRocket(x, y) {
+  const set = COLOR_SETS[setOf(state.heightStars)];
+  let frame = set[0];
+  const tilting = Math.abs(state.targetX - state.rocketX) > 0.045;
+  if (state.dizzyT > 0 || state.spin > 0) frame = set[2];
+  else if (state.boostLevel > 0.45 || state.hiccup > 0.9) frame = set[3];
+  else if (tilting) frame = set[1];
+  const flip = frame === set[1] && (state.targetX < state.rocketX);
+  const lean = (state.targetX - state.rocketX) * 60;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(lean * 0.012 - state.spin);
+  if (state.invulnT > 0 && state.spin <= 0) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(state.t * 20);
+  const s = 1 + state.boostLevel * 0.08;
+  ctx.scale(s / Math.sqrt(state.squash), s * state.squash);
+  const bodyH = rocketH();
+  const f = BODYF[frame] || 0.8;
+  const drawH = bodyH / f;
+  // 車身中心對齊 (0,0)：圖片中心要往下移（火焰在圖片下半部）
+  if (!pic(frame, 0, (0.5 - f / 2) * drawH, drawH, { flip })) {
+    emo('🚀', 0, 0, bodyH);   // 素材沒到位時的備援
+  }
+  ctx.restore();
+}
+function skyColors() {
+  const f = state.skyFrom, t = state.skyTo, k = state.skyMix;
+  return [0, 1, 2].map(i => hexLerp(f[i], t[i], k));
+}
+function draw(now) {
+  const [c0, c1, c2] = skyColors();
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  if (state.phase === 'countdown' || (state.phase === 'launch' && state.groundY < 0.5)) {
+    g.addColorStop(0, '#4fa8e8'); g.addColorStop(1, '#c9ecfa');
+  } else {
+    g.addColorStop(0, c0); g.addColorStop(0.55, c1); g.addColorStop(1, c2);
+  }
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  if (state.shake > 0) ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+
+  // 太空小星點（外太空以上）
+  if (state.band >= 3) {
+    for (const s of bgStars) {
+      ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(state.t * 2 + s.tw));
+      ctx.fillStyle = '#fff';
+      const len = state.boostLevel * 18;
+      if (len > 2) ctx.fillRect(s.x * W, s.y * H, s.s, s.s + len);
+      else { ctx.beginPath(); ctx.arc(s.x * W, s.y * H, s.s, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // 背景景物
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const d of decors) sprite(d.id, d.fb, d.x * W, d.y * H, d.h, { rot: d.rot, flip: d.flip, alpha: d.alpha });
+
+  // 城市天際線（第 0 層與離場動畫）
+  if (skylineY < 1 && has('BG002')) {
+    const ar = ART.BG002.ar, w = W * 1.06, h = w / ar;
+    ctx.globalAlpha = clamp(1 - skylineY * 1.2, 0, 1);
+    ctx.drawImage(IMG.BG002, (W - w) / 2 - state.rocketX * W * 0.02, H - h * (1 - skylineY * 0.4) + skylineY * H * 0.5, w, h);
+    ctx.globalAlpha = 1;
+  }
+
+  // 發射台（倒數與升空）
+  if (state.phase === 'countdown' || state.phase === 'launch') {
+    const gy = H * (0.86 + state.groundY);
+    if (has('BG001')) {
+      const ar = ART.BG001.ar, w = W * 1.04, h = w / ar;
+      ctx.drawImage(IMG.BG001, (W - w) / 2, gy - h * 0.55, w, h);
+    } else {
+      ctx.fillStyle = '#2d5a2d'; ctx.fillRect(0, gy, W, H);
+    }
+  }
+
+  // 掉落物
+  for (const it of items) {
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const iy = it.y * H;
+    if (it.type === 'bomb') {
+      ctx.globalAlpha = 0.25 + 0.15 * Math.sin(state.t * 8);
+      ctx.fillStyle = '#ff3333';
+      ctx.beginPath(); ctx.arc(ix, iy, VMIN() * 0.085, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    const hh = VMIN() * (it.type === 'star' ? 0.085 : 0.105);
+    sprite(it.type === 'gift' ? 'IT002' : it.type === 'bomb' ? 'OB001' : 'IT001',
+      it.type === 'gift' ? '🎁' : it.type === 'bomb' ? '💣' : '⭐', ix, iy, hh,
+      { rot: Math.sin(state.t * 3 + it.wob) * 0.15 });
+  }
+
+  // 火箭
+  const ry = state.phase === 'countdown' ? H * 0.86 - rocketH() * 0.52 : RY();
+  drawRocket(state.rocketX * W, ry);
+
+  // 前景特效
+  for (const f of fxs) sprite(f.id, f.fb, f.x, f.y, f.h, { rot: f.rot, alpha: clamp(f.life / (f.maxLife * 0.4), 0, 1), flip: f.flip });
+
+  // 粒子
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    if (p.emoji) emo(p.emoji, p.x, p.y, p.size);
+    else { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }
+  }
+  ctx.globalAlpha = 1;
+
+  // 衝刺速度線
+  if (state.boostLevel > 0.35) {
+    ctx.globalAlpha = (state.boostLevel - 0.35) * 0.7;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 0; i < 7; i++) {
+      const lx = ((i * 0.147 + state.t * 0.9) % 1) * W;
+      const ly = ((i * 0.31 + state.t * 2.2) % 1) * H;
+      ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly + VMIN() * 0.09 * state.boostLevel); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---- HUD ----
+  if (state.phase === 'fly' || state.phase === 'launch') {
+    // 星星持有數（左上）
+    const sh = VMIN() * 0.075;
+    sprite('IT001', '⭐', sh * 0.9, sh * 0.95, sh);
+    ctx.font = 'bold ' + sh * 0.85 + 'px "Microsoft JhengHei", sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(0,0,0,.35)';
+    ctx.fillText('× ' + state.starsHeld, sh * 1.62, sh * 1.02);
+    ctx.fillStyle = '#ffdd44';
+    ctx.fillText('× ' + state.starsHeld, sh * 1.58, sh * 0.98);
+
+    // 高度路線（右側，由下往上五個圖示）
+    const ih = VMIN() * 0.062, ix = W - ih * 1.1;
+    for (let b = 0; b < 5; b++) {
+      const iy = H * 0.72 - b * ih * 1.5;
+      const active = state.band === b, passed = state.band > b;
+      ctx.globalAlpha = active ? 1 : passed ? 0.75 : 0.28;
+      const sc = active ? 1.35 + Math.sin(state.t * 4) * 0.06 : 1;
+      emo(BANDS[b].icon, ix, iy, ih * sc);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = 'center';
+
+    // 教學箭頭（前兩顆星）
+    if (state.tutorial <= 2 && state.heightStars < 2 && state.phase === 'fly') {
+      const target = items.find(i => i.type === 'star');
+      if (target) {
+        const axx = target.x * W, ay = H * 0.6 + Math.sin(state.t * 5) * 10;
+        emo('⬇️', axx, ay, VMIN() * 0.1);
+      }
+    }
+    // 舉手示範（第 2 顆星後短暫顯示）
+    if (state.heightStars === 2 && !state.boost) {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.t * 4);
+      emo('🙌', W / 2, H * 0.2, VMIN() * 0.12);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // 中文字幕
+  if (caption.t > 0) {
+    ctx.font = 'bold ' + Math.min(40, VMIN() * 0.055) + 'px "Microsoft JhengHei", sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const cy = H * 0.92;
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    const tw = ctx.measureText(caption.text).width;
+    ctx.beginPath(); ctx.roundRect(W / 2 - tw / 2 - 18, cy - 26, tw + 36, 52, 26); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillText(caption.text, W / 2, cy);
+  }
+
+  ctx.restore();
+}
+
+/* ================== 主迴圈 ================== */
+let lastT = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  if (state.phase !== 'menu') {
+    update(dt, now);
+    draw(now);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ================== 測試勾子（自動驗證用） ================== */
+window.__sim = (sec, input = {}) => {
+  if (input.personX != null) { personX = input.personX; state.targetX = input.personX; }
+  if (input.targetX != null) state.targetX = input.targetX;
+  if (input.handsUp != null) { handsUp = input.handsUp; state.boost = input.handsUp; }
+  if (input.giveStars) for (let i = 0; i < input.giveStars; i++) collectStar({ x: state.rocketX, y: 0.7, wob: 0 }, state.rocketX * W, H * 0.7);
+  if (input.bomb) bombHit(state.rocketX * W, H * 0.7);
+  if (input.gift) startGiftShow();
+  if (input.phase) state.phase = input.phase;
+  const steps = Math.round(sec * 60);
+  for (let i = 0; i < steps; i++) update(1 / 60, performance.now() + i * 16.7);
+  draw(performance.now());
+  return {
+    phase: state.phase, band: state.band, heightStars: state.heightStars, starsHeld: state.starsHeld,
+    rocketX: +state.rocketX.toFixed(3), boostLevel: +state.boostLevel.toFixed(2),
+    spin: +state.spin.toFixed(2), transT: +state.transT.toFixed(2), parade: +state.paradeT.toFixed(2),
+    gift: state.giftShow && state.giftShow.kind, items: items.length, decors: decors.length, fxs: fxs.length,
+    set: setOf(state.heightStars), tutorial: state.tutorial,
+  };
+};
+</script>
+</body>
+</html>

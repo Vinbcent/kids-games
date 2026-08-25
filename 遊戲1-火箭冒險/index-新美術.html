@@ -117,7 +117,7 @@
 
 <script type="module">
 /* ================== 基本設定 ================== */
-const ART_VER = 2;
+const ART_VER = 3;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -617,7 +617,7 @@ function fireworks(n = 3) {
     setTimeout(() => {
       const x = W * (0.12 + Math.random() * 0.76), y = H * (0.1 + Math.random() * 0.32);
       fxAdd('FX104', '🎆', x, y, VMIN() * (0.16 + Math.random() * 0.14), { life: 1.1, grow: 1.2, rot: Math.random() * 6.28 });
-      burst(x, y, 14);
+      burst(x, y, 10, { color: pick(['#ffe094', '#a8dcf2']) });
       sfxFirework();
     }, k * 220);
   }

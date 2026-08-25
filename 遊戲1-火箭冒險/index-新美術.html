@@ -117,7 +117,7 @@
 
 <script type="module">
 /* ================== 基本設定 ================== */
-const ART_VER = 1;
+const ART_VER = 2;
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -344,11 +344,11 @@ function say(key, { gap = 2500, priority = 1 } = {}) {
 /* ================== 高度層設定 ================== */
 /* heightStars（累積新星星）決定高度層：炸彈震掉持有星星，但高度永不倒退 */
 const BANDS = [
-  { name: '糖果城市', icon: '🏙️', at: 0,  sky: ['#4fa8e8', '#8fd0f4', '#c9ecfa'], decor: [['FX002', .35], ['FX003', .65]] },
-  { name: '鬆軟雲海', icon: '☁️', at: 10, sky: ['#3d97e0', '#7cc4ef', '#e8f6fd'], decor: [['FX001', .6], ['FX002', .25], ['FX003', .15]] },
-  { name: '彩虹高空', icon: '🌈', at: 20, sky: ['#2e7fd6', '#5fb3e8', '#aee4f8'], decor: [['FX004', .3], ['FX001', .7]] },
-  { name: '閃亮外太空', icon: '🪐', at: 30, sky: ['#0d1b5e', '#1c3a94', '#3a63c4'], decor: [['FX007', .5], ['FX005', .5]] },
-  { name: '月球糖果星系', icon: '🌕', at: 40, sky: ['#101347', '#232a7a', '#3f55b5'], decor: [['FX006', .35], ['FX008', .4], ['FX007', .15], ['FX005', .1]] },
+  { name: '糖果城市', icon: '🏙️', at: 0,  sky: ['#7ab8e6', '#aad9f2', '#dcf0fa'], decor: [['FX002', .35], ['FX003', .65]] },
+  { name: '鬆軟雲海', icon: '☁️', at: 10, sky: ['#7fc0e8', '#abd9f0', '#eef7fc'], decor: [['FX001', .6], ['FX002', .25], ['FX003', .15]] },
+  { name: '彩虹高空', icon: '🌈', at: 20, sky: ['#6fa9dc', '#95c7e9', '#c9e7f6'], decor: [['FX004', .3], ['FX001', .7]] },
+  { name: '閃亮外太空', icon: '🪐', at: 30, sky: ['#28356f', '#3a4f9c', '#5f79c4'], decor: [['FX007', .5], ['FX005', .5]] },
+  { name: '月球糖果星系', icon: '🌕', at: 40, sky: ['#2b2f5e', '#3f478c', '#6270b8'], decor: [['FX006', .35], ['FX008', .4], ['FX007', .15], ['FX005', .1]] },
 ];
 const bandOf = hs => hs >= 40 ? 4 : hs >= 30 ? 3 : hs >= 20 ? 2 : hs >= 10 ? 1 : 0;
 const BAND_SAY = { 1: 's8', 2: 's9', 3: 's10', 4: 's11' };
@@ -538,7 +538,7 @@ function startCountdown() {
     } else {
       el.style.display = 'none';
       state.phase = 'launch';
-      state.t = 0; state.shake = 14;
+      state.t = 0; state.shake = 8;
       sfxLaunch();
       for (let k = 0; k < 6; k++) fxPuff(state.rocketX * W + (Math.random() - 0.5) * VMIN() * 0.3, H * 0.9, VMIN() * (0.12 + Math.random() * 0.1));
     }
@@ -550,7 +550,7 @@ function startCountdown() {
 function rocketH() { return VMIN() * 0.24; }
 function noBombs() { return state.transT > 0 || state.giftShow || state.paradeT > 0 || state.invulnT > 0 || state.spin > 0; }
 function spawnItem(now) {
-  const interval = state.boostLevel > 0.5 ? 450 : 850;
+  const interval = state.boostLevel > 0.5 ? 700 : 1300;
   if (now - lastItemSpawn < interval) return;
   lastItemSpawn = now;
   // 教學：前兩顆星固定出現在火箭附近、左右交替
@@ -578,11 +578,11 @@ function spawnItem(now) {
 function spawnDecor(now) {
   const band = BANDS[state.band];
   const bigOnScreen = decors.filter(d => ['FX006', 'FX007', 'FX008'].includes(d.id)).length;
-  if (now - lastDecorSpawn < 2600) return;
+  if (now - lastDecorSpawn < 4500 || decors.length >= 4) return;
   lastDecorSpawn = now;
   let r = Math.random(), id = band.decor[band.decor.length - 1][0];
   for (const [d, w] of band.decor) { if (r < w) { id = d; break; } r -= w; }
-  if (['FX006', 'FX007', 'FX008'].includes(id) && bigOnScreen >= 2) return;
+  if (['FX006', 'FX007', 'FX008'].includes(id) && bigOnScreen >= 1) return;
   const big = ['FX004', 'FX006', 'FX007', 'FX008'].includes(id);
   const side = Math.random() < 0.5;
   decors.push({
@@ -591,8 +591,8 @@ function spawnDecor(now) {
     y: -0.3,
     h: VMIN() * (big ? 0.34 + Math.random() * 0.14 : 0.10 + Math.random() * 0.07),
     sp: big ? 0.28 + Math.random() * 0.08 : 0.38 + Math.random() * 0.1,
-    drift: (Math.random() - 0.5) * 12,
-    rot: 0, rotSp: (Math.random() - 0.5) * 0.15,
+    drift: (Math.random() - 0.5) * 7,
+    rot: 0, rotSp: (Math.random() - 0.5) * 0.08,
     flip: Math.random() < 0.5,
     alpha: big ? 0.9 : 1,
   });
@@ -612,12 +612,12 @@ function fxAdd(id, fb, x, y, h, o = {}) {
   fxs.push({ id, fb, x, y, h, vx: o.vx || 0, vy: o.vy || 0, rot: o.rot || 0, rotSp: o.rotSp || 0, life: o.life || 1, maxLife: o.life || 1, grow: o.grow || 0, flip: o.flip || false, orbit: o.orbit || null, stick: o.stick || false });
 }
 function fxPuff(x, y, h) { fxAdd('FX101', '💨', x, y, h, { vy: -20, life: 0.9, grow: 0.6, rotSp: (Math.random() - 0.5) * 0.6 }); }
-function fireworks(n = 5) {
+function fireworks(n = 3) {
   for (let k = 0; k < n; k++) {
     setTimeout(() => {
       const x = W * (0.12 + Math.random() * 0.76), y = H * (0.1 + Math.random() * 0.32);
       fxAdd('FX104', '🎆', x, y, VMIN() * (0.16 + Math.random() * 0.14), { life: 1.1, grow: 1.2, rot: Math.random() * 6.28 });
-      burst(x, y, 24);
+      burst(x, y, 14);
       sfxFirework();
     }, k * 220);
   }
@@ -634,18 +634,18 @@ function startGiftShow() {
   if (kind === 'rainbow') {
     fxAdd('FX105', '🌈', rx, ry, VMIN() * 0.26, { life: 3, orbit: { r: R, sp: 2.6, ph: 0 } });
   } else if (kind === 'icecream') {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
       const side = i % 2 ? 0.1 : 0.9;
       fxAdd('FX106', '🍦', W * side + (Math.random() - 0.5) * W * 0.1, H * (0.2 + i * 0.12), VMIN() * 0.12, { life: 3, vy: 30 * (i % 2 ? 1 : -1), rotSp: (Math.random() - 0.5) * 2 });
     }
   } else if (kind === 'puppy') {
     fxAdd('FX107', '🐶', rx, ry, VMIN() * 0.16, { life: 3, orbit: { r: R * 1.1, sp: 3.2, ph: Math.PI } });
   } else if (kind === 'balloon') {
-    for (let i = 0; i < 4; i++) fxAdd('FX002', '🎈', -W * 0.08 - i * W * 0.14, H * (0.25 + (i % 2) * 0.14), VMIN() * (0.13 + Math.random() * 0.05), { life: 4, vx: W * 0.22, vy: Math.sin(i) * 12 });
+    for (let i = 0; i < 3; i++) fxAdd('FX002', '🎈', -W * 0.08 - i * W * 0.14, H * (0.25 + (i % 2) * 0.14), VMIN() * (0.13 + Math.random() * 0.05), { life: 4, vx: W * 0.22, vy: Math.sin(i) * 12 });
   } else if (kind === 'ufo') {
     fxAdd('FX005', '🛸', W * 1.1, H * 0.3, VMIN() * 0.2, { life: 4, vx: -W * 0.2, vy: 14, rotSp: 0.4 });
   } else { // starrain：純表演星星雨，不影響數字
-    for (let i = 0; i < 12; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * 0.1 - Math.random() * H * 0.3, VMIN() * (0.05 + Math.random() * 0.04), { life: 4, vy: H * 0.28, rotSp: (Math.random() - 0.5) });
+    for (let i = 0; i < 7; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * 0.1 - Math.random() * H * 0.3, VMIN() * (0.05 + Math.random() * 0.04), { life: 4, vy: H * 0.28, rotSp: (Math.random() - 0.5) });
   }
 }
 
@@ -653,8 +653,8 @@ function startGiftShow() {
 function bombHit(ix, iy) {
   sfxBoom();
   fxAdd('FX102', '💥', ix, iy, VMIN() * 0.3, { life: 0.7, grow: 1.6 });
-  burst(ix, iy, 22, { color: '#ff8844' });
-  state.shake = 22;
+  burst(ix, iy, 12, { color: '#ff8844' });
+  state.shake = 10;
   state.spin = Math.PI * 6;          // 翻滾三圈
   state.dizzyT = 2.2;
   state.invulnT = 2.0;
@@ -674,7 +674,7 @@ function bombHit(ix, iy) {
 function collectStar(it, ix, iy) {
   state.starsHeld++;
   sfxCollect();
-  burst(ix, iy, 12, { color: '#ffdd44' });
+  burst(ix, iy, 7, { color: '#ffdd44' });
   if (!state.firstCatch) { state.firstCatch = true; say('s4', { gap: 0 }); }
   if (it.noHeight) return;             // 撿回的星星只補持有數
   state.heightStars++;
@@ -684,9 +684,9 @@ function collectStar(it, ix, iy) {
     const nb = bandOf(hs);
     if (nb !== state.band) startBandTransition(nb);
     else if (hs === 50) startParade();
-    else { sfxMilestone(); fireworks(4); say('s13', { gap: 5000 }); }
+    else { sfxMilestone(); fireworks(2); say('s13', { gap: 5000 }); }
     // 換色：第 20、40，之後每 20 循環
-    if (hs % 20 === 0) { sfxUpgrade(); state.shake = Math.max(state.shake, 8); }
+    if (hs % 20 === 0) { sfxUpgrade(); state.shake = Math.max(state.shake, 5); }
   }
 }
 function startBandTransition(nb) {
@@ -697,15 +697,15 @@ function startBandTransition(nb) {
   state.transT = 3.2;
   state.hiccupDone = false;
   for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
-  sfxMilestone(); fireworks(5);
+  sfxMilestone(); fireworks(3);
   say(BAND_SAY[nb] || 's13', { gap: 0, priority: 2 });
 }
 function startParade() {
   state.paradeT = 6;
   for (let i = items.length - 1; i >= 0; i--) if (items[i].type === 'bomb') items.splice(i, 1);
-  sfxMilestone(); fireworks(8);
+  sfxMilestone(); fireworks(4);
   say('s12', { gap: 0, priority: 2 });
-  for (let i = 0; i < 10; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * (0.1 + Math.random() * 0.4), VMIN() * (0.05 + Math.random() * 0.04), { life: 5, vy: H * 0.26, rotSp: (Math.random() - 0.5) });
+  for (let i = 0; i < 6; i++) fxAdd('IT001', '⭐', W * Math.random(), -H * (0.1 + Math.random() * 0.4), VMIN() * (0.05 + Math.random() * 0.04), { life: 5, vy: H * 0.26, rotSp: (Math.random() - 0.5) });
   for (const [i, id] of [['FX006', '🌕'], ['FX008', '🍭'], ['FX007', '🪐'], ['FX005', '🛸']].entries()) {
     fxAdd(id[0], id[1], (i % 2 ? W * 1.12 : -W * 0.12), H * (0.15 + i * 0.12), VMIN() * 0.2, { life: 5.5, vx: (i % 2 ? -1 : 1) * W * 0.16 });
   }
@@ -822,7 +822,7 @@ function update(dt, now) {
   for (let i = items.length - 1; i >= 0; i--) {
     const it = items[i];
     it.y += fall * dt;
-    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 8;
     const iy = it.y * H;
     const dx = ix - rx, dy = iy - ry;
     if (!state.paused && Math.hypot(dx, dy) < catchR) {
@@ -834,7 +834,7 @@ function update(dt, now) {
         continue;
       }
       items.splice(i, 1);
-      if (it.type === 'gift') { sfxGift(); burst(ix, iy, 10, { emoji: ['🌈', '🦄', '🍭', '🎈', '🍦', '⚽'] }); startGiftShow(); }
+      if (it.type === 'gift') { sfxGift(); burst(ix, iy, 6, { emoji: ['🌈', '🦄', '🍭', '🎈', '🍦', '⚽'] }); startGiftShow(); }
       else collectStar(it, ix, iy);
     } else if (it.y > 1.15) {
       items.splice(i, 1);
@@ -928,7 +928,7 @@ function draw(now) {
   // 太空小星點（外太空以上）
   if (state.band >= 3) {
     for (const s of bgStars) {
-      ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(state.t * 2 + s.tw));
+      ctx.globalAlpha = 0.25 + 0.3 * Math.abs(Math.sin(state.t * 1.2 + s.tw));
       ctx.fillStyle = '#fff';
       const len = state.boostLevel * 18;
       if (len > 2) ctx.fillRect(s.x * W, s.y * H, s.s, s.s + len);
@@ -962,10 +962,10 @@ function draw(now) {
 
   // 掉落物
   for (const it of items) {
-    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 14;
+    const ix = it.x * W + Math.sin(state.t * 2 + it.wob) * 8;
     const iy = it.y * H;
     if (it.type === 'bomb') {
-      ctx.globalAlpha = 0.25 + 0.15 * Math.sin(state.t * 8);
+      ctx.globalAlpha = 0.20 + 0.10 * Math.sin(state.t * 4);
       ctx.fillStyle = '#ff3333';
       ctx.beginPath(); ctx.arc(ix, iy, VMIN() * 0.085, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 1;
@@ -973,7 +973,7 @@ function draw(now) {
     const hh = VMIN() * (it.type === 'star' ? 0.085 : 0.105);
     sprite(it.type === 'gift' ? 'IT002' : it.type === 'bomb' ? 'OB001' : 'IT001',
       it.type === 'gift' ? '🎁' : it.type === 'bomb' ? '💣' : '⭐', ix, iy, hh,
-      { rot: Math.sin(state.t * 3 + it.wob) * 0.15 });
+      { rot: Math.sin(state.t * 2 + it.wob) * 0.07 });
   }
 
   // 火箭
@@ -993,9 +993,9 @@ function draw(now) {
 
   // 衝刺速度線
   if (state.boostLevel > 0.35) {
-    ctx.globalAlpha = (state.boostLevel - 0.35) * 0.7;
+    ctx.globalAlpha = (state.boostLevel - 0.35) * 0.4;
     ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 4; i++) {
       const lx = ((i * 0.147 + state.t * 0.9) % 1) * W;
       const ly = ((i * 0.31 + state.t * 2.2) % 1) * H;
       ctx.beginPath(); ctx.moveTo(lx, ly); ctx.lineTo(lx, ly + VMIN() * 0.09 * state.boostLevel); ctx.stroke();
@@ -1021,7 +1021,7 @@ function draw(now) {
       const iy = H * 0.72 - b * ih * 1.5;
       const active = state.band === b, passed = state.band > b;
       ctx.globalAlpha = active ? 1 : passed ? 0.75 : 0.28;
-      const sc = active ? 1.35 + Math.sin(state.t * 4) * 0.06 : 1;
+      const sc = active ? 1.22 + Math.sin(state.t * 2) * 0.03 : 1;
       emo(BANDS[b].icon, ix, iy, ih * sc);
     }
     ctx.globalAlpha = 1;
@@ -1037,7 +1037,7 @@ function draw(now) {
     }
     // 舉手示範（第 2 顆星後短暫顯示）
     if (state.heightStars === 2 && !state.boost) {
-      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(state.t * 4);
+      ctx.globalAlpha = 0.55 + 0.3 * Math.sin(state.t * 2.5);
       emo('🙌', W / 2, H * 0.2, VMIN() * 0.12);
       ctx.globalAlpha = 1;
     }

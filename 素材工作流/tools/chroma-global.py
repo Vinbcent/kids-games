@@ -6,9 +6,19 @@
 import sys, subprocess, numpy as np
 from PIL import Image
 game, aid = sys.argv[1], sys.argv[2]
-tol = int(sys.argv[3]) if len(sys.argv) > 3 else 70
+tolarg = sys.argv[3] if len(sys.argv) > 3 else "70"
 lofac = float(sys.argv[4]) if len(sys.argv) > 4 else 0.65   # 半透明過渡帶的下限比例；主體本身偏紫/粉時調高（0.9~0.97）
 p = f"{game}/pic/_tmp/{aid}.png"
+# tol="auto"：模型每次生的「洋紅」濃度不一樣（實測 m 從 71 到 240 都有），固定門檻會漏掉偏粉的那幾張。
+# 從 pic/_raw 的角落取這張圖自己的底色濃度 m，門檻設成 m 的 75%——主體用的黃/綠/灰/膚色 m 都是負的，很安全。
+if tolarg == "auto":
+    raw = Image.open(f"{game}/pic/_raw/{aid}.png").convert("RGB")
+    c = np.array(raw)[4, 4].astype(int)
+    m0 = int(min(c[0], c[2]) - c[1])
+    tol = max(15, min(240, 255 - int(m0 * 0.75)))
+    print(f"   auto tol: 底色 m={m0} -> tol={tol} (hi={255-tol})")
+else:
+    tol = int(tolarg)
 im = Image.open(p).convert("RGBA"); a = np.array(im).astype(int)
 r, g, b, al = a[..., 0], a[..., 1], a[..., 2], a[..., 3]
 # 洋紅 = R 高、B 高、G 低；距離用 (R-255, G-0, B-255) 的最大分量差

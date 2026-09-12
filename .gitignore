@@ -20,3 +20,6 @@ Thumbs.db
 遊戲*/pic/opt/_*
 素材工作流/_run/
 遊戲*/assets.gpt.json
+
+# 工具改版前的備份（留在本機就好）
+素材工作流/tools/*.bak*

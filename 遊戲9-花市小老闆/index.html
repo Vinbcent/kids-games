@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#bfe0f5">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🌻 花市小老闆</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #bfe0f5; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 鏡頭預覽小視窗（給爸爸確認追蹤狀況用） */
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  /* 尺寸全部用 vmin（螢幕短邊）縮放，手機橫向/直向/電視都不會爆版 */
+  #startOverlay { background: linear-gradient(180deg, #8ec6e8 0%, #bfe0f5 55%, #e8f0da 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; color: #4a5a3a; text-shadow: 0 2px 10px rgba(255,255,255,.7); }
+  #startOverlay .big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: sway 2.4s ease-in-out infinite; }
+  @keyframes sway { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+  .btn {
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.25);
+  }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.25); }
+  #btnBody  { background: linear-gradient(180deg, #8fc46a, #5d9b3e); }
+  #btnTouch { background: linear-gradient(180deg, #7fc4e8, #3f8fbe); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #46543a; max-width: 88%; line-height: 1.5; }
+
+  #rotateHint {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.6); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(60,80,60,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 太靠近電視的提醒（強制暫停 5 秒） */
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #ff9a3c, 0 4px 10px rgba(0,0,0,.4);
+  }
+
+  /* 手指模式的大按鈕 */
+  /* 靠右下角：不能蓋住畫面中下方的兩個候選花盆 */
+  #touchUI { position: fixed; right: 2.5vmin; bottom: 2.5vmin; z-index: 22; display: none; flex-direction: column; gap: 1.6vmin; pointer-events: none; }
+  #touchUI button {
+    pointer-events: auto; border: none; border-radius: 3vmin; padding: 1.6vmin 4vmin;
+    font-size: clamp(16px, 4.6vmin, 30px); font-weight: bold; color: #fff;
+    box-shadow: 0 .6vmin 0 rgba(0,0,0,.25);
+  }
+  #touchUI button:active { transform: translateY(.4vmin); box-shadow: 0 .2vmin 0 rgba(0,0,0,.25); }
+  #btnPlant { background: linear-gradient(180deg, #8fc46a, #5d9b3e); }
+  #btnFlip  { background: linear-gradient(180deg, #f0b060, #d2853a); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div id="touchUI">
+  <button id="btnPlant">🌱 放花</button>
+  <button id="btnFlip">🔄 轉一圈</button>
+</div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🌱</div>
+  <p id="loadingText">正在準備花攤…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="big">🌻</div>
+  <h1>花市小老闆</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">左右移動身體選花盆、雙手高舉把花放進去！<br>放錯也沒關係，小花會自己咕嚕咕嚕跑到對的盆 😆　蹲一下，花盆會翻一圈！<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================== 素材 ================== */
+const ART_VER = '1';
+const ART = {}, IMG = {};
+const ART_IDS = [
+  'CH001', 'CH002', 'CH003',                                       // 小芽三姿勢
+  'CH101', 'CH102', 'CH103',                                       // 向日葵 小苗/含苞/盛開
+  'CH201', 'CH202', 'CH203',                                       // 蝴蝶蘭
+  'CH301', 'CH302', 'CH303',                                       // 九重葛
+  'CH401', 'CH402', 'CH403',                                       // 聖誕紅
+  'CH501', 'CH502', 'CH503',                                       // 含笑
+  'TP001', 'TP002', 'TP003', 'TP004', 'TP005',                     // 花盆（開心／搖頭）、花架、遮陽棚、綠植
+  'IT001', 'FX001',                                                // 澆花壺、水流
+  'EV001', 'EV002',                                                // 小蜜蜂（一般／聞香）
+  'BG001', 'BG002',                                                // 遠景橫幅、地面橫幅
+];
+const EXT = { BG001: 'jpg', BG002: 'jpg' };
+for (const id of ART_IDS) ART[id] = {};
+function loadArt() {
+  return Promise.all(ART_IDS.map(id => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[id] = im; ART[id].ar = im.naturalWidth / im.naturalHeight; res(); };
+    im.onerror = () => { IMG[id] = null; res(); };
+    im.src = 'pic/opt/' + id + '.' + (EXT[id] || 'webp') + '?v=' + ART_VER;
+  })));
+}
+// 貼圖：給寬或給高其中一個，另一邊照原圖比例算；cx,cy 是中心
+function pic(id, cx, cy, { h = null, w = null, flip = false, rot = 0, alpha = 1, sx = 1, sy = 1 } = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let ww = w, hh = h;
+  if (ww == null) ww = hh * ART[id].ar;
+  if (hh == null) hh = ww / ART[id].ar;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
+  ctx.drawImage(im, -ww / 2, -hh / 2, ww, hh);
+  ctx.restore();
+  return true;
+}
+// 底部對齊的貼圖（給站在地上的東西用）：by = 底線 y
+function picBottom(id, cx, by, opts = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let hh = opts.h, ww = opts.w;
+  if (ww == null) ww = hh * ART[id].ar; if (hh == null) hh = ww / ART[id].ar;
+  return pic(id, cx, by - hh / 2, { ...opts, w: ww, h: hh });
+}
+// 橫向鋪滿一條帶（奇數塊水平鏡像＝來源圖左右不連續也看不出接縫）
+function tileBand(id, top, h, shift = 0) {
+  const im = IMG[id]; if (!im) return false;
+  const tw = h * ART[id].ar;
+  if (!(tw > 1)) return false;
+  const i0 = Math.floor(shift / tw);
+  for (let i = i0; i * tw - shift < W; i++) {
+    const x = i * tw - shift;
+    const mirror = (((i % 2) + 2) % 2) === 1;
+    ctx.save();
+    if (mirror) { ctx.translate(x + tw, top); ctx.scale(-1, 1); }
+    else ctx.translate(x, top);
+    ctx.drawImage(im, 0, 0, tw, h);
+    ctx.restore();
+  }
+  return true;
+}
+
+/* ================== 音效（Web Audio 合成，不需音檔） ================== */
+let AC = null;
+/* ---- 音訊衛生（全系列共用補丁 2026-08-23）---- */
+let MASTER = null, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = []; try { speechSynthesis.cancel(); } catch (e) {} }
+    else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  audioGuardInstall();
+}
+function tone(freq, dur, type = 'sine', vol = 0.25, when = 0) {
+  if (!audioCanPlay() || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+const sfxPick    = () => tone(660, 0.09, 'sine', 0.18);                                            // 換盆：輕輕一聲
+const sfxPlant   = () => { tone(523, 0.14, 'triangle', 0.22); tone(784, 0.2, 'triangle', 0.2, 0.1); }
+const sfxRight   = () => [659, 880, 1047].forEach((f, i) => tone(f, 0.2, 'triangle', 0.2, i * 0.09));
+const sfxSlide   = () => { for (let i = 0; i < 6; i++) tone(400 + i * 70, 0.09, 'sine', 0.14, i * 0.06); } // 咕嚕咕嚕
+const sfxBloom   = () => [784, 988, 1175, 1568].forEach((f, i) => tone(f, 0.26, 'sine', 0.18, i * 0.1));
+const sfxFlip    = () => { for (let i = 0; i < 8; i++) tone(300 + Math.sin(i) * 160 + i * 40, 0.1, 'square', 0.1, i * 0.08); }
+const sfxShelf   = () => { tone(523, 0.16, 'sine', 0.18); tone(659, 0.22, 'sine', 0.18, 0.12); }
+const sfxDone    = () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'triangle', 0.22, i * 0.14));
+const sfxBee     = () => { for (let i = 0; i < 5; i++) tone(210 + (i % 2) * 30, 0.16, 'sawtooth', 0.07, i * 0.15); }
+function sfxAlarm() { // 太靠近的「咿－嗚－」警報
+  tone(880, 0.3, 'square', 0.3); tone(660, 0.3, 'square', 0.3, 0.3);
+  tone(880, 0.3, 'square', 0.3, 0.6); tone(660, 0.3, 'square', 0.3, 0.9);
+}
+function sfxWaterOn() { // 澆水的沙沙聲（短促、克制）
+  for (let i = 0; i < 7; i++) tone(1200 + Math.random() * 500, 0.12, 'sine', 0.05, i * 0.14);
+}
+
+/* ================== 旁白（英文短句磨耳朵；畫面字幕繁體中文） ================== */
+// 有 snd/sN.mp3 就用預錄人聲，沒有就用瀏覽器 TTS
+const LINES = {
+  s1:  ['Welcome to our flower shop!', '小花市開張！'],
+  s2:  ["Let's grow some flowers!", '一起種花！'],
+  s3:  ['Pick a pot!', '選一個花盆'],
+  s4:  ['Move side to side!', '左右動一動'],
+  s5:  ['Hands up to plant!', '舉高手，放進去'],
+  s6:  ['A perfect match!', '剛剛好！'],
+  s7:  ['Hello, flower!', '小花你好！'],
+  s8:  ['Whee! This way!', '咕嚕，往這邊！'],
+  s9:  ['A little flower ride!', '小花溜滑梯！'],
+  s10: ['Have a little drink!', '喝一點水！'],
+  s11: ['Up you grow!', '長高高！'],
+  s12: ['Hello, beautiful bloom!', '開花啦！'],
+  s13: ["You're upside down!", '你倒過來啦！'],
+  s14: ['Back up again!', '又轉回來啦！'],
+  s15: ['Mmm! Lovely flowers!', '好香的花！'],
+  s16: ['Step back, please!', '往後退一點'],
+  s17: ['Ready to grow again?', '繼續種花囉'],
+  s18: ['Look at our flower shop!', '花架擺滿啦！'],
+  s19: ["Let's fill another shelf!", '再擺一架！'],
+};
+const SND = {}; let curVoice = null;
+const lastSay = {};
+let caption = { text: '', t: 0 };
+function loadVoices() {
+  for (const k of Object.keys(LINES)) {
+    const a = new Audio('snd/' + k + '.mp3?v=' + ART_VER); a.preload = 'auto';
+    a.addEventListener('canplaythrough', () => { SND[k] = a; }, { once: true });
+    a.addEventListener('error', () => { SND[k] = null; }, { once: true });
+    a.load();
+  }
+}
+let ttsVoice = null;
+function pickVoice() {
+  if (ttsVoice) return ttsVoice;
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_)/i.test(v.lang));
+    ttsVoice = vs.find(v => /female|samantha|zira|aria/i.test(v.name)) || vs[0] || null;
+  } catch (e) {}
+  return ttsVoice;
+}
+// priority 2 = 一定要播（會打斷正在播的）；1 = 忙就跳過
+function say(key, { gap = 2600, priority = 1 } = {}) {
+  const line = LINES[key]; if (!line) return;
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  caption = { text: line[1], t: 2.4 };
+  if (SND[key]) {
+    const busy = curVoice && !curVoice.paused && !curVoice.ended;
+    if (busy && priority < 2) return;
+    if (busy) { curVoice.pause(); curVoice.currentTime = 0; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    curVoice = SND[key]; curVoice.currentTime = 0; curVoice.volume = 1;
+    curVoice.play().catch(() => {});
+    return;
+  }
+  try {
+    if (speechSynthesis.speaking && priority < 2) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(line[0]);
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = 1.05; u.pitch = Math.min(2, 1.25 + (Math.random() - 0.5) * 0.2); u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+/* ================== 遊戲狀態 ================== */
+// 五種花：小苗 / 含苞 / 盛開
+const FLOWERS = [
+  { key: 'sun',    ids: ['CH101', 'CH102', 'CH103'], name: '向日葵' },
+  { key: 'orchid', ids: ['CH201', 'CH202', 'CH203'], name: '蝴蝶蘭' },
+  { key: 'bou',    ids: ['CH301', 'CH302', 'CH303'], name: '九重葛' },
+  { key: 'poin',   ids: ['CH401', 'CH402', 'CH403'], name: '聖誕紅' },
+  { key: 'smile',  ids: ['CH501', 'CH502', 'CH503'], name: '含笑' },
+];
+const SLOTS = 5;               // 花架五格
+const GROW_T = [1.2, 1.2, 1.2, 1.4];  // 澆水 / 抽高 / 開花 / 花臉笑
+const POT_X = [0.30, 0.58];    // 兩個候選盆的水平位置（右邊留給花架）
+const DEMO_X = 0.085;          // 示範盆
+
+const state = {
+  phase: 'menu',      // menu | countdown | play
+  mode: null,         // body | touch
+  step: 'pick',       // pick | drop | shake | slide | grow | shelf | done
+  t: 0,               // 這一步經過的秒數
+  seedX: 0.5,         // 小芽實際位置（平滑跟隨 targetX）
+  targetX: 0.5,
+  sel: 0,             // 目前選中的盆 0/1
+  order: [],          // 本局花的順序
+  round: 0,           // 第幾盆（0~4）
+  pots: [],           // 兩個候選盆的花種 key
+  correct: 0,         // 正確的盆 index
+  dropTo: 0,          // 實際放進去的盆
+  shelf: [],          // 已完成：{key, nod}
+  shelfPrev: [],      // 上一局的成果（背景陳列）
+  armT: 0,            // 舉手已維持秒數
+  armLatch: false,    // 舉手放過花之後要先放下手才能再放
+  squatCool: 0,
+  flip: null,         // {target:'demo'|index, t}
+  bee: null,          // {t, x}
+  wave: null,         // 花架偷偷打招呼 {t}
+  idle: 0,            // 等待選盆的閒置秒數
+  demoT: 0,           // 前 10 秒教學時間軸
+  paused: false,
+  beeUsed: false,    // 小蜜蜂一局最多來一次
+  waveUsed: false,   // 花架打招呼一局最多一次
+};
+
+// 當輪的花；order 還沒排好（例如還在主選單）時回傳第一種，不讓繪圖丟例外
+function curFlower() { return FLOWERS[state.order[state.round]] ?? FLOWERS[0]; }
+
+function newRound(first) {
+  if (first) {
+    // 第一局固定先出向日葵，其餘打散；之後整組打散
+    const rest = FLOWERS.map((f, i) => i).filter(i => i !== 0);
+    for (let i = rest.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [rest[i], rest[j]] = [rest[j], rest[i]]; }
+    state.order = [0, ...rest];
+  }
+  const cur = state.order[state.round];
+  // 另一個盆放不同花種；第一局先挑輪廓差最多的（向日葵 vs 蝴蝶蘭）
+  let other;
+  if (first && state.round === 0) other = 1;
+  else { do { other = (Math.random() * FLOWERS.length) | 0; } while (other === cur); }
+  state.correct = Math.random() < 0.5 ? 0 : 1;
+  state.pots = state.correct === 0 ? [cur, other] : [other, cur];
+  state.step = 'pick'; state.t = 0; state.armT = 0; state.idle = 0;
+}
+
+function startLocal() {
+  state.shelfPrev = state.shelf.slice();
+  state.shelf = [];
+  state.round = 0;
+  state.beeUsed = false; state.waveUsed = false;
+  state.bee = null; state.wave = null; state.flip = null;
+  newRound(true);
+}
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1;
+let lastSeen = 0;
+let personX = 0.5;
+let armsUp = false;        // 雙手高舉 = 放花
+let squat = false;         // 蹲下 = 整盆倒轉
+let squatPrev = false;
+let standH = 0;            // 站姿基準高度（肩到踝）
+let shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.3,
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
+  });
+  pip.style.display = 'block';
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = zoomBox;
+  let result;
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  const nowT = performance.now();
+  if (!lm) {
+    // 追蹤丟失太久 → 重置姿勢，不然舉手／蹲下會卡住
+    if (nowT - lastSeen > 700) { armsUp = false; squat = false; state.armT = 0; }
+    return;
+  }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const zcx = (minX + maxX) / 2, zcy = (minY + maxY) / 2;
+    const s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, zcx - s / 2)), by = Math.min(1 - s, Math.max(0, zcy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;                       // 前鏡頭要鏡像才像照鏡子
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+
+  // 雙手高舉：兩腕都明顯高過肩膀（用肩寬當尺規，遠近都適用）
+  const shoulderY = (lm[11].y + lm[12].y) / 2;
+  const band = shoulderW * 0.5;
+  const upNow = visOK(15) && visOK(16) && (shoulderY - lm[15].y) > band && (shoulderY - lm[16].y) > band;
+  // 遲滯：放下要低於一半門檻才算放下，避免停在邊界時每幀跳動
+  const downNow = !(visOK(15) && visOK(16) && (shoulderY - lm[15].y) > band * 0.5 && (shoulderY - lm[16].y) > band * 0.5);
+  if (upNow) armsUp = true; else if (downNow) armsUp = false;
+
+  // 蹲下：肩到踝的高度比例掉到站姿基準的 0.80 才算蹲、回到 0.90 才算站起
+  const ankleY = Math.max(lm[27].y, lm[28].y);
+  const bodyH = Math.abs(ankleY - shoulderY);
+  if (bodyH > 0.02) standH = standH ? Math.max(standH * 0.995, bodyH) : bodyH;  // 基準慢慢回升，換位置也跟得上
+  const ratio = standH ? bodyH / standH : 1;
+  if (ratio < 0.80) squat = true; else if (ratio > 0.90) squat = false;
+
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.background = squat ? '#ff8800' : (armsUp ? '#ffdd00' : '#00ff88');
+}
+
+/* ================== 觸控模式 ================== */
+let touchPlant = false, touchFlip = false;   // touchPlant = 按住「放花」不放
+const touchUI = document.getElementById('touchUI');
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  // 點畫面左右半邊 = 選盆（也可以直接點盆）
+  const x = e.clientX / W;
+  state.sel = x < (POT_X[0] + POT_X[1]) / 2 ? 0 : 1;
+  state.targetX = POT_X[state.sel];
+});
+const btnPlant = document.getElementById('btnPlant');
+btnPlant.addEventListener('pointerdown', e => { e.preventDefault(); touchPlant = true; });
+for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) btnPlant.addEventListener(ev, () => { touchPlant = false; });
+window.addEventListener('pointerup', () => { touchPlant = false; });
+document.getElementById('btnFlip').addEventListener('pointerdown', e => { e.preventDefault(); touchFlip = true; });
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen();
+  audioInit();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+  loadingOverlay.style.display = 'flex';
+  document.getElementById('loadingText').textContent = '正在準備花攤…';
+  await loadArt();
+  loadVoices();
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+
+  if (mode === 'body') {
+    try {
+      await setupBodyTracking();
+    } catch (e) {
+      alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+      state.mode = 'touch';
+    }
+  }
+  loadingOverlay.style.display = 'none';
+  if (state.mode === 'touch') touchUI.style.display = 'flex';
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function startCountdown() {
+  state.phase = 'countdown';
+  startLocal();
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '開花囉！'];
+  say('s1', { priority: 2 });
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      tone(i < 3 ? 523 : 1047, i < 3 ? 0.28 : 0.7, 'triangle', 0.2);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'play';
+      state.demoT = 0;
+    }
+  };
+  step();
+}
+
+/* ================== 版面 ================== */
+// 所有版面座標集中在這裡：horizon 以上是天空，以下是步道
+const LAY = {
+  horizon: 0.50,     // 地平線
+  seedY:   0.62,     // 小芽站的底線（上層工作帶）
+  seedH:   0.26,     // 小芽高度
+  potY:    0.95,     // 候選盆底線（下層栽種帶）
+  potH:    0.20,
+  rackX:   0.745,    // 花架中心（右端要留邊：第五盆倒轉時會外擴，也不能壓到手指模式按鈕）
+  rackY:   0.74,     // 花架底線
+  rackW:   0.32,
+  slotH:   0.095,    // 花架上每盆的高度（要比格距小，否則五盆會疊在一起）
+};
+const potCX = i => POT_X[i] * W;
+// 盆口（花要落進去的位置）
+function potMouth(i) { return { x: potCX(i), y: LAY.potY * H - LAY.potH * H * 0.62 }; }
+function slotPos(i) {
+  const w = LAY.rackW * W;
+  const x = LAY.rackX * W - w / 2 + w * (0.10 + 0.20 * i);
+  return { x, y: LAY.rackY * H - LAY.slotH * H * 0.35 };
+}
+
+/* ================== 遊戲邏輯 ================== */
+function plant() {   // 放花（舉手或按鈕確認完成）
+  state.dropTo = state.sel;
+  state.step = 'drop'; state.t = 0;
+  state.armLatch = true;
+  sfxPlant();
+}
+function afterDrop() {
+  if (state.dropTo === state.correct) { state.step = 'grow'; state.t = 0; say(Math.random() < 0.5 ? 's6' : 's7', { priority: 2 }); sfxRight(); }
+  else { state.step = 'shake'; state.t = 0; say(Math.random() < 0.5 ? 's8' : 's9', { priority: 2 }); }
+}
+function toShelf() {
+  state.shelf.push({ key: curFlower().key, nod: 0 });
+  state.step = 'shelf'; state.t = 0;
+  sfxShelf();
+}
+function nextRound() {
+  state.round++;
+  if (state.round >= SLOTS) { state.step = 'done'; state.t = 0; state.idle = 0; say('s18', { priority: 2 }); sfxDone(); }
+  else {
+    newRound(false);
+    // 偶爾讓小蜜蜂來拜訪（第二盆或第四盆之後，一局最多一次）
+    if (!state.beeUsed && (state.round === 2 || state.round === 4) && Math.random() < 0.7) {
+      state.bee = { t: 0 }; state.beeUsed = true; sfxBee();
+    }
+  }
+}
+function doFlip() {   // 蹲下 = 整盆倒轉（不影響任何進度）
+  if (state.squatCool > 0) return;
+  const target = state.shelf.length ? state.shelf.length - 1 : 'demo';
+  state.flip = { target, t: 0 };
+  state.squatCool = 2.5;
+  say(Math.random() < 0.5 ? 's13' : 's14', { gap: 8000 });
+  sfxFlip();
+}
+
+function update(dt, now) {
+  // ---- 護眼：太靠近電視 → 強制暫停 5 秒 ----
+  if (state.mode === 'body') {
+    const close = shoulderW > 0.28, far = shoulderW < 0.23;
+    if (close && !tooCloseSince) tooCloseSince = now;
+    if (!close && far) tooCloseSince = 0;
+    if (tooCloseSince && now - tooCloseSince > 400 && now > pauseUntil) {
+      pauseUntil = now + 5000; sfxAlarm(); say('s16', { priority: 2, gap: 6000 });
+    }
+  }
+  state.paused = now < pauseUntil;
+  const tooCloseEl = document.getElementById('tooClose');
+  if (state.paused) {
+    tooCloseEl.style.display = 'flex';
+    document.getElementById('pauseCount').textContent = Math.ceil((pauseUntil - now) / 1000);
+    wasPaused = true;
+    return;                     // 玩法整個凍結，原地接回去
+  }
+  tooCloseEl.style.display = 'none';
+  if (wasPaused) {
+    // 解除採「清場」：把臨時的東西移掉，主花／花盆／花架全部保留
+    wasPaused = false; tooCloseSince = 0;
+    state.bee = null; state.wave = null; state.flip = null;
+    state.armT = 0; state.armLatch = true;   // 手還舉著不算，要放下重舉
+    say('s17', { priority: 2 });
+  }
+  document.getElementById('findPlayer').style.display =
+    (state.mode === 'body' && now - lastSeen > 1500) ? 'block' : 'none';
+
+  state.t += dt;
+  state.demoT += dt;
+  if (state.squatCool > 0) state.squatCool -= dt;
+  if (caption.t > 0) caption.t -= dt;
+
+  // ---- 輸入：優先序 暫停 > 演出 > 蹲下 > 舉手 > 選盆 ----
+  const busy = state.step !== 'pick' && state.step !== 'done';   // 自動演出中不收新操作
+  const sq = state.mode === 'body' ? squat : false;
+  const squatEdge = (sq && !squatPrev) || touchFlip;             // 下降緣觸發，不連發
+  squatPrev = sq; touchFlip = false;
+  if (!busy && squatEdge && !state.flip) doFlip();
+
+  if (!sq && !busy) {
+    // 舉手確認：維持 1 秒才放花；放過之後要先放下手
+    const up = state.mode === 'body' ? armsUp : touchPlant;
+    if (!up) { state.armT = 0; state.armLatch = false; }
+    else if (!state.armLatch) {
+      state.armT += dt;
+      if (state.armT >= 1.0) {
+        state.armT = 0;
+        if (state.step === 'pick') plant();
+        else if (state.step === 'done') { startLocal(); say('s19', { priority: 2 }); }
+      }
+    }
+    // 左右選盆（舉手確認中就鎖住不換盆）
+    if (state.armT === 0) {
+      if (state.mode === 'body') state.targetX = personX;
+      const mid = (POT_X[0] + POT_X[1]) / 2;
+      const buf = 0.035;                       // 中央緩衝區，身體在邊界晃不會來回跳選
+      const prev = state.sel;
+      if (state.targetX < mid - buf) state.sel = 0;
+      else if (state.targetX > mid + buf) state.sel = 1;
+      if (prev !== state.sel) sfxPick();
+    }
+  }
+  // 小芽平滑跟到選中的盆上方（體感模式也直接跟身體，但不會超出兩盆範圍）
+  const want = state.mode === 'body'
+    ? Math.max(POT_X[0] - 0.06, Math.min(POT_X[1] + 0.06, state.targetX))
+    : POT_X[state.sel];
+  state.seedX += (want - state.seedX) * Math.min(1, dt * 6);
+
+  // ---- 各階段推進 ----
+  if (state.step === 'pick') {
+    state.idle += dt;
+    if (state.idle > 3 && state.idle < 3.3) say('s3', { gap: 6000 });
+    if (state.idle > 7 && state.idle < 7.3) say(state.round === 0 ? 's4' : 's5', { gap: 6000 });
+    // 花架偷偷打招呼：三盆以上、安靜的時候，一局最多一次
+    if (!state.waveUsed && state.shelf.length >= 3 && state.idle > 6 && !state.bee && !state.flip && Math.random() < dt * 0.35) {
+      state.wave = { t: 0 }; state.waveUsed = true;
+    }
+  }
+  else if (state.step === 'drop') { if (state.t > 0.55) afterDrop(); }
+  else if (state.step === 'shake') { if (state.t > 0.7) { state.step = 'slide'; state.t = 0; sfxSlide(); } }
+  else if (state.step === 'slide') { if (state.t > 0.9) { state.step = 'grow'; state.t = 0; } }
+  else if (state.step === 'grow') {
+    const T = GROW_T;
+    if (state.t < T[0]) { if (state.t < dt * 2) { say('s10', { priority: 2 }); sfxWaterOn(); } }
+    else if (state.t < T[0] + T[1]) { if (state.t - dt <= T[0]) say('s11'); }
+    else if (state.t < T[0] + T[1] + T[2]) { if (state.t - dt <= T[0] + T[1]) { say('s12', { priority: 2 }); sfxBloom(); } }
+    else if (state.t > T[0] + T[1] + T[2] + T[3]) toShelf();
+  }
+  else if (state.step === 'shelf') { if (state.t > 0.8) nextRound(); }
+  else if (state.step === 'done') {
+    state.idle += dt;
+    if (state.idle > 6 && state.idle < 6.3) say('s19', { gap: 8000 });
+  }
+
+  // ---- 自動演出 ----
+  if (state.flip) { state.flip.t += dt; if (state.flip.t > 1.5) state.flip = null; }
+  if (state.bee) {
+    state.bee.t += dt;
+    if (state.bee.t > 1.6 && state.bee.t < 1.7) say('s15', { gap: 8000 });
+    if (state.bee.t > 3.6) state.bee = null;
+  }
+  if (state.wave) { state.wave.t += dt; if (state.wave.t > 2.2) state.wave = null; }
+}
+
+/* ================== 繪圖 ================== */
+const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const clamp01 = t => Math.max(0, Math.min(1, t));
+
+// 當輪的花：依 grow 進度回傳要畫哪一張與額外縮放
+function growStage() {
+  const T = GROW_T, t = state.t;
+  if (state.step !== 'grow') return { idx: 0, s: 1, bob: 0 };
+  if (t < T[0]) return { idx: 0, s: 1, bob: 0 };
+  if (t < T[0] + T[1]) { const k = clamp01((t - T[0]) / T[1]); return { idx: 1, s: 0.9 + k * 0.25, bob: 0 }; }
+  if (t < T[0] + T[1] + T[2]) { const k = clamp01((t - T[0] - T[1]) / T[2]); return { idx: 2, s: 0.8 + ease(k) * 0.45, bob: 0 }; }
+  const k = (t - T[0] - T[1] - T[2]);
+  return { idx: 2, s: 1.25, bob: Math.sin(k * 7) * 0.03 };
+}
+
+function drawFlowerAt(key, idx, cx, by, h, opts = {}) {
+  const f = FLOWERS.find(x => x.key === key) || FLOWERS[0];
+  return picBottom(f.ids[idx], cx, by, { h, ...opts });
+}
+
+// 花形提示：盆口上方的小小輪廓（用盛開圖，淡淡的，像貼紙）
+function drawHint(key, cx, cy, h) {
+  const f = FLOWERS.find(x => x.key === key) || FLOWERS[0];
+  ctx.save();
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = 'rgba(255,253,244,.92)';
+  ctx.strokeStyle = 'rgba(120,130,105,.35)'; ctx.lineWidth = Math.max(1, H * 0.004);
+  const r = h * 0.62;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.restore();
+  pic(f.ids[2], cx, cy, { h: h * 0.92 });
+}
+
+function draw(now) {
+  // 天空
+  const g = ctx.createLinearGradient(0, 0, 0, H * LAY.horizon);
+  g.addColorStop(0, '#a8d4ee'); g.addColorStop(1, '#dbeef8');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * LAY.horizon + 2);
+  tileBand('BG001', 0, H * LAY.horizon + 2, 0);
+  // 地面
+  ctx.fillStyle = '#e8e0cd'; ctx.fillRect(0, H * LAY.horizon, W, H * (1 - LAY.horizon));
+  tileBand('BG002', H * LAY.horizon, H * (1 - LAY.horizon), 0);
+
+  // 中景：遮陽棚與綠植（各自一張，不烘進背景）
+  picBottom('TP004', W * 0.80, H * 0.60, { w: W * 0.44, alpha: 0.98 });
+  picBottom('TP005', W * 0.06, H * 0.60, { h: H * 0.16 });
+  picBottom('TP005', W * 0.20, H * 0.585, { h: H * 0.13, flip: true });
+
+  // 上一局的成果（更後面、更淡，讓花攤慢慢豐富起來）
+  if (state.shelfPrev.length) {
+    ctx.save(); ctx.globalAlpha = 0.55;
+    picBottom('TP003', W * 0.60, H * 0.585, { w: W * 0.20 });
+    state.shelfPrev.forEach((s, i) => {
+      const x = W * 0.60 - W * 0.10 + W * 0.20 * (0.14 + 0.19 * i);
+      picBottom('TP001', x, H * 0.575, { h: H * 0.05 });
+      drawFlowerAt(s.key, 2, x, H * 0.575 - H * 0.035, H * 0.06);
+    });
+    ctx.restore();
+  }
+
+  if (state.phase === 'menu') return;   // 主選單只畫背景
+
+  drawRack(now);
+  drawDemoPot(now);
+  drawPots(now);
+  drawSeed(now);
+  drawFlyingFlower(now);
+  if (state.bee) drawBee(now);
+  drawHUD(now);
+}
+
+function drawRack(now) {
+  picBottom('TP003', LAY.rackX * W, LAY.rackY * H, { w: LAY.rackW * W });
+  state.shelf.forEach((s, i) => {
+    const p = slotPos(i);
+    const flipping = state.flip && state.flip.target === i;
+    const wave = state.wave ? Math.max(0, Math.sin((state.wave.t - i * 0.18) * 4)) : 0;
+    const last = (i === SLOTS - 1);
+    const doneNod = state.step === 'done'
+      ? Math.max(0, Math.sin((state.t - i * 0.35 - (last ? 0.5 : 0)) * 4)) : 0;   // 最後一盆故意慢半拍
+    const nod = Math.max(wave, doneNod) * (last && state.step === 'done' ? 1.5 : 1);
+    drawPotUnit(s.key, p.x, p.y, H * LAY.slotH, { flip: flipping ? state.flip.t : null, nod, flowerH: H * LAY.slotH * 1.0 });
+  });
+}
+
+// 一盆完成的花（盆＋花，倒轉時整組一起轉）
+function drawPotUnit(key, cx, by, potH, { flip = null, nod = 0, potId = 'TP001', flowerH = null } = {}) {
+  // 0→π→0：轉到整盆倒立、停一下讓花臉倒著看人、再轉回來
+  const rot = flip == null ? 0 : (flip < 0.75 ? (flip / 0.75) * Math.PI : (1 - (flip - 0.75) / 0.75) * Math.PI);
+  const bounce = flip != null && flip > 1.35 ? Math.sin((flip - 1.35) * 20) * potH * 0.05 : 0;
+  ctx.save();
+  ctx.translate(cx, by - potH * 0.5 + bounce);
+  if (rot) ctx.rotate(rot);
+  ctx.translate(-cx, -(by - potH * 0.5));
+  picBottom(potId, cx, by, { h: potH });
+  drawFlowerAt(key, 2, cx, by - potH * 0.62, flowerH ?? potH * 1.15, { sy: 1 + nod * 0.04, sx: 1 - nod * 0.02 });
+  ctx.restore();
+}
+
+function drawDemoPot(now) {
+  const flipping = state.flip && state.flip.target === 'demo';
+  drawPotUnit('sun', DEMO_X * W, H * 0.93, H * 0.14, { flip: flipping ? state.flip.t : null, nod: Math.max(0, Math.sin(now / 700)) * 0.4 });
+}
+
+function drawPots(now) {
+  const potH = LAY.potH * H;
+  for (let i = 0; i < 2; i++) {
+    const sel = state.sel === i && (state.step === 'pick');
+    const lift = sel ? potH * 0.06 : 0;
+    const wrongShake = (state.step === 'shake' && i === state.dropTo);
+    const potId = wrongShake ? 'TP002' : 'TP001';
+    const wob = wrongShake ? Math.sin(state.t * 22) * 0.08 : 0;
+    ctx.save();
+    if (wob) { ctx.translate(potCX(i), LAY.potY * H - potH * 0.5); ctx.rotate(wob); ctx.translate(-potCX(i), -(LAY.potY * H - potH * 0.5)); }
+    picBottom(potId, potCX(i), LAY.potY * H - lift, { h: potH });
+    ctx.restore();
+    // 選中的盆：不發光，只用一個簡單的盆口指示
+    if (sel) {
+      const m = potMouth(i);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = Math.max(2, H * 0.007);
+      ctx.beginPath(); ctx.ellipse(m.x, m.y - lift, potH * 0.34, potH * 0.1, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
+    // 盆口上方的花形提示
+    drawHint(state.pots[i] !== undefined ? FLOWERS[state.pots[i]].key : 'sun', potCX(i), LAY.potY * H - potH * 1.15 - lift, H * 0.10);
+
+    // 已經放進去、正在長大的花
+    if (i === state.correct && (state.step === 'grow')) {
+      const st = growStage();
+      const base = LAY.potY * H - potH * 0.62;
+      drawFlowerAt(curFlower().key, st.idx, potCX(i), base, potH * (0.8 + st.idx * 0.25) * st.s,
+        { sy: 1 + st.bob, sx: 1 - st.bob * 0.5 });
+      // 澆水：壺 + 一股簡化水流
+      if (state.t < GROW_T[0]) {
+        const wx = potCX(i) + potH * 0.85, wy = LAY.potY * H - potH * 1.15;
+        picBottom('IT001', wx, wy, { h: potH * 0.5, flip: true });
+        pic('FX001', wx - potH * 0.38, wy + potH * 0.25, { h: potH * 0.6, alpha: 0.9 });
+      }
+    }
+  }
+}
+
+function drawSeed(now) {
+  const x = state.seedX * W, by = LAY.seedY * H, h = LAY.seedH * H;
+  // 姿勢：等待托花 → 抬手放花 → 完成介紹
+  let id = 'CH001';
+  if (state.step === 'drop' || state.armT > 0.35) id = 'CH002';
+  if (state.step === 'shelf' || state.step === 'done') id = 'CH003';
+  picBottom(id, x, by, { h });
+  // 手上的小苗＋它的花形提示（還沒放出去的時候才有）
+  if (state.step === 'pick') {
+    const key = curFlower().key;
+    // 小苗放在他伸出的手上（偏前方、偏低），不可以蓋住自己的臉；花形提示再往外放，不壓到身體
+    drawFlowerAt(key, 0, x + h * 0.34, by - h * 0.34, h * 0.36);
+    drawHint(key, x - h * 0.46, by - h * 0.78, H * 0.075);
+    // 舉手確認的填滿提示（不是發光，是一圈慢慢畫滿的弧）
+    if (state.armT > 0.05) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,.95)'; ctx.lineWidth = Math.max(3, H * 0.012); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(x, by - h * 1.08, h * 0.2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, state.armT / 1.0)); ctx.stroke();
+      ctx.restore();
+    }
+  }
+}
+
+// 落盆／配錯搬家途中的那朵花
+function drawFlyingFlower(now) {
+  if (state.step !== 'drop' && state.step !== 'shake' && state.step !== 'slide' && state.step !== 'shelf') return;
+  const key = curFlower().key;
+  const potH = LAY.potH * H;
+  if (state.step === 'shake') {
+    // 盆搖頭的這 0.7 秒，小花是停在放錯的那個盆口上（不畫的話花會憑空消失）
+    const m = potMouth(state.dropTo);
+    drawFlowerAt(key, 0, m.x, m.y, potH * 0.8, { rot: Math.sin(state.t * 18) * 0.06 });
+  } else if (state.step === 'drop') {
+    const k = ease(clamp01(state.t / 0.55));
+    const from = { x: state.seedX * W + LAY.seedH * H * 0.1, y: LAY.seedY * H - LAY.seedH * H * 0.52 };
+    const to = potMouth(state.dropTo);
+    drawFlowerAt(key, 0, from.x + (to.x - from.x) * k, from.y + (to.y - from.y) * k, potH * 0.8);
+  } else if (state.step === 'slide') {
+    // 咕嚕咕嚕滑到對的盆：短而平緩，一定會自己抵達
+    const k = ease(clamp01(state.t / 0.9));
+    const a = potMouth(state.dropTo), b = potMouth(state.correct);
+    const x = a.x + (b.x - a.x) * k;
+    const y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * potH * 0.35;
+    drawFlowerAt(key, 0, x, y, potH * 0.8, { rot: Math.sin(k * Math.PI * 2) * 0.5 });
+  } else if (state.step === 'shelf') {
+    // 花與盆成套飛到花架，不拆開
+    const k = ease(clamp01(state.t / 0.8));
+    const a = { x: potCX(state.correct), y: LAY.potY * H };
+    const b = slotPos(state.shelf.length - 1);
+    const x = a.x + (b.x - a.x) * k, y = a.y + (b.y - a.y) * k - Math.sin(k * Math.PI) * H * 0.06;
+    drawPotUnit(key, x, y, potH * (1 - k * 0.35));
+  }
+}
+
+function drawBee(now) {
+  const t = state.bee.t;
+  const target = slotPos(Math.max(0, state.shelf.length - 1));
+  const k = t < 1.2 ? ease(t / 1.2) : (t > 2.6 ? 1 - ease((t - 2.6) / 1.0) : 1);
+  const x = W * 1.05 + (target.x + W * 0.09 - W * 1.05) * k;
+  const y = target.y - H * 0.13 + Math.sin(t * 6) * H * 0.012;
+  const sniff = t > 1.4 && t < 2.6;
+  picBottom(sniff ? 'EV002' : 'EV001', x, y, { h: H * 0.09, flip: true });
+}
+
+function drawHUD(now) {
+  // 教學示範（前 10 秒沒有操作時）：大大的身體示意圖，不靠讀字
+  if (state.phase === 'play' && state.demoT < 10 && state.step === 'pick' && state.round === 0) {
+    const t = state.demoT;
+    ctx.save();
+    ctx.globalAlpha = 0.9;
+    const cx = W * 0.5, cy = H * 0.30, s = H * 0.16;
+    let icon = '🧍', label = '';
+    if (t >= 2 && t < 4) { icon = t % 1 < 0.5 ? '🚶' : '🚶‍♂️'; label = '左右動一動'; }
+    else if (t >= 4 && t < 7) { icon = '🙆'; label = '舉高手，放進去'; }
+    else if (t >= 7 && t < 10) { icon = '🧎'; label = '蹲一下試試看'; }
+    if (label) {
+      ctx.font = `${s}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(icon, cx, cy);
+      ctx.font = `bold ${H * 0.045}px "Microsoft JhengHei", sans-serif`;
+      ctx.fillStyle = 'rgba(70,84,58,.9)';
+      ctx.fillText(label, cx, cy + s * 0.75);
+      // 方向箭頭
+      if (t >= 2 && t < 4) { ctx.fillText('⬅ ➡', cx, cy - s * 0.7); }
+      if (t >= 4 && t < 7) { ctx.fillText('⬆', cx, cy - s * 0.7); }
+    }
+    ctx.restore();
+  }
+
+  // 進度：花架幾盆（圖示，不是數字排行）
+  ctx.save();
+  ctx.font = `${H * 0.05}px serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  let s = '';
+  for (let i = 0; i < SLOTS; i++) s += i < state.shelf.length ? '🌸' : '·';
+  ctx.fillText(s, W * 0.03, H * 0.04);
+  ctx.restore();
+
+  // 字幕（給旁邊的大人看的繁體中文）
+  if (caption.t > 0 && caption.text) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, caption.t * 2);
+    ctx.font = `bold ${Math.max(16, H * 0.055)}px "Microsoft JhengHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const y = H * 0.135;
+    ctx.lineWidth = Math.max(4, H * 0.012); ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.strokeText(caption.text, W / 2, y);
+    ctx.fillStyle = '#5a6a45'; ctx.fillText(caption.text, W / 2, y);
+    ctx.restore();
+  }
+
+  // 完成畫面：只有一顆大圖示按鈕
+  if (state.step === 'done') {
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.font = `${H * 0.12}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🌼', W * 0.5, H * 0.26);
+    ctx.font = `bold ${H * 0.055}px "Microsoft JhengHei", sans-serif`;
+    ctx.lineWidth = Math.max(4, H * 0.012); ctx.strokeStyle = 'rgba(255,255,255,.92)';
+    ctx.strokeText('再擺一架！', W * 0.5, H * 0.35);   // 背景是房子，沒有白邊會看不清楚
+    ctx.fillStyle = '#5a6a45';
+    ctx.fillText('再擺一架！', W * 0.5, H * 0.35);
+    ctx.restore();
+  }
+}
+
+/* ================== 主迴圈 ================== */
+let last = performance.now();
+let loopErr = 0;
+function loop(now) {
+  requestAnimationFrame(loop);           // 先排下一幀：中間丟例外也不會讓畫面整個停住
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  try {
+    if (state.mode === 'body') trackFrame();
+    if (state.phase === 'play') update(dt, now);
+    draw(now);
+  } catch (e) {
+    if (loopErr++ < 3) console.error('[loop]', e);
+  }
+}
+requestAnimationFrame(loop);
+
+/* ---- 測試勾子（給開發用，玩家碰不到）----
+   __art() 列出載不到的素材；__step(秒) 手動快轉；__sim() 自動玩一局 */
+window.__art = () => ART_IDS.filter(id => !IMG[id]);
+window.__dbg = () => ({
+  phase: state.phase, step: state.step, paused: state.paused,
+  round: state.round, sel: state.sel, correct: state.correct,
+  pots: state.pots.map(i => FLOWERS[i].key), cur: curFlower().key,
+  shelf: state.shelf.map(s => s.key), armT: +state.armT.toFixed(2),
+  flip: state.flip ? +state.flip.t.toFixed(2) : null, bee: !!state.bee, t: +state.t.toFixed(2),
+});
+// 手動步進：不靠 requestAnimationFrame（背景分頁會被凍結），可離線快轉驗證
+window.__step = (secs = 5, { arms = false, squat: sq = false, sel = null, fps = 60 } = {}) => {
+  const dt = 1 / fps, n = Math.round(secs * fps);
+  window.__clock = Math.max(window.__clock || 0, performance.now());
+  let now = window.__clock;
+  for (let i = 0; i < n; i++) {
+    if (sel != null) state.targetX = POT_X[sel];
+    touchPlant = arms; touchFlip = sq && i === 0;
+    now += dt * 1000;
+    update(dt, now);
+  }
+  window.__clock = now;
+  draw(now);
+  return window.__dbg();
+};
+window.__sim = async (rounds = 5, { wrong = 0.4 } = {}) => {
+  if (state.phase === 'menu') { startOverlay.style.display = 'none'; audioInit(); await loadArt(); loadVoices(); }
+  state.mode = 'touch'; state.phase = 'play'; state.paused = false;
+  startLocal();
+  const log = [];
+  for (let r = 0; r < rounds; r++) {
+    const want = Math.random() < wrong ? 1 - state.correct : state.correct;
+    __step(0.6, { sel: want });          // 走到那個盆
+    __step(1.2, { sel: want, arms: true });  // 舉手放花
+    __step(6.5, { sel: want });          // 長大秀＋上架
+    log.push(window.__dbg());
+  }
+  return log;
+};
+</script>
+</body>
+</html>

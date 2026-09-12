@@ -7,12 +7,14 @@
 #   FORCE=1 ...                                                     # 強制重生
 #
 # 機制：
-#   - 在遊戲資料夾執行 codex，它會自動讀該資料夾的 AGENTS.md（= 以前的 Project Instructions）
+#   - 畫風前綴（assets.json 的「畫風前綴」）會自動接在每個 prompt 前面：codex 0.154 的 Windows 沙箱擋掉 model 的 shell，
+#     它讀不到 AGENTS.md，畫風只能靠 prompt 內嵌
 #   - prompt 裡提到 REFxxx.png 的，自動用 -i 把 pic/_ref/REFxxx.png 附上（= 以前的 Sources 設定圖）
 #   - 圖落在 ~/.codex/generated_images/<session>/*.png，複製成 pic/_raw/<ID>.png（檔名由我們控制，不靠下載順序）
 #   - 狀態由檔案系統表達：_raw 有檔＝已生成。中斷後重跑不會重生已有的
 #   - 每張約 60 秒；</dev/null 是必要的，否則 codex 會把後面的輸入吃掉
 set -u
+M="${GPT_MODEL:-gpt-6-astra}"   # codex 0.154 起用 gpt-6-astra
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 GAME="$1"; shift || true
 DIR="$REPO/$GAME"
@@ -26,7 +28,8 @@ ONLY="$*"
 node -e '
 const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));
 const only=process.argv.slice(2);
-for(const b of j.批次) for(const a of b.素材){ if(only.length && !only.includes(a.id)) continue; console.log(a.id+"\t"+a.prompt.replace(/\s+/g," ")); }
+const pre=(j.畫風前綴||"").replace(/\s+/g," ");
+for(const b of j.批次) for(const a of b.素材){ if(only.length && !only.includes(a.id)) continue; console.log(a.id+"\t"+(pre?pre+" ":"")+a.prompt.replace(/\s+/g," ")); }
 ' "$(cygpath -w "$DIR/assets.json")" $ONLY > "$LOG.list"
 
 ok=0; fail=0; skip=0
@@ -38,7 +41,7 @@ while IFS=$'\t' read -r id prompt; do
   refs=(); for r in $(grep -oE 'REF[0-9]{3}\.png' <<<"$prompt" | sort -u); do [ -f "$DIR/pic/_ref/$r" ] && refs+=(-i "$W\\pic\\_ref\\$r"); done
   echo "== $id  (refs: ${#refs[@]}/2)" | tee -a "$LOG"
   before=$(ls -d ~/.codex/generated_images/*/ 2>/dev/null | sort)
-  timeout 300 codex exec "\$imagegen $prompt" -C "$W" -s read-only --skip-git-repo-check "${refs[@]}" </dev/null >>"$LOG" 2>&1
+  timeout 420 codex exec -m "$M" "\$imagegen $prompt" -C "$W" -s read-only --skip-git-repo-check "${refs[@]}" </dev/null >>"$LOG" 2>&1
   after=$(ls -d ~/.codex/generated_images/*/ 2>/dev/null | sort)
   newdir=$(comm -13 <(echo "$before") <(echo "$after") | tail -1)
   png=$(ls -t "$newdir"*.png 2>/dev/null | head -1)

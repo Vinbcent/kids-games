@@ -267,12 +267,11 @@ const sfxFlip    = () => { for (let i = 0; i < 8; i++) tone(300 + Math.sin(i) * 
 const sfxShelf   = () => { tone(523, 0.16, 'sine', 0.18); tone(659, 0.22, 'sine', 0.18, 0.12); }
 const sfxDone    = () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'triangle', 0.22, i * 0.14));
 const sfxBee     = () => { for (let i = 0; i < 5; i++) tone(210 + (i % 2) * 30, 0.16, 'sawtooth', 0.07, i * 0.15); }
+const sfxShoo    = () => { [520, 700, 900, 1150].forEach((f, i) => tone(f, 0.12, 'square', 0.16, i * 0.06)); }  // 咻～蜜蜂翻著飛走
+const sfxWaterTick = () => tone(900 + Math.random() * 400, 0.07, 'sine', 0.04);                                  // 出水的細碎水聲
 function sfxAlarm() { // 太靠近的「咿－嗚－」警報
   tone(880, 0.3, 'square', 0.3); tone(660, 0.3, 'square', 0.3, 0.3);
   tone(880, 0.3, 'square', 0.3, 0.6); tone(660, 0.3, 'square', 0.3, 0.9);
-}
-function sfxWaterOn() { // 澆水的沙沙聲（短促、克制）
-  for (let i = 0; i < 7; i++) tone(1200 + Math.random() * 500, 0.12, 'sine', 0.05, i * 0.14);
 }
 
 /* ================== 旁白（英文短句磨耳朵；畫面字幕繁體中文） ================== */
@@ -293,6 +292,9 @@ const LINES = {
   s13: ["You're upside down!", '你倒過來啦！'],
   s14: ['Back up again!', '又轉回來啦！'],
   s15: ['Mmm! Lovely flowers!', '好香的花！'],
+  s20: ['More water, please!', '我還要喝水～'],
+  s21: ['Shoo, little bee!', '小蜜蜂走開啦！'],
+  s22: ['Wheee! Bye bee!', '蜜蜂翻跟斗囉！'],
   s16: ['Step back, please!', '往後退一點'],
   s17: ['Ready to grow again?', '繼續種花囉'],
   s18: ['Look at our flower shop!', '花架擺滿啦！'],
@@ -354,9 +356,11 @@ const FLOWERS = [
   { key: 'smile',  ids: ['CH501', 'CH502', 'CH503'], name: '含笑' },
 ];
 const SLOTS = 5;               // 花架五格
-const GROW_T = [1.2, 1.2, 1.2, 1.4];  // 澆水 / 抽高 / 開花 / 花臉笑
-const POT_X = [0.30, 0.58];    // 兩個候選盆的水平位置（右邊留給花架）
-const DEMO_X = 0.085;          // 示範盆
+const WATER_FULL = 3.4;        // 舉著手澆滿要幾秒（不澆也不會失敗，只是慢）
+const WATER_AUTO = 5.0;        // 都沒人澆這麼久 → 花自己慢慢長，絕不卡住小玩家
+const BLOOM_T = 1.5;           // 開花＋花臉笑
+const POT_X = [0.20, 0.47, 0.74];  // 三個候選盆：拉開到要真的走過去
+const DEMO_X = 0.05;           // 示範盆（最左邊，隨時可以蹲下玩倒轉）
 
 const state = {
   phase: 'menu',      // menu | countdown | play
@@ -375,12 +379,15 @@ const state = {
   shelfPrev: [],      // 上一局的成果（背景陳列）
   armT: 0,            // 舉手已維持秒數
   armLatch: false,    // 舉手放過花之後要先放下手才能再放
+  water: 0,           // 這盆澆了多少（0~1）
+  waterIdle: 0,       // 多久沒人澆了（太久就自己長，不讓小玩家卡住）
+  pouring: false,     // 這一格有沒有在出水（畫面用）
   squatCool: 0,
   flip: null,         // {target:'demo'|index, t}
   bee: null,          // {t, x}
   wave: null,         // 花架偷偷打招呼 {t}
   idle: 0,            // 等待選盆的閒置秒數
-  demoT: 0,           // 前 10 秒教學時間軸
+  demoT: 0,           // 開場教學時間軸（約 11 秒，含澆水示範）
   paused: false,
   beeUsed: false,    // 小蜜蜂一局最多來一次
   waveUsed: false,   // 花架打招呼一局最多一次
@@ -397,13 +404,21 @@ function newRound(first) {
     state.order = [0, ...rest];
   }
   const cur = state.order[state.round];
-  // 另一個盆放不同花種；第一局先挑輪廓差最多的（向日葵 vs 蝴蝶蘭）
-  let other;
-  if (first && state.round === 0) other = 1;
-  else { do { other = (Math.random() * FLOWERS.length) | 0; } while (other === cur); }
-  state.correct = Math.random() < 0.5 ? 0 : 1;
-  state.pots = state.correct === 0 ? [cur, other] : [other, cur];
+  // 另外兩個盆放不同花種；第一局第一盆先挑輪廓差最多的（向日葵／蝴蝶蘭／聖誕紅）
+  const others = [];
+  if (first && state.round === 0) others.push(1, 3);
+  else {
+    while (others.length < POT_X.length - 1) {
+      const k = (Math.random() * FLOWERS.length) | 0;
+      if (k !== cur && !others.includes(k)) others.push(k);
+    }
+  }
+  state.correct = (Math.random() * POT_X.length) | 0;
+  state.pots = [];
+  let oi = 0;
+  for (let i = 0; i < POT_X.length; i++) state.pots.push(i === state.correct ? cur : others[oi++]);
   state.step = 'pick'; state.t = 0; state.armT = 0; state.idle = 0;
+  state.water = 0; state.waterIdle = 0; state.pouring = false;
 }
 
 function startLocal() {
@@ -605,12 +620,12 @@ const LAY = {
   horizon: 0.50,     // 地平線
   seedY:   0.62,     // 小芽站的底線（上層工作帶）
   seedH:   0.26,     // 小芽高度
-  potY:    0.95,     // 候選盆底線（下層栽種帶）
-  potH:    0.20,
-  rackX:   0.745,    // 花架中心（右端要留邊：第五盆倒轉時會外擴，也不能壓到手指模式按鈕）
-  rackY:   0.74,     // 花架底線
-  rackW:   0.32,
-  slotH:   0.095,    // 花架上每盆的高度（要比格距小，否則五盆會疊在一起）
+  potY:    0.96,     // 候選盆底線（下層栽種帶）
+  potH:    0.18,
+  rackX:   0.815,    // 花架中心（退到右後方，下層讓給三個候選盆）
+  rackY:   0.665,    // 花架底線
+  rackW:   0.30,
+  slotH:   0.075,    // 花架上每盆的高度（要比格距小，否則五盆會疊在一起）
 };
 const potCX = i => POT_X[i] * W;
 // 盆口（花要落進去的位置）
@@ -629,8 +644,12 @@ function plant() {   // 放花（舉手或按鈕確認完成）
   sfxPlant();
 }
 function afterDrop() {
-  if (state.dropTo === state.correct) { state.step = 'grow'; state.t = 0; say(Math.random() < 0.5 ? 's6' : 's7', { priority: 2 }); sfxRight(); }
+  if (state.dropTo === state.correct) { startWater(); say(Math.random() < 0.5 ? 's6' : 's7', { priority: 2 }); sfxRight(); }
   else { state.step = 'shake'; state.t = 0; say(Math.random() < 0.5 ? 's8' : 's9', { priority: 2 }); }
+}
+function startWater() {
+  state.step = 'water'; state.t = 0; state.water = 0; state.waterIdle = 0; state.pouring = false;
+  say('s10', { priority: 2 });
 }
 function toShelf() {
   state.shelf.push({ key: curFlower().key, nod: 0 });
@@ -643,10 +662,27 @@ function nextRound() {
   else {
     newRound(false);
     // 偶爾讓小蜜蜂來拜訪（第二盆或第四盆之後，一局最多一次）
-    if (!state.beeUsed && (state.round === 2 || state.round === 4) && Math.random() < 0.7) {
-      state.bee = { t: 0 }; state.beeUsed = true; sfxBee();
+    if (!state.beeUsed && (state.round === 2 || state.round === 4) && Math.random() < 0.8) {
+      state.bee = { t: 0, phase: 'in', slot: state.shelf.length - 1 }; state.beeUsed = true; sfxBee();
     }
   }
+}
+// 花瓣：開花那一下灑幾片就好（兩種柔色、稀疏，刺激要克制）
+const FX = [];
+function petals() {
+  const p = potMouth(state.correct);
+  for (let i = 0; i < 10; i++) FX.push({
+    x: p.x, y: p.y - H * 0.05,
+    vx: (Math.random() - 0.5) * H * 0.5, vy: -H * (0.25 + Math.random() * 0.3),
+    r: H * (0.008 + Math.random() * 0.008), t: 0, life: 1.1 + Math.random() * 0.5,
+    c: Math.random() < 0.5 ? 'rgba(255,244,214,.95)' : 'rgba(226,238,214,.95)',
+  });
+}
+function shooBee() {   // 蹲下 = 把停在花臉上搗蛋的蜜蜂嚇跑（不影響任何進度）
+  if (!state.bee || state.bee.phase !== 'tickle') return;
+  state.bee.phase = 'flee'; state.bee.t = 0;
+  say(Math.random() < 0.5 ? 's21' : 's22', { gap: 5000 });
+  sfxShoo();
 }
 function doFlip() {   // 蹲下 = 整盆倒轉（不影響任何進度）
   if (state.squatCool > 0) return;
@@ -679,8 +715,9 @@ function update(dt, now) {
   if (wasPaused) {
     // 解除採「清場」：把臨時的東西移掉，主花／花盆／花架全部保留
     wasPaused = false; tooCloseSince = 0;
-    state.bee = null; state.wave = null; state.flip = null;
+    state.bee = null; state.wave = null; state.flip = null; FX.length = 0;
     state.armT = 0; state.armLatch = true;   // 手還舉著不算，要放下重舉
+    state.pouring = false;
     say('s17', { priority: 2 });
   }
   document.getElementById('findPlayer').style.display =
@@ -692,13 +729,35 @@ function update(dt, now) {
   if (caption.t > 0) caption.t -= dt;
 
   // ---- 輸入：優先序 暫停 > 演出 > 蹲下 > 舉手 > 選盆 ----
-  const busy = state.step !== 'pick' && state.step !== 'done';   // 自動演出中不收新操作
+  // 澆水階段也要收操作（舉手＝出水），所以它不算 busy
+  const busy = state.step !== 'pick' && state.step !== 'done' && state.step !== 'water';
   const sq = state.mode === 'body' ? squat : false;
   const squatEdge = (sq && !squatPrev) || touchFlip;             // 下降緣觸發，不連發
   squatPrev = sq; touchFlip = false;
-  if (!busy && squatEdge && !state.flip) doFlip();
+  // 蹲下永遠有事做：有蜜蜂在搗蛋就是趕蜜蜂，沒有才是整盆倒轉（兩者錯開，不會互搶）
+  if (!busy && squatEdge) {
+    if (state.bee && state.bee.phase === 'tickle') shooBee();
+    else if (state.step !== 'water' && !state.flip) doFlip();
+  }
 
-  if (!sq && !busy) {
+  // 澆水：舉著手就一直出水，放下就停（不會失敗，只是慢）
+  if (state.step === 'water') {
+    const up = state.mode === 'body' ? armsUp : touchPlant;
+    state.pouring = up && !sq;
+    if (state.pouring) {
+      state.water += dt / WATER_FULL;
+      state.waterIdle = 0;
+      if (Math.random() < dt * 6) sfxWaterTick();
+    } else {
+      state.waterIdle += dt;
+      if (state.waterIdle > 2.2) { say('s20', { gap: 4000 }); state.waterIdle = 0.8; }
+      // 太久沒人澆 → 自己慢慢長完，絕不卡住
+      if (state.t > WATER_AUTO) state.water += dt / (WATER_FULL * 2.2);
+    }
+    if (state.water >= 1) { state.water = 1; state.step = 'bloom'; state.t = 0; state.pouring = false; say('s12', { priority: 2 }); sfxBloom(); petals(); }
+  }
+
+  if (!sq && !busy && state.step !== 'water') {
     // 舉手確認：維持 1 秒才放花；放過之後要先放下手
     const up = state.mode === 'body' ? armsUp : touchPlant;
     if (!up) { state.armT = 0; state.armLatch = false; }
@@ -713,11 +772,14 @@ function update(dt, now) {
     // 左右選盆（舉手確認中就鎖住不換盆）
     if (state.armT === 0) {
       if (state.mode === 'body') state.targetX = personX;
-      const mid = (POT_X[0] + POT_X[1]) / 2;
-      const buf = 0.035;                       // 中央緩衝區，身體在邊界晃不會來回跳選
+      // 三選一的遲滯：要比目前這盆「明顯更近」另一盆才換，身體在邊界晃不會來回跳選
       const prev = state.sel;
-      if (state.targetX < mid - buf) state.sel = 0;
-      else if (state.targetX > mid + buf) state.sel = 1;
+      let best = state.sel, bestD = Math.abs(state.targetX - POT_X[state.sel]) - 0.045;
+      for (let i = 0; i < POT_X.length; i++) {
+        const d = Math.abs(state.targetX - POT_X[i]);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+      state.sel = best;
       if (prev !== state.sel) sfxPick();
     }
   }
@@ -739,14 +801,9 @@ function update(dt, now) {
   }
   else if (state.step === 'drop') { if (state.t > 0.55) afterDrop(); }
   else if (state.step === 'shake') { if (state.t > 0.7) { state.step = 'slide'; state.t = 0; sfxSlide(); } }
-  else if (state.step === 'slide') { if (state.t > 0.9) { state.step = 'grow'; state.t = 0; } }
-  else if (state.step === 'grow') {
-    const T = GROW_T;
-    if (state.t < T[0]) { if (state.t < dt * 2) { say('s10', { priority: 2 }); sfxWaterOn(); } }
-    else if (state.t < T[0] + T[1]) { if (state.t - dt <= T[0]) say('s11'); }
-    else if (state.t < T[0] + T[1] + T[2]) { if (state.t - dt <= T[0] + T[1]) { say('s12', { priority: 2 }); sfxBloom(); } }
-    else if (state.t > T[0] + T[1] + T[2] + T[3]) toShelf();
-  }
+  else if (state.step === 'slide') { if (state.t > 0.9) startWater(); }
+  else if (state.step === 'water') { if (state.water > 0.5 && state.water - dt / WATER_FULL <= 0.5) say('s11'); }
+  else if (state.step === 'bloom') { if (state.t > BLOOM_T) toShelf(); }
   else if (state.step === 'shelf') { if (state.t > 0.8) nextRound(); }
   else if (state.step === 'done') {
     state.idle += dt;
@@ -756,9 +813,16 @@ function update(dt, now) {
   // ---- 自動演出 ----
   if (state.flip) { state.flip.t += dt; if (state.flip.t > 1.5) state.flip = null; }
   if (state.bee) {
-    state.bee.t += dt;
-    if (state.bee.t > 1.6 && state.bee.t < 1.7) say('s15', { gap: 8000 });
-    if (state.bee.t > 3.6) state.bee = null;
+    const b = state.bee;
+    b.t += dt;
+    if (b.phase === 'in' && b.t > 1.2) { b.phase = 'tickle'; b.t = 0; say('s15', { gap: 8000 }); }
+    else if (b.phase === 'tickle' && b.t > 7) { b.phase = 'flee'; b.t = 0; }   // 沒人趕就自己吃飽飛走
+    else if (b.phase === 'flee' && b.t > 1.2) state.bee = null;
+  }
+  for (let i = FX.length - 1; i >= 0; i--) {
+    const f = FX[i]; f.t += dt;
+    f.x += f.vx * dt; f.y += f.vy * dt; f.vy += H * 0.9 * dt;
+    if (f.t > f.life) FX.splice(i, 1);
   }
   if (state.wave) { state.wave.t += dt; if (state.wave.t > 2.2) state.wave = null; }
 }
@@ -767,15 +831,21 @@ function update(dt, now) {
 const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
 const clamp01 = t => Math.max(0, Math.min(1, t));
 
-// 當輪的花：依 grow 進度回傳要畫哪一張與額外縮放
+// 當輪的花長到哪裡：澆水階段跟著水量長，開花階段是彈一下的爆開
 function growStage() {
-  const T = GROW_T, t = state.t;
-  if (state.step !== 'grow') return { idx: 0, s: 1, bob: 0 };
-  if (t < T[0]) return { idx: 0, s: 1, bob: 0 };
-  if (t < T[0] + T[1]) { const k = clamp01((t - T[0]) / T[1]); return { idx: 1, s: 0.9 + k * 0.25, bob: 0 }; }
-  if (t < T[0] + T[1] + T[2]) { const k = clamp01((t - T[0] - T[1]) / T[2]); return { idx: 2, s: 0.8 + ease(k) * 0.45, bob: 0 }; }
-  const k = (t - T[0] - T[1] - T[2]);
-  return { idx: 2, s: 1.25, bob: Math.sin(k * 7) * 0.03 };
+  if (state.step === 'water') {
+    const w = state.water;
+    const idx = w < 0.5 ? 0 : 1;
+    // 沒在澆的時候歪頭催人（不是可憐，是「快點嘛」）
+    const nag = state.pouring ? 0 : Math.sin(performance.now() / 260) * 0.05;
+    return { idx, s: 0.85 + w * 0.45, bob: state.pouring ? Math.sin(performance.now() / 120) * 0.02 : 0, tilt: nag };
+  }
+  if (state.step === 'bloom') {
+    const k = clamp01(state.t / BLOOM_T);
+    const pop = k < 0.35 ? 0.9 + ease(k / 0.35) * 0.5 : 1.4 - ease((k - 0.35) / 0.65) * 0.15;
+    return { idx: 2, s: pop, bob: k > 0.5 ? Math.sin((k - 0.5) * 18) * 0.03 : 0, tilt: 0 };
+  }
+  return { idx: 0, s: 1, bob: 0, tilt: 0 };
 }
 
 function drawFlowerAt(key, idx, cx, by, h, opts = {}) {
@@ -831,6 +901,13 @@ function draw(now) {
   drawSeed(now);
   drawFlyingFlower(now);
   if (state.bee) drawBee(now);
+  for (const f of FX) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, 1 - f.t / f.life) * 0.9;
+    ctx.fillStyle = f.c;
+    ctx.beginPath(); ctx.ellipse(f.x, f.y, f.r * 1.5, f.r, f.t * 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   drawHUD(now);
 }
 
@@ -839,7 +916,9 @@ function drawRack(now) {
   state.shelf.forEach((s, i) => {
     const p = slotPos(i);
     const flipping = state.flip && state.flip.target === i;
-    const wave = state.wave ? Math.max(0, Math.sin((state.wave.t - i * 0.18) * 4)) : 0;
+    const tickled = state.bee && state.bee.phase === 'tickle' && state.bee.slot === i;
+    const wave = tickled ? 0.6 + Math.sin(state.bee.t * 22) * 0.4
+                         : (state.wave ? Math.max(0, Math.sin((state.wave.t - i * 0.18) * 4)) : 0);
     const last = (i === SLOTS - 1);
     const doneNod = state.step === 'done'
       ? Math.max(0, Math.sin((state.t - i * 0.35 - (last ? 0.5 : 0)) * 4)) : 0;   // 最後一盆故意慢半拍
@@ -869,7 +948,7 @@ function drawDemoPot(now) {
 
 function drawPots(now) {
   const potH = LAY.potH * H;
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < POT_X.length; i++) {
     const sel = state.sel === i && (state.step === 'pick');
     const lift = sel ? potH * 0.06 : 0;
     const wrongShake = (state.step === 'shake' && i === state.dropTo);
@@ -890,17 +969,28 @@ function drawPots(now) {
     // 盆口上方的花形提示
     drawHint(state.pots[i] !== undefined ? FLOWERS[state.pots[i]].key : 'sun', potCX(i), LAY.potY * H - potH * 1.15 - lift, H * 0.10);
 
-    // 已經放進去、正在長大的花
-    if (i === state.correct && (state.step === 'grow')) {
+    // 已經放進去、正在喝水長大的花
+    if (i === state.correct && (state.step === 'water' || state.step === 'bloom')) {
       const st = growStage();
       const base = LAY.potY * H - potH * 0.62;
-      drawFlowerAt(curFlower().key, st.idx, potCX(i), base, potH * (0.8 + st.idx * 0.25) * st.s,
-        { sy: 1 + st.bob, sx: 1 - st.bob * 0.5 });
-      // 澆水：壺 + 一股簡化水流
-      if (state.t < GROW_T[0]) {
-        const wx = potCX(i) + potH * 0.85, wy = LAY.potY * H - potH * 1.15;
-        picBottom('IT001', wx, wy, { h: potH * 0.5, flip: true });
-        pic('FX001', wx - potH * 0.38, wy + potH * 0.25, { h: potH * 0.6, alpha: 0.9 });
+      drawFlowerAt(curFlower().key, st.idx, potCX(i), base, potH * (0.85 + st.idx * 0.25) * st.s,
+        { sy: 1 + st.bob, sx: 1 - st.bob * 0.5, rot: st.tilt });
+      if (state.step === 'water') {
+        // 澆花壺：舉著手才傾倒出水，放下就扶正
+        const wx = potCX(i) + potH * 0.95, wy = LAY.potY * H - potH * (1.25 + state.water * 0.35);
+        picBottom('IT001', wx, wy, { h: potH * 0.52, flip: true, rot: state.pouring ? -0.45 : 0 });
+        if (state.pouring) {
+          pic('FX001', wx - potH * 0.42, wy + potH * 0.3, { h: potH * 0.75, alpha: 0.85 + Math.sin(now / 90) * 0.12 });
+        }
+        // 水位條：用盆口上方一條柔和的小弧表示「還要多少水」，不是數字也不是血條
+        ctx.save();
+        ctx.lineCap = 'round'; ctx.lineWidth = Math.max(3, H * 0.011);
+        ctx.strokeStyle = 'rgba(255,255,255,.45)';
+        const ay = LAY.potY * H - potH * (2.25 + state.water * 0.3);   // 跟著花長高一起往上
+        ctx.beginPath(); ctx.arc(potCX(i), ay, potH * 0.42, Math.PI * 0.85, Math.PI * 0.15, true); ctx.stroke();
+        ctx.strokeStyle = 'rgba(150,205,235,.95)';
+        ctx.beginPath(); ctx.arc(potCX(i), ay, potH * 0.42, Math.PI * 0.85, Math.PI * 0.85 - (Math.PI * 0.7) * state.water, true); ctx.stroke();
+        ctx.restore();
       }
     }
   }
@@ -910,7 +1000,7 @@ function drawSeed(now) {
   const x = state.seedX * W, by = LAY.seedY * H, h = LAY.seedH * H;
   // 姿勢：等待托花 → 抬手放花 → 完成介紹
   let id = 'CH001';
-  if (state.step === 'drop' || state.armT > 0.35) id = 'CH002';
+  if (state.step === 'drop' || state.armT > 0.35 || (state.step === 'water' && state.pouring)) id = 'CH002';
   if (state.step === 'shelf' || state.step === 'done') id = 'CH003';
   picBottom(id, x, by, { h });
   // 手上的小苗＋它的花形提示（還沒放出去的時候才有）
@@ -961,26 +1051,39 @@ function drawFlyingFlower(now) {
 }
 
 function drawBee(now) {
-  const t = state.bee.t;
-  const target = slotPos(Math.max(0, state.shelf.length - 1));
-  const k = t < 1.2 ? ease(t / 1.2) : (t > 2.6 ? 1 - ease((t - 2.6) / 1.0) : 1);
-  const x = W * 1.05 + (target.x + W * 0.09 - W * 1.05) * k;
-  const y = target.y - H * 0.13 + Math.sin(t * 6) * H * 0.012;
-  const sniff = t > 1.4 && t < 2.6;
-  picBottom(sniff ? 'EV002' : 'EV001', x, y, { h: H * 0.09, flip: true });
+  const b = state.bee;
+  const target = slotPos(Math.min(b.slot, Math.max(0, state.shelf.length - 1)));
+  const land = { x: target.x + W * 0.02, y: target.y - H * 0.10 };
+  let x, y, rot = 0, id = 'EV001';
+  if (b.phase === 'in') {                       // 從右邊飛進來
+    const k = ease(clamp01(b.t / 1.2));
+    x = W * 1.06 + (land.x - W * 1.06) * k;
+    y = land.y - H * 0.06 + Math.sin(b.t * 7) * H * 0.012;
+  } else if (b.phase === 'tickle') {            // 停在花臉上搬癢癢，花會一直抖
+    x = land.x + Math.sin(b.t * 9) * W * 0.004;
+    y = land.y + Math.sin(b.t * 13) * H * 0.006;
+    id = 'EV002';
+  } else {                                      // 被嚇到：翻著跟斗飛走
+    const k = ease(clamp01(b.t / 1.2));
+    x = land.x + k * W * 0.42;
+    y = land.y - Math.sin(k * Math.PI) * H * 0.22 - k * H * 0.05;
+    rot = k * Math.PI * 6;                      // 翻三圈
+  }
+  picBottom(id, x, y, { h: H * 0.085, flip: true, rot });
 }
 
 function drawHUD(now) {
   // 教學示範（前 10 秒沒有操作時）：大大的身體示意圖，不靠讀字
-  if (state.phase === 'play' && state.demoT < 10 && state.step === 'pick' && state.round === 0) {
+  if (state.phase === 'play' && state.demoT < 11 && state.step === 'pick' && state.round === 0) {
     const t = state.demoT;
     ctx.save();
     ctx.globalAlpha = 0.9;
     const cx = W * 0.5, cy = H * 0.30, s = H * 0.16;
     let icon = '🧍', label = '';
-    if (t >= 2 && t < 4) { icon = t % 1 < 0.5 ? '🚶' : '🚶‍♂️'; label = '左右動一動'; }
-    else if (t >= 4 && t < 7) { icon = '🙆'; label = '舉高手，放進去'; }
-    else if (t >= 7 && t < 10) { icon = '🧎'; label = '蹲一下試試看'; }
+    if (t >= 2 && t < 4.5) { icon = t % 1 < 0.5 ? '🚶' : '🚶‍♂️'; label = '走過去選一個盆'; }
+    else if (t >= 4.5 && t < 7) { icon = '🙆'; label = '舉高手，放進去'; }
+    else if (t >= 7 && t < 8.8) { icon = '🙆'; label = '手一直舉著＝澆水'; }
+    else if (t >= 8.8 && t < 11) { icon = '🧎'; label = '蹲一下試試看'; }
     if (label) {
       ctx.font = `${s}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(icon, cx, cy);
@@ -1054,9 +1157,12 @@ window.__dbg = () => ({
   phase: state.phase, step: state.step, paused: state.paused,
   round: state.round, sel: state.sel, correct: state.correct,
   pots: state.pots.map(i => FLOWERS[i].key), cur: curFlower().key,
+  water: +state.water.toFixed(2), pouring: state.pouring, beePhase: state.bee ? state.bee.phase : null,
   shelf: state.shelf.map(s => s.key), armT: +state.armT.toFixed(2),
-  flip: state.flip ? +state.flip.t.toFixed(2) : null, bee: !!state.bee, t: +state.t.toFixed(2),
+  flip: state.flip ? +state.flip.t.toFixed(2) : null, t: +state.t.toFixed(2),
 });
+// 叫小蜜蜂出來搗蛋（開發用，正式玩是一局隨機一次）
+window.__bee = () => { state.bee = { t: 0, phase: 'in', slot: Math.max(0, state.shelf.length - 1) }; sfxBee(); return window.__dbg(); };
 // 手動步進：不靠 requestAnimationFrame（背景分頁會被凍結），可離線快轉驗證
 window.__step = (secs = 5, { arms = false, squat: sq = false, sel = null, fps = 60 } = {}) => {
   const dt = 1 / fps, n = Math.round(secs * fps);
@@ -1072,16 +1178,20 @@ window.__step = (secs = 5, { arms = false, squat: sq = false, sel = null, fps = 
   draw(now);
   return window.__dbg();
 };
-window.__sim = async (rounds = 5, { wrong = 0.4 } = {}) => {
+window.__sim = async (rounds = 5, { wrong = 0.4, water = true } = {}) => {
   if (state.phase === 'menu') { startOverlay.style.display = 'none'; audioInit(); await loadArt(); loadVoices(); }
   state.mode = 'touch'; state.phase = 'play'; state.paused = false;
   startLocal();
   const log = [];
   for (let r = 0; r < rounds; r++) {
-    const want = Math.random() < wrong ? 1 - state.correct : state.correct;
-    __step(0.6, { sel: want });          // 走到那個盆
-    __step(1.2, { sel: want, arms: true });  // 舉手放花
-    __step(6.5, { sel: want });          // 長大秀＋上架
+    const n = POT_X.length;
+    const want = Math.random() < wrong ? (state.correct + 1 + ((Math.random() * (n - 1)) | 0)) % n : state.correct;
+    __step(0.6, { sel: want });                 // 走到那個盆
+    __step(1.2, { sel: want, arms: true });     // 舉手放花
+    __step(2.2, { sel: want });                 // 落盆／配錯搬家
+    if (water) __step(WATER_FULL + 0.6, { sel: want, arms: true });  // 舉著手把水澆滿
+    else __step(WATER_AUTO + WATER_FULL * 2.4, { sel: want });       // 完全不澆：驗證它會自己長完
+    __step(BLOOM_T + 1.2, { sel: want });       // 開花＋上架
     log.push(window.__dbg());
   }
   return log;

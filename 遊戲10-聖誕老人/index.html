@@ -1,0 +1,1530 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#9fb6cf">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="../共用/manifest.json">
+<link rel="icon" href="../共用/icon-192.png?v=2">
+<title>🎅 聖誕老人送禮去</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #9fb6cf; touch-action: none; }
+  body { font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; }
+
+  /* 鏡頭預覽小視窗（給爸爸確認追蹤狀況用） */
+  #pip {
+    position: fixed; left: 12px; bottom: 12px; width: 160px; height: 120px;
+    border: 3px solid rgba(255,255,255,.6); border-radius: 12px; overflow: hidden;
+    display: none; z-index: 20; background: #000;
+  }
+  #pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  #pipDot {
+    position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%;
+    background: #00ff88; box-shadow: 0 0 8px #00ff88; transform: translate(-50%,-50%);
+    transition: left .1s linear;
+  }
+  #pipHide {
+    position: absolute; top: 2px; right: 2px; width: 28px; height: 28px;
+    background: rgba(0,0,0,.5); color: #fff; border: none; border-radius: 8px; font-size: 14px;
+  }
+
+  .overlay {
+    position: fixed; inset: 0; z-index: 30;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+  }
+  #startOverlay { background: linear-gradient(180deg, #7d93b4 0%, #a8bed6 50%, #d9c9b6 100%); padding: 2vmin; overflow: hidden; }
+  #startOverlay h1 { font-size: clamp(22px, 9vmin, 64px); margin-bottom: 1vmin; color: #fff7ec; text-shadow: 0 2px 10px rgba(80,60,50,.5); }
+  #startOverlay .big { font-size: clamp(44px, 16vmin, 140px); line-height: 1.1; animation: sway 2.4s ease-in-out infinite; }
+  @keyframes sway { 0%,100% { transform: rotate(-4deg) } 50% { transform: rotate(4deg) } }
+  .btn {
+    margin: 1.2vmin; padding: 1.8vmin 5vmin; font-size: clamp(15px, 5vmin, 32px); font-weight: bold;
+    color: #fff; border: none; border-radius: 60px; cursor: pointer;
+    box-shadow: 0 0.6vmin 0 rgba(0,0,0,.25);
+  }
+  .btn:active { transform: translateY(0.4vmin); box-shadow: 0 0.2vmin 0 rgba(0,0,0,.25); }
+  #btnBody  { background: linear-gradient(180deg, #d0705f, #a84536); }
+  #btnTouch { background: linear-gradient(180deg, #7fa8c4, #4a7796); }
+  #startOverlay .hint { margin-top: 1.5vmin; font-size: clamp(10px, 3vmin, 18px); color: #fdf3e6; max-width: 88%; line-height: 1.5; }
+
+  #rotateHint {
+    display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    background: rgba(0,0,0,.6); color: #ffdd44; text-align: center;
+    font-size: clamp(14px, 4vmin, 22px); font-weight: bold; padding: 2vmin;
+    pointer-events: none;
+  }
+  @media (orientation: portrait) { #rotateHint { display: block; } }
+
+  #loadingOverlay { background: rgba(50,62,80,.92); display: none; }
+  #loadingOverlay .spin { font-size: 70px; animation: spin 1.2s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg) } }
+  #loadingOverlay p { margin-top: 16px; font-size: 24px; }
+
+  #findPlayer {
+    position: fixed; inset: auto 0 18% 0; z-index: 25; display: none;
+    text-align: center; pointer-events: none;
+  }
+  #findPlayer .bubble {
+    display: inline-block; background: rgba(255,255,255,.92); color: #333;
+    font-size: clamp(24px, 5vw, 40px); font-weight: bold;
+    padding: 18px 36px; border-radius: 24px;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  @keyframes bounce { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+
+  /* 太靠近電視的提醒（強制暫停 5 秒） */
+  #tooClose {
+    position: fixed; inset: 0; z-index: 26; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+    background: rgba(180, 40, 0, .3);
+  }
+  #tooClose .bubble {
+    background: rgba(255,255,255,.95); color: #d3322a; text-align: center;
+    font-size: clamp(26px, 8vmin, 60px); font-weight: bold;
+    padding: 4vmin 7vmin; border-radius: 4vmin; line-height: 1.5;
+    animation: bounce 1s ease-in-out infinite;
+  }
+  #tooClose .count { font-size: clamp(44px, 16vmin, 120px); color: #ff8800; line-height: 1.2; }
+
+  #countdown {
+    position: fixed; inset: 0; z-index: 28; display: none;
+    align-items: center; justify-content: center; pointer-events: none;
+  }
+  #countdown span {
+    font-size: clamp(80px, 38vmin, 300px); font-weight: bold; color: #ffdd44;
+    text-shadow: 0 0 50px #e08a3c, 0 4px 10px rgba(0,0,0,.4);
+  }
+
+  /* 手指模式的大按鈕：靠右下角，不能蓋住下層陽台 */
+  #touchUI { position: fixed; right: 2.5vmin; bottom: 2.5vmin; z-index: 22; display: none; flex-direction: column; gap: 1.6vmin; pointer-events: none; }
+  #touchUI button {
+    pointer-events: auto; border: none; border-radius: 3vmin; padding: 1.6vmin 4vmin;
+    font-size: clamp(16px, 4.6vmin, 30px); font-weight: bold; color: #fff;
+    box-shadow: 0 .6vmin 0 rgba(0,0,0,.25);
+  }
+  #touchUI button:active { transform: translateY(.4vmin); box-shadow: 0 .2vmin 0 rgba(0,0,0,.25); }
+  #btnThrow { background: linear-gradient(180deg, #d0705f, #a84536); }
+  #btnDown  { background: linear-gradient(180deg, #7fa8c4, #4a7796); }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="rotateHint">📱 把手機轉橫的玩更好玩喔！</div>
+
+<div id="pip">
+  <video id="cam" playsinline muted autoplay></video>
+  <div id="pipDot"></div>
+  <button id="pipHide">✕</button>
+</div>
+
+<div id="findPlayer"><div class="bubble">🧍 站到鏡頭前面吧！</div></div>
+<div id="tooClose"><div class="bubble">🛑 太靠近電視囉！<br>往後退～往後退～ 👣<div id="pauseCount" class="count"></div></div></div>
+<div id="countdown"><span id="countNum"></span></div>
+
+<div id="touchUI">
+  <button id="btnThrow">🎁 丟禮物</button>
+  <button id="btnDown">🧎 蹲下</button>
+</div>
+
+<div class="overlay" id="loadingOverlay">
+  <div class="spin">🎁</div>
+  <p id="loadingText">正在爬上屋頂…</p>
+</div>
+
+<div class="overlay" id="startOverlay">
+  <div class="big">🎅</div>
+  <h1>聖誕老人送禮去</h1>
+  <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
+  <button class="btn" id="btnTouch">👆 用手指玩</button>
+  <div class="hint">平安夜，大家都睡著了 🌙 左右走，用大袋子接住禮物！袋子滿了就走到煙囪旁，<b>揮手一件一件丟下去</b> 🎁<br>禮物會滑到聖誕樹旁、或掉進掛著的襪子裡。蹲一下會有好笑的事發生 😆 接不到也沒關係，禮物會自己彈回袋子裡。<br>影像只在裝置上運算，不會上傳。</div>
+</div>
+
+<script type="module">
+/* ================== 基本設定 ================== */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+function resize() {
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ================== 素材 ================== */
+const ART_VER = '2';
+const ART = {}, IMG = {};
+const ART_IDS = [
+  'CH001', 'CH002', 'CH003', 'CH005', 'CH006', 'CH007', 'CH008',  // 聖誕老人：待機／走路兩格／蹲下／四腳朝天／投擲預備／投擲出手
+  'CH101', 'CH102',                                               // 屋頂貓：坐／仰倒
+  'CH201', 'CH202',                                               // 麻雀：收翅／張翅
+  'CH303', 'CH403',                                               // 熟睡的小朋友／熟睡的阿嬤（躺著）
+  'CH501', 'VH001',                                               // 馴鹿／雪橇
+  'IT001', 'IT002', 'IT003', 'IT004', 'IT005', 'IT006',           // 禮物盒／玩具車／熊玩偶／麵包紙袋／紅包袋／點心餐盤
+  'TP001', 'TP003', 'TP004', 'TP005', 'TP006',                    // 屋頂平台／公寓／店面／機車／聖誕樹
+  'TP007', 'TP008', 'TP009', 'TP010', 'TP011', 'TP012',           // 聖誕紅／晾衣被／禮物袋／煙囪與煙道／聖誕襪／床與床頭矮櫃
+  'BG001', 'BG002',                                               // 遠景橫幅／街道橫幅
+];
+const EXT = { BG001: 'jpg', BG002: 'jpg' };
+for (const id of ART_IDS) ART[id] = {};
+function loadArt() {
+  return Promise.all(ART_IDS.map(id => new Promise(res => {
+    const im = new Image();
+    im.onload = () => { IMG[id] = im; ART[id].ar = im.naturalWidth / im.naturalHeight; res(); };
+    im.onerror = () => { IMG[id] = null; res(); };
+    im.src = 'pic/opt/' + id + '.' + (EXT[id] || 'webp') + '?v=' + ART_VER;
+  })));
+}
+function pic(id, cx, cy, { h = null, w = null, flip = false, rot = 0, alpha = 1, sx = 1, sy = 1 } = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let ww = w, hh = h;
+  if (ww == null) ww = hh * ART[id].ar;
+  if (hh == null) hh = ww / ART[id].ar;
+  ctx.save();
+  ctx.globalAlpha *= alpha;
+  ctx.translate(cx, cy);
+  if (rot) ctx.rotate(rot);
+  if (flip) ctx.scale(-1, 1);
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
+  ctx.drawImage(im, -ww / 2, -hh / 2, ww, hh);
+  ctx.restore();
+  return true;
+}
+function picBottom(id, cx, by, opts = {}) {
+  const im = IMG[id]; if (!im) return false;
+  let hh = opts.h, ww = opts.w;
+  if (ww == null) ww = hh * ART[id].ar; if (hh == null) hh = ww / ART[id].ar;
+  return pic(id, cx, by - hh / 2, { ...opts, w: ww, h: hh });
+}
+function tileBand(id, top, h, shift = 0) {
+  const im = IMG[id]; if (!im) return false;
+  const tw = h * ART[id].ar;
+  if (!(tw > 1)) return false;
+  const i0 = Math.floor(shift / tw);
+  for (let i = i0; i * tw - shift < W; i++) {
+    const x = i * tw - shift;
+    const mirror = (((i % 2) + 2) % 2) === 1;
+    ctx.save();
+    if (mirror) { ctx.translate(x + tw, top); ctx.scale(-1, 1); }
+    else ctx.translate(x, top);
+    ctx.drawImage(im, 0, 0, tw, h);
+    ctx.restore();
+  }
+  return true;
+}
+
+/* ================== 音效（Web Audio 合成，不需音檔） ================== */
+let AC = null;
+/* ---- 音訊衛生（全系列共用補丁 2026-08-23）---- */
+let MASTER = null, AUDIO_VOICE_T = [];
+const AUDIO_LOOPS = [];
+function AUDIO_DEST() { if (!MASTER && AC) { MASTER = AC.createGain(); MASTER.gain.value = 1; MASTER.connect(AC.destination); } return MASTER || AC.destination; }
+function audioCanPlay() { if (!AC || AC.state !== 'running') return false; const now = performance.now(); AUDIO_VOICE_T = AUDIO_VOICE_T.filter(t => now - t < 2500); return AUDIO_VOICE_T.length < 14; }
+function audioVoiceStart() { AUDIO_VOICE_T.push(performance.now()); }
+function audioAllLoopsOff() { for (const l of AUDIO_LOOPS) { try { l.off(); } catch (e) {} } }
+function audioGuardInstall() {
+  AUDIO_DEST();
+  const mute = on => { if (MASTER) MASTER.gain.setTargetAtTime(on ? 0 : 1, AC.currentTime, 0.03); };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      mute(true); audioAllLoopsOff(); AUDIO_VOICE_T = [];
+      try { speechSynthesis.cancel(); } catch (e) {}
+      if (curVoice) { try { curVoice.pause(); } catch (e) {} }
+    } else { try { AC.resume(); } catch (e) {} mute(false); AUDIO_VOICE_T = []; }
+  });
+  AC.addEventListener('statechange', () => { if (AC.state !== 'running') { audioAllLoopsOff(); AUDIO_VOICE_T = []; } });
+  window.addEventListener('pointerdown', () => { if (AC.state !== 'running') { try { AC.resume(); } catch (e) {} } });
+}
+function audioInit() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  audioGuardInstall();
+}
+// 深夜場景，音量整體壓低一點（全家都在睡）
+function tone(freq, dur, type = 'sine', vol = 0.2, when = 0) {
+  if (!audioCanPlay() || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, AC.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + when + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(AC.currentTime + when); o.stop(AC.currentTime + when + dur + 0.05);
+}
+function sweepDown(f0, f1, dur, vol = 0.14) {
+  if (!audioCanPlay() || !AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sawtooth';
+  o.frequency.setValueAtTime(f0, AC.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(40, f1), AC.currentTime + dur);
+  g.gain.setValueAtTime(vol, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  o.connect(g); g.connect(AUDIO_DEST());
+  audioVoiceStart(); o.start(); o.stop(AC.currentTime + dur + 0.05);
+}
+const sfxStep    = () => tone(230 + Math.random() * 30, 0.05, 'sine', 0.05);
+const sfxCatch   = () => { tone(660, 0.08, 'triangle', 0.16); tone(880, 0.1, 'triangle', 0.13, 0.06); }
+const sfxFull    = () => [523, 659, 784].forEach((f, i) => tone(f, 0.16, 'triangle', 0.16, i * 0.08));
+const sfxThrow   = () => { tone(520, 0.07, 'sine', 0.12); tone(760, 0.09, 'sine', 0.1, 0.05); }
+const sfxFlue    = () => sweepDown(900, 260, 0.45, 0.1);                      // 咻——滑下煙囪
+const sfxLand    = () => { tone(440, 0.1, 'triangle', 0.13); tone(660, 0.14, 'triangle', 0.1, 0.08); }
+const sfxSock    = () => { tone(350, 0.12, 'sine', 0.12); tone(520, 0.14, 'sine', 0.1, 0.09); }
+const sfxBounce  = () => { tone(300, 0.09, 'square', 0.11); tone(520, 0.1, 'square', 0.1, 0.08); tone(760, 0.12, 'square', 0.08, 0.17); }
+const sfxRoll    = () => { for (let i = 0; i < 7; i++) tone(250 + Math.sin(i * 1.7) * 120 + i * 24, 0.09, 'square', 0.07, i * 0.07); }
+const sfxSpin    = () => { sweepDown(700, 320, 0.3, 0.09); tone(520, 0.12, 'triangle', 0.1, 0.28); }
+const sfxSquish  = () => { sweepDown(520, 180, 0.22, 0.12); tone(680, 0.14, 'triangle', 0.12, 0.2); }
+const sfxMeow    = () => { tone(520, 0.14, 'sawtooth', 0.07); tone(420, 0.18, 'sawtooth', 0.06, 0.12); }
+const sfxChirp   = () => { tone(1500, 0.05, 'sine', 0.08); tone(1900, 0.05, 'sine', 0.07, 0.07); }
+const sfxShoo    = () => [520, 700, 900, 1150].forEach((f, i) => tone(f, 0.09, 'square', 0.1, i * 0.05));
+const sfxDuck    = () => { for (let i = 0; i < 5; i++) tone(700 - i * 90, 0.07, 'sine', 0.08, i * 0.05); }
+const sfxSnack   = () => { tone(300, 0.1, 'square', 0.1); tone(420, 0.1, 'square', 0.09, 0.12); tone(560, 0.16, 'triangle', 0.1, 0.24); }
+const sfxSleigh  = () => { for (let i = 0; i < 6; i++) tone(880 + (i % 2) * 180, 0.12, 'triangle', 0.07, i * 0.13); }
+const sfxDone    = () => [523, 659, 784, 1047, 1319, 1047, 1319].forEach((f, i) => tone(f, 0.28, 'triangle', 0.14, i * 0.13));
+function sfxAlarm() {  // 太靠近的「咿－嗚－」警報：這一句一定要聽得到，不壓音量
+  tone(880, 0.3, 'square', 0.3); tone(660, 0.3, 'square', 0.3, 0.3);
+  tone(880, 0.3, 'square', 0.3, 0.6); tone(660, 0.3, 'square', 0.3, 0.9);
+}
+
+/* ================== 旁白（英文短句磨耳朵；畫面字幕繁體中文） ================== */
+// 有 snd/sN.mp3 就用預錄人聲，沒有就退回瀏覽器 TTS。全程是「不能吵醒小孩」的輕聲氣氛
+const LINES = {
+  s1:  ["Shh, everyone's asleep.",     '噓，大家都睡了。'],
+  s2:  ["Santa, let's go.",            '聖誕老人，出發囉。'],
+  s3:  ['Move and catch.',             '左右動，接禮物。'],
+  s4:  ['You caught it!',              '接到了！'],
+  s5:  ['Your bag is full.',           '袋子滿了。'],
+  s6:  ['Over to the chimney.',        '走到煙囪旁。'],
+  s7:  ['Toss one present.',           '丟出一件禮物。'],
+  s8:  ['Down the chimney.',           '禮物滑下煙囪了。'],
+  s9:  ['Right beside the tree.',      '放在聖誕樹旁邊。'],
+  s10: ['A little car!',               '是玩具車！'],
+  s11: ['Into the stocking.',          '放進襪子裡。'],
+  s12: ['Sweet dreams.',               '做個好夢。'],
+  s13: ['Crouch for a cookie.',        '蹲下，偷吃一口餅乾。'],
+  s14: ['A cookie in your beard!',     '餅乾卡在鬍子上了！'],
+  s15: ['A little sip of milk.',       '再喝一口牛奶。'],
+  s16: ['A carrot for you.',           '這根紅蘿蔔給你。'],
+  s17: ["Grandma's asleep too.",       '阿嬤也睡著了。'],
+  s18: ['The other chimney.',          '換另一座煙囪。'],
+  s19: ['What a big bear!',            '好大一隻熊！'],
+  s20: ['Crouch to squish it.',        '蹲下壓一壓。'],
+  s21: ['Boing, in you go.',           '啵，進去了。'],
+  s22: ["Kitty, that's my bag.",       '貓咪，那是我的袋子。'],
+  s23: ['Swing your arm, shoo kitty.', '揮一下，請貓咪讓開。'],
+  s24: ['Crouch under the blanket.',   '蹲下，鑽過被子。'],
+  s25: ['Silly little bird.',          '淘氣的小麻雀。'],
+  s26: ['Swing your arm, shoo bird.',  '揮一下，請麻雀讓開。'],
+  s27: ['Oops, back in the bag.',      '哎呀，彈回袋子裡了。'],
+  s28: ['A belly bounce!',             '肚子幫忙彈一下！'],
+  s29: ["Santa's rolling!",            '聖誕老人滾起來了！'],
+  s30: ['Here it comes.',              '禮物過來了。'],
+  s31: ['Back to the sleigh.',         '回雪橇，去下一間。'],
+  s32: ['One more bag.',               '再送一袋。'],
+  s33: ['A present for Santa!',        '這份是送給聖誕老人的！'],
+  s34: ['Crouch, Santa.',              '蹲下，聖誕老人。'],
+  s35: ['Give a toss, boing!',         '揮一下，連自己也彈起來！'],
+  s36: ['Still fast asleep.',          '大家還睡得好熟。'],
+  s37: ['Merry Christmas.',            '耶誕快樂。'],
+  s38: ['Step back, please.',          '請往後退。'],
+  s39: ["Let's keep going.",           '我們繼續。'],
+  s40: ["Let's deliver again.",        '再送一次。'],
+  s41: ['Toss the next one.',          '再丟一件。'],
+  s42: ['An empty-handed spin!',       '空手也轉了一圈！'],
+};
+const SND = {}; let curVoice = null;
+const lastSay = {};
+let caption = { text: '', t: 0 };
+function loadVoices() {
+  for (const k of Object.keys(LINES)) {
+    const a = new Audio('snd/' + k + '.mp3?v=' + ART_VER); a.preload = 'auto';
+    a.addEventListener('canplaythrough', () => { SND[k] = a; }, { once: true });
+    a.addEventListener('error', () => { SND[k] = null; }, { once: true });
+    a.load();
+  }
+}
+let ttsVoice = null;
+function pickVoice() {
+  if (ttsVoice) return ttsVoice;
+  try {
+    const vs = speechSynthesis.getVoices().filter(v => /^en(-|_)/i.test(v.lang));
+    ttsVoice = vs.find(v => /female|samantha|zira|aria/i.test(v.name)) || vs[0] || null;
+  } catch (e) {}
+  return ttsVoice;
+}
+// priority 2 = 一定要播（會打斷正在播的）；1 = 忙就跳過。不排隊，不累積。
+function say(key, { gap = 2600, priority = 1 } = {}) {
+  const line = LINES[key]; if (!line) return;
+  const n = performance.now();
+  if (lastSay[key] && n - lastSay[key] < gap) return;
+  lastSay[key] = n;
+  caption = { text: line[1], t: 2.4 };
+  if (SND[key]) {
+    const busy = curVoice && !curVoice.paused && !curVoice.ended;
+    if (busy && priority < 2) return;
+    if (busy) { curVoice.pause(); curVoice.currentTime = 0; }
+    try { speechSynthesis.cancel(); } catch (e) {}
+    curVoice = SND[key]; curVoice.currentTime = 0; curVoice.volume = 1;
+    curVoice.play().catch(() => {});
+    return;
+  }
+  try {
+    if (speechSynthesis.speaking && priority < 2) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(line[0]);
+    const v = pickVoice(); if (v) u.voice = v;
+    u.lang = 'en-US'; u.rate = 1.0; u.pitch = Math.min(2, 1.2 + (Math.random() - 0.5) * 0.2); u.volume = 0.95;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+/* ================== 版面（座標集中在這裡，照 scene.md） ================== */
+const LAY = {
+  roofY:     0.46,   // 屋頂平台面 ＝ 聖誕老人腳底線
+  roofH:     0.045,
+  santaH:    0.235,
+  sackH:     0.115,
+  chimTop:   0.372,  // 煙囪口
+  chimH:     0.305,  // 煙囪＋煙道總高（底端就是室內出口）
+  roomTop:   0.525,  // 室內剖面
+  roomBot:   0.845,
+  groundTop: 0.855,
+  giftH:     0.070,
+};
+const WALK_MIN = 0.24, WALK_MAX = 0.88;   // 屋頂可走位範圍（左側讓給雪橇與馴鹿）
+const SLEIGH_X = 0.085, DEER_X = 0.185;
+
+// 兩戶住家：前兩段只有一戶，第三段起變兩戶
+const HOUSE_ONE = [{ x0: 0.22, x1: 0.86, chim: 0.54, who: 'CH303', wall: '#b9c4d2', name: '小朋友家' }];
+const HOUSE_TWO = [
+  { x0: 0.045, x1: 0.475, chim: 0.29, who: 'CH303', wall: '#b9c4d2', name: '小朋友家' },
+  { x0: 0.525, x1: 0.955, chim: 0.71, who: 'CH403', wall: '#d6cdbc', name: '阿嬤家' },
+];
+const houses = () => (state.stage >= 2 ? HOUSE_TWO : HOUSE_ONE);
+const targetHouse = () => houses()[Math.min(state.target, houses().length - 1)];
+
+const roofTopY = () => LAY.roofY * H;
+const sackX = () => state.santaX * W + W * 0.038;
+const sackMouthY = () => roofTopY() - LAY.sackH * H * 0.92;
+const chimMouth = h => ({ x: h.chim * W, y: LAY.chimTop * H + H * 0.012 });
+const chimExit = h => ({ x: h.chim * W, y: (LAY.chimTop + LAY.chimH) * H - H * 0.015 });
+// 室內的固定位置（樹、襪子、床、餐盤）
+function roomSpots(h) {
+  const cx = h.chim * W, left = h.x0 * W, right = h.x1 * W;
+  const treeSide = (h.chim - h.x0) > (h.x1 - h.chim) ? -1 : 1;     // 樹放在煙道空間比較大的那一側
+  const floorY = LAY.roomBot * H - H * 0.012;
+  return {
+    floorY, dir: treeSide,
+    tree:  { x: cx + treeSide * W * 0.150, y: floorY },
+    drop:  { x: cx + treeSide * W * 0.105, y: floorY },             // 樹旁放大禮物的空地
+    sock:  { x: cx + treeSide * W * 0.075, y: chimExit(h).y + H * 0.018 },   // 掛在煙道與樹之間，遠離床，不會疊到睡著的人
+    bed:   { x: treeSide > 0 ? left + W * 0.085 : right - W * 0.085, y: floorY },
+    plate: { x: treeSide > 0 ? left + W * 0.160 : right - W * 0.160, y: floorY - H * 0.048 },
+  };
+}
+const SMALL_GIFT = { IT002: 1, IT005: 1 };   // 小禮物進襪子，大禮物放樹旁
+
+/* ================== 八段推進（每兩袋一段） ================== */
+const STAGES = [
+  { name: '第一間亮著小燈的房子', gifts: ['IT001'],                            ev: null,      tint: 0.00 },
+  { name: '禮物裡有車車',         gifts: ['IT001', 'IT002', 'IT004'],          ev: null,      tint: 0.02 },
+  { name: '阿嬤也睡著了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: null,      tint: 0.04 },
+  { name: '這隻熊太大了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'bear',    tint: 0.06 },
+  { name: '屋頂貓來幫倒忙',       gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'cat',     tint: 0.08 },
+  { name: '晾衣被的捷徑',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'blanket', tint: 0.10 },
+  { name: '麻雀搬不動',           gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'bird',    tint: 0.12 },
+  { name: '整條街的回禮',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'mix',     tint: 0.14 },
+];
+const BAGS_PER_STAGE = 2;
+const BAG_SIZE = 4;
+const TOTAL_BAGS = STAGES.length * BAGS_PER_STAGE;
+const ASSIST_AFTER = 5.0;
+const FALL_T = 2.6;
+const THROW_ANIM = 0.34;       // 預備＋出手兩格連播的長度
+const NEAR_CHIM = 0.30;        // 站得夠近才丟得到；太遠就是好笑的肚子彈一下再補送
+
+const state = {
+  phase: 'menu', mode: null,
+  step: 'catch',      // catch | full | deliver | snack | stage | finale | done
+  t: 0,
+  bag: 0, stage: 0,
+  santaX: 0.5, targetX: 0.5, facing: 1, walkPhase: 0, moving: false,
+  gifts: [],          // 空中掉落中的禮物
+  hold: [],           // 袋子裡的禮物 id
+  flying: [],         // 已丟出、還在路上的禮物
+  spawnGap: 0,
+  target: 0,
+  throwAnim: 0, throwCool: 0,
+  squatCool: 0,
+  event: null,
+  roll: null, spin: null, snack: null,
+  delivered: [[], []],   // 每一戶已送達的禮物（樹旁／襪子）
+  dream: 0,              // 住戶在夢裡笑一下
+  assist: 0, assisting: false, idle: 0,
+  paused: false,
+  finale: null,
+  stageFlash: 0,
+  sleigh: 0,             // 換場時雪橇滑一段
+};
+
+function curStage() { return STAGES[Math.min(state.stage, STAGES.length - 1)]; }
+
+function startLocal() {
+  state.bag = 0; state.stage = 0; state.step = 'catch'; state.t = 0;
+  state.santaX = 0.5; state.targetX = 0.5; state.facing = 1;
+  state.gifts = []; state.hold = []; state.flying = [];
+  state.event = null; state.roll = null; state.spin = null; state.snack = null;
+  state.finale = null; state.delivered = [[], []]; state.dream = 0;
+  state.throwAnim = 0; state.throwCool = 0; state.squatCool = 0;
+  state.assist = 0; state.assisting = false; state.idle = 0;
+  state.target = 0; state.spawnGap = 0.6; state.sleigh = 0;
+}
+
+/* ================== 體感追蹤（MediaPipe Pose） ================== */
+const video = document.getElementById('cam');
+const pip = document.getElementById('pip');
+const pipDot = document.getElementById('pipDot');
+let poseLandmarker = null;
+let lastVideoTime = -1;
+let lastSeen = 0;
+let personX = 0.5;
+let squat = false, squatPrev = false;
+let standH = 0, shoulderW = 0;
+let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
+// 揮擲：讀手腕相對肩線的上升速度尖峰（時間性偵測，不是單格姿勢）
+let throwPulse = false;          // 這一幀有沒有丟出去（遊戲邏輯消耗掉）
+let throwArm = 0;                // 目前速度（除錯用）
+const wristHist = [];            // 兩腕最近幾幀的位置
+let throwLock = 0;               // 觸發後的冷卻（秒）
+const THROW_SPEED = 2.4;         // 手腕上升速度門檻（以肩寬為尺規，每秒幾個肩寬）
+const THROW_COOL = 0.55;
+const zoomCanvas = document.createElement('canvas');
+const zoomCtx = zoomCanvas.getContext('2d');
+let zoomBox = null;
+
+async function setupBodyTracking() {
+  const loadingText = document.getElementById('loadingText');
+  loadingText.textContent = '正在啟動鏡頭…';
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+    audio: false,
+  });
+  video.srcObject = stream;
+  await new Promise(r => video.onloadedmetadata = r);
+  await video.play();
+
+  loadingText.textContent = '正在載入 AI 模型…（第一次會久一點）';
+  const { PoseLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14');
+  const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+    baseOptions: {
+      modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task',
+      delegate: 'GPU',
+    },
+    runningMode: 'VIDEO',
+    numPoses: 1,
+    minPoseDetectionConfidence: 0.3,
+    minPosePresenceConfidence: 0.3,
+    minTrackingConfidence: 0.3,
+  });
+  pip.style.display = 'block';
+}
+
+function trackFrame() {
+  if (!poseLandmarker || video.currentTime === lastVideoTime) return;
+  lastVideoTime = video.currentTime;
+  const vw = video.videoWidth || 640, vh = video.videoHeight || 480;
+  if (zoomBox && performance.now() - lastSeen > 1200) zoomBox = null;
+  const zb = zoomBox;
+  let result;
+  try {
+    if (zb) {
+      zoomCanvas.width = vw; zoomCanvas.height = vh;
+      zoomCtx.drawImage(video, zb.x * vw, zb.y * vh, zb.w * vw, zb.h * vh, 0, 0, vw, vh);
+      result = poseLandmarker.detectForVideo(zoomCanvas, performance.now());
+    } else {
+      result = poseLandmarker.detectForVideo(video, performance.now());
+    }
+  } catch (e) { return; }
+  const lm = result.landmarks && result.landmarks[0];
+  const nowT = performance.now();
+  if (!lm) {
+    // 追蹤丟失太久 → 重置姿勢與速度歷史，不然蹲下／揮擲會卡住或誤觸
+    if (nowT - lastSeen > 700) { squat = false; wristHist.length = 0; throwArm = 0; }
+    return;
+  }
+  lastSeen = nowT;
+  if (zb) for (const p of lm) { p.x = zb.x + p.x * zb.w; p.y = zb.y + p.y * zb.h; }
+  {
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for (const p of lm) { if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x; if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; }
+    const zcx = (minX + maxX) / 2, zcy = (minY + maxY) / 2;
+    const s = Math.min(1, Math.max(0.45, Math.max(maxX - minX, maxY - minY) * 2.4));
+    const bx = Math.min(1 - s, Math.max(0, zcx - s / 2)), by = Math.min(1 - s, Math.max(0, zcy - s / 2));
+    if (!zoomBox) zoomBox = { x: bx, y: by, w: s, h: s };
+    else { zoomBox.x += (bx - zoomBox.x) * 0.12; zoomBox.y += (by - zoomBox.y) * 0.12; zoomBox.w += (s - zoomBox.w) * 0.12; zoomBox.h += (s - zoomBox.h) * 0.12; }
+  }
+  const visOK = i => (lm[i].visibility ?? 1) >= 0.5;
+  const cx = (lm[11].x + lm[12].x) / 2;
+  personX = 1 - cx;                       // 前鏡頭要鏡像才像照鏡子
+  shoulderW = Math.abs(lm[11].x - lm[12].x);
+  const shoulderY = (lm[11].y + lm[12].y) / 2;
+
+  /* ---- 揮擲：手腕在一小段時間內的上升速度尖峰 ---- */
+  // 用肩寬當尺規，站遠站近門檻一樣；兩腕分別算，同一次大動作只算一次
+  wristHist.push({ t: nowT, l: visOK(15) ? lm[15].y : null, r: visOK(16) ? lm[16].y : null, sy: shoulderY });
+  while (wristHist.length > 8) wristHist.shift();
+  const old = wristHist[0], now2 = wristHist[wristHist.length - 1];
+  let best = 0;
+  if (wristHist.length >= 3 && shoulderW > 0.02) {
+    const dt = (now2.t - old.t) / 1000;
+    if (dt > 0.03) {
+      for (const side of ['l', 'r']) {
+        if (old[side] == null || now2[side] == null) continue;
+        const rise = (old[side] - now2[side]) / shoulderW;    // 往上是正
+        const sp = rise / dt;
+        // 手腕要真的甩到肩線附近以上，才算「丟」；純粹身體上下晃不算
+        const high = (now2.sy - now2[side]) / shoulderW > -0.35;
+        if (high && sp > best) best = sp;
+      }
+    }
+  }
+  throwArm = best;
+  if (throwLock <= 0 && best > THROW_SPEED) { throwPulse = true; throwLock = THROW_COOL; wristHist.length = 0; }
+
+  // 蹲下：肩到踝的高度比例掉到站姿基準的 0.80 才算蹲、回到 0.90 才算站起
+  const ankleY = Math.max(lm[27].y, lm[28].y);
+  const bodyH = Math.abs(ankleY - shoulderY);
+  if (bodyH > 0.02) standH = standH ? Math.max(standH * 0.995, bodyH) : bodyH;
+  const ratio = standH ? bodyH / standH : 1;
+  if (ratio < 0.80) squat = true; else if (ratio > 0.90) squat = false;
+
+  pipDot.style.left = (personX * 100) + '%';
+  pipDot.style.background = squat ? '#ff8800' : (throwLock > 0 ? '#ffdd00' : '#00ff88');
+}
+
+/* ================== 觸控模式 ================== */
+let touchSquat = false;
+const touchUI = document.getElementById('touchUI');
+canvas.addEventListener('pointerdown', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play') return;
+  state.targetX = Math.max(WALK_MIN, Math.min(WALK_MAX, e.clientX / W));
+});
+canvas.addEventListener('pointermove', e => {
+  if (state.mode !== 'touch' || state.phase !== 'play' || e.buttons === 0) return;
+  state.targetX = Math.max(WALK_MIN, Math.min(WALK_MAX, e.clientX / W));
+});
+document.getElementById('btnThrow').addEventListener('pointerdown', e => { e.preventDefault(); throwPulse = true; });
+document.getElementById('btnDown').addEventListener('pointerdown', e => { e.preventDefault(); touchSquat = true; });
+
+/* ================== 開始流程 ================== */
+const startOverlay = document.getElementById('startOverlay');
+const loadingOverlay = document.getElementById('loadingOverlay');
+
+function goFullscreen() {
+  if (document.fullscreenElement) return;
+  if (matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) return;
+  const el = document.documentElement;
+  const fn = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (fn) { try { const p = fn.call(el, { navigationUI: 'hide' }); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+}
+window.addEventListener('pointerdown', () => { if (state.phase !== 'menu') goFullscreen(); });
+
+async function begin(mode) {
+  goFullscreen();
+  audioInit();
+  state.mode = mode;
+  startOverlay.style.display = 'none';
+  loadingOverlay.style.display = 'flex';
+  document.getElementById('loadingText').textContent = '正在爬上屋頂…';
+  await loadArt();
+  loadVoices();
+  try { await navigator.wakeLock.request('screen'); } catch (e) {}
+
+  if (mode === 'body') {
+    try {
+      await setupBodyTracking();
+    } catch (e) {
+      alert('鏡頭啟動失敗，改用手指模式吧！\n(' + e.message + ')');
+      state.mode = 'touch';
+    }
+  }
+  loadingOverlay.style.display = 'none';
+  if (state.mode === 'touch') touchUI.style.display = 'flex';
+  startCountdown();
+}
+document.getElementById('btnBody').addEventListener('click', () => begin('body'));
+document.getElementById('btnTouch').addEventListener('click', () => begin('touch'));
+document.getElementById('pipHide').addEventListener('click', () => pip.style.display = 'none');
+
+function startCountdown() {
+  state.phase = 'countdown';
+  startLocal();
+  const el = document.getElementById('countdown');
+  const num = document.getElementById('countNum');
+  el.style.display = 'flex';
+  const seq = ['3', '2', '1', '噓…'];
+  say('s1', { priority: 2 });
+  let i = 0;
+  const step = () => {
+    if (i < seq.length) {
+      num.textContent = seq[i];
+      tone(i < 3 ? 523 : 1047, i < 3 ? 0.25 : 0.6, 'triangle', 0.16);
+      i++;
+      setTimeout(step, 900);
+    } else {
+      el.style.display = 'none';
+      state.phase = 'play';
+      say('s2', { priority: 2 });
+    }
+  };
+  step();
+}
+
+/* ================== 遊戲邏輯 ================== */
+function pickGiftId() {
+  const pool = curStage().gifts;
+  return pool[(Math.random() * pool.length) | 0];
+}
+function pickGiftX() {
+  const near = Math.random() < 0.7;
+  const spread = near ? 0.10 : 0.28;
+  const x = state.santaX + (Math.random() < 0.5 ? -1 : 1) * (0.03 + Math.random() * spread);
+  return Math.max(WALK_MIN, Math.min(WALK_MAX, x));
+}
+function spawnGift() {
+  state.gifts.push({ id: pickGiftId(), x: pickGiftX(), t: 0, dur: FALL_T, caught: false, bounce: null });
+}
+function maybeStartEvent() {
+  if (state.event || state.step !== 'catch') return;
+  const kind = curStage().ev;
+  if (!kind) return;
+  const pick = kind === 'mix' ? ['bear', 'cat', 'bird'][(Math.random() * 3) | 0] : kind;
+  if (pick === 'blanket') return;               // 晾衣被屬於送禮路上的事件
+  if (Math.random() > 0.55) return;
+  if (pick === 'bear') {
+    state.event = { kind: 'bear', phase: 'jam', t: 0 };
+    say('s19', { priority: 2 }); setTimeout(() => say('s20', { priority: 2 }), 900);
+  } else if (pick === 'cat') {
+    state.event = { kind: 'cat', phase: 'sit', t: 0 };
+    sfxMeow(); say('s22', { priority: 2 }); setTimeout(() => say('s23', { priority: 2 }), 1000);
+  } else {
+    state.event = { kind: 'bird', phase: 'carry', t: 0 };
+    sfxChirp(); say('s25', { priority: 2 }); setTimeout(() => say('s26', { priority: 2 }), 900);
+  }
+}
+function bagFull() {
+  state.step = 'full'; state.t = 0;
+  state.target = houses().length > 1 ? ((Math.random() * houses().length) | 0) : 0;
+  sfxFull(); say('s5', { priority: 2 });
+  if (curStage().ev === 'blanket' || (curStage().ev === 'mix' && Math.random() < 0.35)) {
+    const bx = targetHouse().chim;
+    const mid = (state.santaX + bx) / 2;
+    state.event = { kind: 'blanket', phase: 'block', t: 0, x: Math.max(WALK_MIN + 0.08, Math.min(WALK_MAX - 0.08, mid)) };
+  }
+}
+function startDeliver() {
+  state.step = 'deliver'; state.t = 0; state.idle = 0;
+  say('s6', { priority: 2 });
+  setTimeout(() => { if (state.step === 'deliver') say('s7', { priority: 2 }); }, 1400);
+}
+// 丟一件：站得夠近就直接飛進煙囪，太遠就先彈一下肚子再補送（好笑，不是失敗）
+function tossOne() {
+  const id = state.hold.shift();
+  const h = targetHouse();
+  const m = chimMouth(h);
+  const far = Math.abs(state.santaX - h.chim) > NEAR_CHIM;
+  state.flying.push({
+    id, house: state.target, phase: far ? 'short' : 'air', t: 0,
+    x0: sackX(), y0: sackMouthY() - H * 0.02, x1: m.x, y1: m.y,
+  });
+  state.throwAnim = THROW_ANIM;
+  state.assist = 0;
+  sfxThrow();
+  if (far) say('s28', { gap: 9000 });
+}
+function deliverLand(f) {
+  const h = houses()[Math.min(f.house, houses().length - 1)];
+  const sp = roomSpots(h);
+  const small = !!SMALL_GIFT[f.id];
+  const list = state.delivered[f.house] || (state.delivered[f.house] = []);
+  list.push({ id: f.id, small, n: list.length });
+  state.dream = 1.6;
+  if (small) { sfxSock(); say('s11', { gap: 9000 }); }
+  else { sfxLand(); say('s9', { gap: 9000 }); }
+  if (state.bag === 0 && list.length === 1) setTimeout(() => say('s12', { priority: 2 }), 700);
+}
+function startSnack() {
+  // 一袋送完，屋主留的點心開放偷吃（蹲下）。不吃也會自己過，不卡住
+  state.step = 'snack'; state.t = 0;
+  state.snack = { phase: 'open', t: 0 };
+  say('s13', { priority: 2 });
+}
+function nextBag() {
+  state.bag++;
+  state.event = null; state.snack = null; state.flying = [];
+  if (state.bag >= TOTAL_BAGS) { startFinale(); return; }
+  const newStage = Math.floor(state.bag / BAGS_PER_STAGE);
+  if (newStage !== state.stage) {
+    state.stage = newStage;
+    state.step = 'stage'; state.t = 0; state.stageFlash = 1.6; state.sleigh = 1;
+    state.delivered = [[], []];              // 換一條街，換兩間新房子
+    sfxSleigh(); say('s31', { priority: 2 });
+    if (newStage === 2) setTimeout(() => say('s17', { priority: 2 }), 1200);
+    if (state.bag === TOTAL_BAGS - 2) say('s32', { priority: 2 });
+    return;
+  }
+  state.step = 'catch'; state.t = 0; state.spawnGap = 0.5; state.assist = 0;
+  if (houses().length > 1) say('s18', { gap: 12000 });
+}
+function startFinale() {
+  state.step = 'finale'; state.t = 0;
+  // 挪到兩座煙囪中間的空地演結局，不然四腳朝天那張會被煙囪擋住
+  state.targetX = houses().length > 1 ? 0.46 : 0.78;
+  state.finale = { phase: 'come', t: 0, y: -0.12, total: 0 };
+  say('s33', { priority: 2 }); sfxSleigh();
+}
+function doRoll() {
+  if (state.squatCool > 0 || state.roll) return;
+  state.roll = { t: 0 };
+  state.squatCool = 2.2;
+  say('s29', { gap: 7000 });
+  sfxRoll();
+}
+function doSpin() {   // 空袋揮擲：腳滑轉一圈，不扣進度
+  if (state.spin) return;
+  state.spin = { t: 0 };
+  state.throwAnim = THROW_ANIM;
+  say('s42', { gap: 9000 });
+  sfxSpin();
+}
+
+const FX = [];
+function sparkle(x, y) {
+  for (let i = 0; i < 7; i++) FX.push({
+    x, y,
+    vx: (Math.random() - 0.5) * H * 0.35, vy: -H * (0.12 + Math.random() * 0.22),
+    r: H * (0.005 + Math.random() * 0.005), t: 0, life: 0.85 + Math.random() * 0.4,
+    c: Math.random() < 0.5 ? 'rgba(255,248,232,.85)' : 'rgba(214,206,190,.85)',
+  });
+}
+
+function update(dt, now) {
+  // ---- 護眼：太靠近電視 → 強制暫停 5 秒 ----
+  if (state.mode === 'body') {
+    const close = shoulderW > 0.28, far = shoulderW < 0.23;
+    if (close && !tooCloseSince) tooCloseSince = now;
+    if (!close && far) tooCloseSince = 0;
+    if (tooCloseSince && now - tooCloseSince > 400 && now > pauseUntil) {
+      pauseUntil = now + 5000; sfxAlarm(); say('s38', { priority: 2, gap: 6000 });
+    }
+  }
+  state.paused = now < pauseUntil;
+  const tooCloseEl = document.getElementById('tooClose');
+  if (state.paused) {
+    tooCloseEl.style.display = 'flex';
+    document.getElementById('pauseCount').textContent = Math.ceil((pauseUntil - now) / 1000);
+    wasPaused = true;
+    throwPulse = false; touchSquat = false;
+    return;                     // 玩法整個凍結
+  }
+  tooCloseEl.style.display = 'none';
+  if (wasPaused) {
+    // 解除採「推回起點」：還沒接到的禮物移回上方重新掉，已裝袋與已送達的全部保留
+    wasPaused = false; tooCloseSince = 0;
+    for (const g of state.gifts) if (!g.caught) { g.t = 0; g.bounce = null; }
+    state.roll = null; state.spin = null; FX.length = 0;
+    if (state.event && state.event.kind !== 'blanket') state.event.t = 0;
+    throwPulse = false; throwLock = THROW_COOL; wristHist.length = 0;
+    state.assist = 0;
+    say('s39', { priority: 2 });
+  }
+  document.getElementById('findPlayer').style.display =
+    (state.mode === 'body' && now - lastSeen > 1500) ? 'block' : 'none';
+
+  state.t += dt;
+  if (state.squatCool > 0) state.squatCool -= dt;
+  if (state.throwAnim > 0) state.throwAnim -= dt;
+  if (throwLock > 0) throwLock -= dt;
+  if (state.stageFlash > 0) state.stageFlash -= dt;
+  if (state.dream > 0) state.dream -= dt;
+  if (state.sleigh > 0) state.sleigh -= dt;
+  if (caption.t > 0) caption.t -= dt;
+
+  /* ---- 輸入：同一時間只解讀一項 ---- */
+  const busy = state.step === 'stage';
+  const sq = state.mode === 'body' ? squat : false;
+  const squatEdge = (sq && !squatPrev) || touchSquat;
+  squatPrev = sq; touchSquat = false;
+  const tossEdge = throwPulse && !sq;      // 半蹲揮手不算丟
+  throwPulse = false;
+
+  // 走位：蹲著或正在出手的那零點三秒不換位置
+  if (!busy && !sq && state.throwAnim <= 0) {
+    // 結局是演出，不讓身體位置把他拉離舞台中央
+    if (state.mode === 'body' && state.step !== 'finale') state.targetX = Math.max(WALK_MIN, Math.min(WALK_MAX, personX));
+    const prev = state.santaX;
+    state.santaX += (state.targetX - state.santaX) * Math.min(1, dt * 5.5);
+    const moved = Math.abs(state.santaX - prev);
+    state.moving = moved > 0.0012;
+    if (state.moving) {
+      state.facing = (state.santaX > prev) ? 1 : -1;
+      state.walkPhase += dt * 7;
+      if (Math.floor(state.walkPhase) !== Math.floor(state.walkPhase - dt * 7)) sfxStep();
+      state.assist = 0;
+    }
+  } else state.moving = false;
+
+  // 蹲下：壓熊／鑽被子／偷吃點心／結局接熊／沒事就翻滾
+  if (!busy && squatEdge) {
+    const e = state.event;
+    if (e && e.kind === 'bear' && e.phase === 'jam') {
+      e.phase = 'squish'; e.t = 0; sfxSquish(); say('s21', { priority: 2 }); state.assist = 0;
+    } else if (e && e.kind === 'blanket' && e.phase === 'block' && Math.abs(state.santaX - e.x) < 0.12) {
+      e.phase = 'duck'; e.t = 0; sfxDuck(); state.assist = 0;
+    } else if (state.step === 'snack' && state.snack && state.snack.phase === 'open') {
+      state.snack.phase = 'eat'; state.snack.t = 0; sfxSnack(); say('s14', { priority: 2 });
+      setTimeout(() => { if (state.snack) say('s15', { priority: 2 }); }, 1100);
+    } else if (state.step === 'finale' && state.finale && state.finale.phase === 'wait') {
+      state.finale.phase = 'sit'; state.finale.t = 0; sfxSquish(); say('s35', { priority: 2 });
+    } else doRoll();
+  }
+
+  // 揮擲：丟禮物／趕動物／空揮出糗／結局彈起／完成畫面重玩
+  if (!busy && tossEdge) {
+    const e = state.event;
+    const animal = e && (e.kind === 'cat' || e.kind === 'bird') && (e.phase === 'sit' || e.phase === 'carry');
+    if (animal) {
+      e.phase = 'leave'; e.t = 0; state.throwAnim = THROW_ANIM; sfxShoo(); state.assist = 0;
+    } else if (state.step === 'deliver' && state.hold.length > 0) {
+      tossOne();
+    } else if (state.step === 'finale' && state.finale && state.finale.phase === 'sit') {
+      state.finale.phase = 'boing'; state.finale.t = 0; state.throwAnim = THROW_ANIM; sfxSleigh(); sparkle(state.santaX * W, roofTopY() - H * 0.1);
+    } else if (state.step === 'done') {
+      startLocal(); say('s40', { priority: 2 });
+    } else doSpin();
+  }
+
+  /* ---- 各階段推進 ---- */
+  if (state.step === 'catch') {
+    const jammed = state.event && state.event.kind === 'bear' && state.event.phase === 'jam';
+    state.spawnGap -= dt;
+    if (!jammed && state.spawnGap <= 0 && state.gifts.length < 2 && state.hold.length + state.gifts.length < BAG_SIZE) {
+      spawnGift(); state.spawnGap = 1.5 + Math.random() * 0.5;
+      if (state.bag === 0 && state.hold.length === 0) say('s3', { priority: 2 });
+      else if (state.stage === 1 && state.gifts[state.gifts.length - 1].id === 'IT002') say('s10', { gap: 12000 });
+      else say('s30', { gap: 9000 });
+    }
+    if (!state.event && state.hold.length === 1) maybeStartEvent();
+
+    for (let i = state.gifts.length - 1; i >= 0; i--) {
+      const g = state.gifts[i];
+      g.t += dt;
+      if (state.assisting) {
+        g.x += (state.santaX + 0.038 - g.x) * Math.min(1, dt * 1.6);
+        g.t -= dt * 0.45;
+      }
+      if (g.bounce) {
+        g.bounce.t += dt;
+        if (g.bounce.t > 0.7) catchGift(g, i, true);
+        continue;
+      }
+      if (g.t / g.dur >= 1) {
+        if (Math.abs(g.x * W - sackX()) < W * 0.07) catchGift(g, i, false);
+        else { g.bounce = { t: 0 }; sfxBounce(); say('s27', { gap: 8000 }); }
+      }
+    }
+    if (state.hold.length >= BAG_SIZE && state.gifts.length === 0 && !state.event) bagFull();
+  }
+  else if (state.step === 'full') { if (state.t > 0.8) startDeliver(); }
+  else if (state.step === 'deliver') {
+    state.idle += dt;
+    if (state.hold.length > 0 && state.idle > 3 && state.idle < 3.2) say('s41', { gap: 7000 });
+    if (state.hold.length === 0 && state.flying.length === 0) startSnack();
+  }
+  else if (state.step === 'snack') {
+    const s = state.snack;
+    if (s) {
+      s.t += dt;
+      if (s.phase === 'open' && s.t > ASSIST_AFTER) { s.phase = 'skip'; s.t = 0; }   // 不吃也會自己過
+      else if (s.phase === 'eat' && s.t > 2.2) { s.phase = 'carrot'; s.t = 0; say('s16', { priority: 2 }); }
+      else if (s.phase === 'carrot' && s.t > 1.4) nextBag();
+      else if (s.phase === 'skip' && s.t > 0.3) nextBag();
+    } else nextBag();
+  }
+  else if (state.step === 'stage') {
+    if (state.t > 1.4) { state.step = 'catch'; state.t = 0; state.spawnGap = 0.4; state.assist = 0; }
+  }
+  else if (state.step === 'finale') updateFinale(dt);
+  else if (state.step === 'done') {
+    state.idle += dt;
+    if (state.idle > 6 && state.idle < 6.3) say('s40', { gap: 8000 });
+  }
+
+  /* ---- 已丟出的禮物：出手弧線 → 煙囪口 → 煙道 → 樹旁或襪子 ---- */
+  for (let i = state.flying.length - 1; i >= 0; i--) {
+    const f = state.flying[i];
+    f.t += dt;
+    const h = houses()[Math.min(f.house, houses().length - 1)];
+    if (f.phase === 'short') {
+      // 太遠：禮物飛一半掉回來、輕輕頂一下肚子，再自己補送進煙囪
+      if (f.t > 0.75) { f.phase = 'air'; f.t = 0; f.x0 = state.santaX * W; f.y0 = roofTopY() - LAY.santaH * H * 0.45; f.x1 = chimMouth(h).x; f.y1 = chimMouth(h).y; sfxBounce(); }
+    } else if (f.phase === 'air') {
+      if (f.t > 0.45) { f.phase = 'flue'; f.t = 0; sfxFlue(); if (state.bag === 0) say('s8', { gap: 9000 }); }
+    } else if (f.phase === 'flue') {
+      if (f.t > 0.5) { f.phase = 'land'; f.t = 0; }
+    } else if (f.phase === 'land') {
+      if (f.t > 0.4) { deliverLand(f); state.flying.splice(i, 1); }
+    }
+  }
+
+  /* ---- 事件推進（每一段都有不會卡住的後路）---- */
+  if (state.event) {
+    const e = state.event;
+    e.t += dt;
+    if (e.kind === 'bear') {
+      if (e.phase === 'jam' && e.t > ASSIST_AFTER) { e.phase = 'squish'; e.t = 0; sfxSquish(); }
+      else if (e.phase === 'squish' && e.t > 0.7) { state.hold.push('IT003'); sfxCatch(); state.event = null; }
+    } else if (e.kind === 'cat') {
+      if (e.phase === 'sit' && e.t > 7) { e.phase = 'leave'; e.t = 0; }
+      else if (e.phase === 'leave' && e.t > 1.1) state.event = null;
+    } else if (e.kind === 'bird') {
+      if (e.phase === 'carry' && e.t > 7) { e.phase = 'leave'; e.t = 0; }
+      else if (e.phase === 'leave' && e.t > 1.1) state.event = null;
+    } else if (e.kind === 'blanket') {
+      if (e.phase === 'block' && e.t > ASSIST_AFTER + 2) { e.phase = 'lift'; e.t = 0; }
+      else if (e.phase === 'duck' && e.t > 0.9) { e.phase = 'lift'; e.t = 0; }
+      else if (e.phase === 'lift' && e.t > 1.2) state.event = null;
+    }
+  }
+
+  /* ---- 溫和援助 ---- */
+  const waiting = state.step === 'catch' || state.step === 'deliver';
+  if (waiting) {
+    state.assist += dt;
+    state.assisting = state.assist > ASSIST_AFTER;
+    if (state.assisting && state.step === 'deliver' && state.hold.length > 0 && state.assist > ASSIST_AFTER + 1.2) {
+      // 太久沒丟 → 自己丟一件（一次一件，仍然看得到完整路徑）
+      const h = targetHouse();
+      state.santaX += (h.chim - state.santaX) * 0.5;
+      tossOne();
+      state.assist = ASSIST_AFTER;
+    }
+  } else { state.assist = 0; state.assisting = false; }
+
+  if (state.roll) { state.roll.t += dt; if (state.roll.t > 1.3) state.roll = null; }
+  if (state.spin) { state.spin.t += dt; if (state.spin.t > 1.0) state.spin = null; }
+
+  for (let i = FX.length - 1; i >= 0; i--) {
+    const f = FX[i]; f.t += dt;
+    f.x += f.vx * dt; f.y += f.vy * dt; f.vy += H * 0.7 * dt;
+    if (f.t > f.life) FX.splice(i, 1);
+  }
+}
+
+function catchGift(g, i, bounced) {
+  g.caught = true;
+  state.gifts.splice(i, 1);
+  state.hold.push(g.id);
+  state.assist = 0;
+  sfxCatch();
+  sparkle(sackX(), sackMouthY());
+  if (!bounced && state.hold.length <= 2 && state.bag === 0) say('s4', { gap: 5000 });
+}
+
+function giftFallY(g) {
+  const prog = Math.max(0, Math.min(1, g.t / g.dur));
+  const y0 = -LAY.giftH * H, y1 = sackMouthY();
+  if (g.bounce) {
+    const k = g.bounce.t / 0.7;
+    return roofTopY() - Math.sin(Math.PI * k) * H * 0.12 - LAY.giftH * H * 0.4;
+  }
+  return y0 + (y1 - y0) * prog;
+}
+
+function updateFinale(dt) {
+  const f = state.finale; if (!f) return;
+  f.t += dt; f.total += dt;
+  // 硬性後路：結局最多演 18 秒，超過就直接收尾
+  if (f.total > 18 && f.phase !== 'boing') { f.phase = 'boing'; f.t = 0; }
+  if (f.phase === 'come') {
+    f.y += dt * 0.20;
+    if (f.y > LAY.roofY - 0.26) { f.phase = 'wait'; f.t = 0; say('s34', { priority: 2 }); }
+  } else if (f.phase === 'wait') {
+    if (f.t > ASSIST_AFTER) { f.phase = 'sit'; f.t = 0; sfxSquish(); }
+  } else if (f.phase === 'sit') {
+    if (f.t > ASSIST_AFTER) { f.phase = 'boing'; f.t = 0; sfxSleigh(); }
+  } else if (f.phase === 'boing') {
+    if (f.t > 1.2 && !f.said) { f.said = true; say('s36', { priority: 2 }); }
+    if (f.t > 2.6) {
+      state.step = 'done'; state.t = 0; state.idle = 0;
+      throwLock = THROW_COOL; wristHist.length = 0;   // 結局那一揮不能直接重開一局
+      say('s37', { priority: 2 }); sfxDone();
+    }
+  }
+}
+
+/* ================== 繪圖 ================== */
+const ease = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+const clamp01 = t => Math.max(0, Math.min(1, t));
+
+function tintNow() {
+  const a = curStage().tint;
+  const prev = state.stage > 0 ? STAGES[state.stage - 1].tint : 0;
+  const k = state.step === 'stage' ? clamp01(state.t / 1.4) : 1;
+  return prev + (a - prev) * k;
+}
+function tintRect(alpha, y0, y1) {
+  if (alpha <= 0) return;
+  ctx.save(); ctx.globalAlpha = alpha; ctx.fillStyle = '#41537a';
+  ctx.fillRect(0, y0, W, y1 - y0); ctx.restore();
+}
+
+function drawBackground() {
+  ctx.clearRect(0, 0, W, H);
+  const t = tintNow();
+  const roofY = roofTopY();
+
+  // 遠景：平安夜的霧藍灰夜空（不壓成黑底，主角與煙囪口要一直看得清楚）
+  const g = ctx.createLinearGradient(0, 0, 0, roofY);
+  g.addColorStop(0, '#6f83a4'); g.addColorStop(1, '#9dadc2');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, roofY + 2);
+  // 安靜的星星：兩種柔色、稀疏、不閃爍
+  ctx.save();
+  for (let i = 0; i < 26; i++) {
+    const x = ((i * 97) % 100) / 100 * W, y = ((i * 53) % 60) / 100 * roofY;
+    ctx.globalAlpha = 0.25 + (i % 3) * 0.12;
+    ctx.fillStyle = i % 2 ? '#fdf6e6' : '#d9dfe8';
+    ctx.beginPath(); ctx.arc(x, y, H * 0.0035, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+
+  const farH = H * 0.28;
+  tileBand('BG001', roofY - farH, farH, 0);
+  const fade = ctx.createLinearGradient(0, roofY - farH, 0, roofY - farH * 0.55);
+  fade.addColorStop(0, '#93a4bb'); fade.addColorStop(1, 'rgba(147,164,187,0)');
+  ctx.fillStyle = fade; ctx.fillRect(0, roofY - farH, W, farH * 0.45);
+  tintRect(0.22 + t, 0, roofY + 2);
+
+  // 中景後層：公寓與騎樓（0.5 倍），底邊藏在屋頂線後面
+  const shift = state.stage * W * 0.05;
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, roofY); ctx.clip();
+  picBottom('TP003', W * 0.13 - shift * 0.2, roofY + H * 0.10, { h: H * 0.38, alpha: 0.95 });
+  picBottom('TP004', W * 0.45, roofY + H * 0.05, { h: H * 0.19, alpha: 0.95 });
+  picBottom('TP003', W * 0.80 + shift * 0.15, roofY + H * 0.12, { h: H * 0.34, flip: true, alpha: 0.95 });
+  ctx.restore();
+  tintRect(0.18 + t * 0.6, 0, roofY + 2);
+
+  // 主場建築的外牆（屋頂線以下到街道）
+  const fg = ctx.createLinearGradient(0, roofY, 0, H * LAY.groundTop);
+  fg.addColorStop(0, '#b3ab9c'); fg.addColorStop(1, '#9e9789');
+  ctx.fillStyle = fg; ctx.fillRect(0, roofY, W, H * LAY.groundTop - roofY);
+  tintRect(0.16 + t * 0.7, roofY, H * LAY.groundTop);
+
+  // 近景街道
+  ctx.fillStyle = '#6f7076'; ctx.fillRect(0, H * LAY.groundTop, W, H * (1 - LAY.groundTop));
+  tileBand('BG002', H * LAY.groundTop, H * (1 - LAY.groundTop), 0);
+  picBottom('TP005', W * 0.16, H * 0.985, { h: H * 0.075 });
+  picBottom('TP005', W * 0.86, H * 0.985, { h: H * 0.075, flip: true });
+  if (state.stage >= 7) picBottom('TP006', W * 0.62, H * 0.995, { h: H * 0.13 });
+  picBottom('TP007', W * 0.48, H * 0.99, { h: H * 0.045 });
+  tintRect(0.2 + t * 0.5, H * LAY.groundTop, H);
+
+  drawLights();
+}
+
+function drawLights() {
+  const y0 = roofTopY() + H * 0.02;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(70,66,60,.35)'; ctx.lineWidth = Math.max(1, H * 0.0022);
+  ctx.beginPath();
+  for (let i = 0; i <= 40; i++) {
+    const x = (i / 40) * W;
+    const y = y0 + Math.sin(i / 40 * Math.PI * 3) * H * 0.010 + H * 0.010;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+  const cols = ['#c0705f', '#d8c489', '#8aa98b'];
+  for (let i = 0; i <= 40; i += 2) {
+    const x = (i / 40) * W;
+    const y = y0 + Math.sin(i / 40 * Math.PI * 3) * H * 0.010 + H * 0.014;
+    ctx.fillStyle = cols[(i / 2) % cols.length];
+    ctx.beginPath(); ctx.arc(x, y, H * 0.005, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ---- 室內剖面：牆切口、聖誕樹、掛襪、床與熟睡的住戶、點心 ---- */
+function drawRooms(now) {
+  const list = houses();
+  for (let i = 0; i < list.length; i++) {
+    const h = list[i], sp = roomSpots(h);
+    const x0 = h.x0 * W, x1 = h.x1 * W, y0 = LAY.roomTop * H, y1 = LAY.roomBot * H;
+    // 背牆與牆體切面
+    ctx.save();
+    ctx.fillStyle = h.wall; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+    ctx.fillStyle = 'rgba(80,76,70,.16)';
+    ctx.fillRect(x0, y0, W * 0.010, y1 - y0); ctx.fillRect(x1 - W * 0.010, y0, W * 0.010, y1 - y0);
+    ctx.fillRect(x0, y0, x1 - x0, H * 0.012);                       // 樓板
+    ctx.fillStyle = 'rgba(232,226,212,.75)';                        // 磨石子地
+    ctx.fillRect(x0, sp.floorY, x1 - x0, y1 - sp.floorY);
+    ctx.restore();
+
+    picBottom('TP012', sp.bed.x, sp.bed.y, { w: W * 0.20, flip: sp.bed.x > h.chim * W });
+    // 躺著睡的住戶：頭朝右，只做小幅呼吸起伏，永遠不會醒
+    const breathe = Math.sin(now / 900 + i) * H * 0.003;
+    const dream = state.dream > 0 ? Math.sin(state.dream * 12) * 0.05 : 0;
+    picBottom(h.who, sp.bed.x, sp.bed.y - H * 0.030 + breathe, { w: W * 0.145, rot: dream, flip: sp.bed.x > h.chim * W });
+    picBottom('IT006', sp.plate.x, sp.plate.y, { h: H * 0.038 });
+    picBottom('TP006', sp.tree.x, sp.tree.y, { h: H * 0.165 });
+    picBottom('TP011', sp.sock.x, sp.sock.y + H * 0.055, { h: H * 0.055 });
+
+    // 已送達的禮物：大的排在樹旁、小的露在襪口
+    const got = state.delivered[i] || [];
+    const bigN = got.filter(d => !d.small).length;
+    const gap = Math.min(W * 0.030, W * 0.115 / Math.max(1, bigN));   // 禮物越多排越密，不會一路堆到床上
+    let big = 0, small = 0;
+    for (const d of got) {
+      if (d.small) {
+        pic(d.id, sp.sock.x + W * 0.004, sp.sock.y + H * 0.030 - small * H * 0.007, { h: H * 0.032, alpha: 0.98 });
+        small++;
+      } else {
+        picBottom(d.id, sp.drop.x + sp.dir * big * gap, sp.floorY, { h: H * (d.id === 'IT003' ? 0.075 : 0.055) });
+        big++;
+      }
+    }
+  }
+}
+
+function drawChimneys() {
+  for (const h of houses()) {
+    picBottom('TP010', h.chim * W, (LAY.chimTop + LAY.chimH) * H, { h: LAY.chimH * H });
+  }
+}
+
+function drawRoof() {
+  const h = LAY.roofH * H;
+  const ar = ART.TP001.ar || 14;
+  const w = h * ar;
+  if (IMG.TP001) {
+    for (let x = -w * 0.2; x < W + w; x += w * 0.985) picBottom('TP001', x + w / 2, roofTopY() + h * 0.92, { h });
+  } else {
+    ctx.fillStyle = '#b9b3a4'; ctx.fillRect(roofTopY(), 0, W, h);
+  }
+}
+
+function drawSleigh(now) {
+  const slide = state.sleigh > 0 ? (1 - state.sleigh / 1.4) : 1;
+  const dx = state.sleigh > 0 ? (1 - slide) * W * 0.25 : 0;
+  picBottom('VH001', SLEIGH_X * W - dx, roofTopY(), { h: LAY.santaH * H * 0.5 });
+  const bob = Math.sin(now / 700) * H * 0.004;
+  picBottom('CH501', DEER_X * W - dx, roofTopY() + bob, { h: LAY.santaH * H * 0.75 });
+  // 點心事件的紅蘿蔔階段：馴鹿低頭一下
+  if (state.snack && state.snack.phase === 'carrot') {
+    pic('IT006', DEER_X * W + W * 0.035, roofTopY() - H * 0.03, { h: H * 0.034 });
+  }
+}
+
+function santaFrame() {
+  if (state.roll) return 'CH006';
+  if (state.finale) {
+    if (state.finale.phase === 'sit') return 'CH006';
+    if (state.finale.phase === 'boing') return 'CH008';
+  }
+  if (state.snack && state.snack.phase === 'eat') return 'CH005';
+  if (state.throwAnim > 0) return state.throwAnim > THROW_ANIM * 0.55 ? 'CH007' : 'CH008';
+  const e = state.event;
+  if (e && e.kind === 'bear' && e.phase === 'squish') return 'CH005';
+  if (e && e.kind === 'blanket' && e.phase === 'duck') return 'CH005';
+  if (state.moving) return (Math.floor(state.walkPhase) % 2 === 0) ? 'CH002' : 'CH003';
+  return 'CH001';
+}
+
+function drawSanta(now) {
+  const x = state.santaX * W;
+  const by = roofTopY();
+  const id = santaFrame();
+  let flip = state.facing < 0, dy = 0, rot = 0, h = LAY.santaH * H;
+  if (state.roll) {
+    const k = clamp01(state.roll.t / 1.3);
+    rot = Math.sin(k * Math.PI) * 0.5; dy = -Math.sin(k * Math.PI) * H * 0.03; h *= 0.92;
+  }
+  if (state.spin) {                                   // 空揮：整個人轉一圈
+    rot = clamp01(state.spin.t / 1.0) * Math.PI * 2;
+    dy = -Math.sin(clamp01(state.spin.t) * Math.PI) * H * 0.012;
+  }
+  if (state.finale && state.finale.phase === 'boing') {
+    dy = -Math.abs(Math.sin(state.finale.t * 7)) * H * 0.06 * Math.max(0, 1 - state.finale.t / 2.6);
+  }
+  if (id === 'CH006') picBottom(id, x, by + dy + H * 0.005, { h: h * 0.62, flip, rot });
+  else picBottom(id, x, by + dy, { h, flip, rot });
+}
+
+function drawSack(now) {
+  if (state.step === 'finale') return;
+  const x = sackX(), by = roofTopY();
+  const bulge = 1 + state.hold.length * 0.03;
+  picBottom('TP009', x, by, { h: LAY.sackH * H * bulge });
+  state.hold.forEach((id, i) => {
+    const ox = (i - (state.hold.length - 1) / 2) * W * 0.018;
+    pic(id, x + ox, sackMouthY() + H * 0.010, { h: H * 0.040, alpha: 0.98 });
+  });
+}
+
+function drawGifts() {
+  // 掉落中的禮物
+  for (const g of state.gifts) {
+    const spin = g.bounce ? Math.sin(g.bounce.t * 12) * 0.35 : Math.sin(g.t * 2.2) * 0.12;
+    pic(g.id, g.x * W, giftFallY(g), { h: LAY.giftH * H, rot: spin });
+  }
+}
+
+function drawFlying() {
+  for (const f of state.flying) {
+    const h = houses()[Math.min(f.house, houses().length - 1)];
+    const m = chimMouth(h), ex = chimExit(h), sp = roomSpots(h);
+    let x, y, rot = 0, hh = LAY.giftH * H;
+    if (f.phase === 'short') {
+      const k = clamp01(f.t / 0.75);
+      const dir = h.chim > state.santaX ? 1 : -1;
+      x = f.x0 + dir * W * 0.12 * Math.sin(Math.PI * k);
+      y = f.y0 - Math.sin(Math.PI * k) * H * 0.10;
+      rot = k * 3;
+    } else if (f.phase === 'air') {
+      const k = clamp01(f.t / 0.45);
+      x = f.x0 + (f.x1 - f.x0) * k;
+      y = f.y0 + (f.y1 - f.y0) * k - Math.sin(Math.PI * k) * H * 0.10;
+      rot = k * 1.2;
+    } else if (f.phase === 'flue') {
+      const k = clamp01(f.t / 0.5);
+      x = m.x + Math.sin(k * 7) * W * 0.004;
+      y = m.y + (ex.y - m.y) * k;
+      rot = Math.sin(k * 9) * 0.3;
+      hh *= 0.92;
+    } else {
+      const k = clamp01(f.t / 0.4);
+      const to = SMALL_GIFT[f.id] ? sp.sock : sp.drop;
+      x = ex.x + (to.x - ex.x) * k;
+      y = ex.y + (to.y - (SMALL_GIFT[f.id] ? 0 : H * 0.02) - ex.y) * k;
+      rot = (1 - k) * 0.4;
+    }
+    pic(f.id, x, y, { h: hh, rot });
+  }
+}
+
+function drawEvent(now) {
+  const e = state.event; if (!e) return;
+  const sx = sackX();
+  if (e.kind === 'bear') {
+    let sy = 1, dy = 0;
+    if (e.phase === 'squish') { const k = clamp01(e.t / 0.7); sy = 1 - Math.sin(Math.PI * k) * 0.45; dy = Math.sin(Math.PI * k) * H * 0.02; }
+    pic('IT003', sx, sackMouthY() - H * 0.02 + dy, { h: LAY.giftH * H * 1.5, sy });
+  } else if (e.kind === 'cat') {
+    if (e.phase === 'sit') picBottom('CH101', sx, sackMouthY() + H * 0.02 + Math.sin(now / 320) * H * 0.004, { h: H * 0.10 });
+    else {
+      const k = clamp01(e.t / 1.1);
+      picBottom('CH102', sx + W * 0.10 * k, sackMouthY() + H * 0.02 - Math.sin(Math.PI * k) * H * 0.08, { h: H * 0.10, rot: k * 2.4 });
+    }
+  } else if (e.kind === 'bird') {
+    if (e.phase === 'carry') {
+      const bx = sx + W * 0.10, byy = H * (0.20 + Math.sin(now / 420) * 0.010);
+      pic('IT001', bx, byy + H * 0.045, { h: LAY.giftH * H * 0.9 });
+      picBottom('CH201', bx, byy, { h: H * 0.070 });
+    } else {
+      const k = clamp01(e.t / 1.1);
+      picBottom('CH202', sx + W * (0.10 + 0.16 * k), H * (0.20 - 0.06 * k), { h: H * 0.070, rot: -k * 1.2 });
+    }
+  } else if (e.kind === 'blanket') {
+    let lift = 0;
+    if (e.phase === 'duck') lift = clamp01(e.t / 0.9) * 0.4;
+    if (e.phase === 'lift') lift = 0.4 + clamp01(e.t / 1.2) * 0.6;
+    picBottom('TP008', e.x * W, roofTopY() - H * 0.10 * lift, { h: H * 0.15, alpha: 1 - lift * 0.35 });
+  }
+}
+
+function drawFinale(now) {
+  const f = state.finale; if (!f) return;
+  const x = state.santaX * W;
+  let y = f.y * H;
+  if (f.phase === 'wait') y = roofTopY() - H * 0.13;
+  if (f.phase === 'sit') y = roofTopY() - H * 0.06;
+  if (f.phase === 'boing') y = roofTopY() - H * 0.12 - Math.abs(Math.sin(f.t * 7)) * H * 0.10 * Math.max(0, 1 - f.t / 2.6);
+  pic('IT003', x, y, { h: H * 0.15 });
+}
+
+function drawHUD(now) {
+  // 進度：八段
+  ctx.save();
+  ctx.font = `${H * 0.034}px serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  let s = '';
+  for (let i = 0; i < STAGES.length; i++) s += i < Math.floor(state.bag / BAGS_PER_STAGE) ? '🎄' : '·';
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.fillText(s, W * 0.03, H * 0.032);
+  // 袋子容量：四格
+  ctx.font = `${H * 0.030}px serif`;
+  let c = '';
+  for (let i = 0; i < BAG_SIZE; i++) c += i < state.hold.length ? '🎁' : '·';
+  ctx.fillText(c, W * 0.03, H * 0.075);
+  ctx.restore();
+
+  if (state.stageFlash > 0) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, state.stageFlash);
+    ctx.font = `bold ${H * 0.048}px "Microsoft JhengHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = Math.max(4, H * 0.012); ctx.strokeStyle = 'rgba(255,255,255,.85)';
+    ctx.strokeText(curStage().name, W / 2, H * 0.20);
+    ctx.fillStyle = '#5d4436'; ctx.fillText(curStage().name, W / 2, H * 0.20);
+    ctx.restore();
+  }
+
+  // 目標煙囪的實心箭頭（不閃、不發光）
+  if (state.step === 'deliver' && state.hold.length > 0) {
+    const h = targetHouse(), m = chimMouth(h);
+    ctx.save();
+    ctx.fillStyle = 'rgba(250,244,230,.9)';
+    const ax = m.x, ay = m.y - H * 0.055 + Math.sin(now / 400) * H * 0.004, r = H * 0.018;
+    ctx.beginPath(); ctx.moveTo(ax, ay + r); ctx.lineTo(ax - r * 0.8, ay - r * 0.6); ctx.lineTo(ax + r * 0.8, ay - r * 0.6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // 字幕（給旁邊的大人看的繁體中文）
+  if (caption.t > 0 && caption.text) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, caption.t * 2);
+    ctx.font = `bold ${Math.max(16, H * 0.05)}px "Microsoft JhengHei", sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.lineWidth = Math.max(4, H * 0.012); ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.strokeText(caption.text, W / 2, H * 0.125);
+    ctx.fillStyle = '#4c3a2e'; ctx.fillText(caption.text, W / 2, H * 0.125);
+    ctx.restore();
+  }
+
+  // 圖示示範（不用文字教學）
+  const icon = (txt, x, y) => {
+    ctx.save(); ctx.globalAlpha = 0.85;
+    ctx.font = `${H * 0.05}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x, y); ctx.restore();
+  };
+  const overSanta = roofTopY() - LAY.santaH * H - H * 0.035;
+  if (state.bag === 0 && state.step === 'catch' && state.t < 9) icon('⬅ 🧍 ➡', state.santaX * W, overSanta);
+  if (state.step === 'deliver' && state.hold.length > 0) icon('💪', state.santaX * W, overSanta);
+  if (state.step === 'snack' && state.snack && state.snack.phase === 'open') icon('🍪 🧎', state.santaX * W, overSanta);
+
+  if (state.step === 'done') {
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.font = `${H * 0.11}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🎁', W * 0.5, H * 0.22);
+    ctx.font = `bold ${H * 0.052}px "Microsoft JhengHei", sans-serif`;
+    ctx.lineWidth = Math.max(4, H * 0.012); ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.strokeText('揮一下，再送一次！', W * 0.5, H * 0.31);
+    ctx.fillStyle = '#5d4436'; ctx.fillText('揮一下，再送一次！', W * 0.5, H * 0.31);
+    ctx.restore();
+  }
+}
+
+function draw(now) {
+  drawBackground();
+  if (state.phase === 'menu') return;      // 主選單只畫背景，不碰任何當輪資料
+  drawRooms(now);
+  drawChimneys();
+  drawRoof();
+  drawSleigh(now);
+  drawGifts();
+  drawSack(now);
+  drawSanta(now);
+  drawEvent(now);
+  drawFlying();
+  if (state.step === 'finale') drawFinale(now);
+  for (const f of FX) {
+    ctx.save(); ctx.globalAlpha = Math.max(0, 1 - f.t / f.life);
+    ctx.fillStyle = f.c; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  drawHUD(now);
+}
+
+/* ================== 主迴圈 ================== */
+let last = performance.now();
+let loopErr = 0;
+function loop(now) {
+  requestAnimationFrame(loop);           // 先排下一幀：中間丟例外也不會讓畫面整個停住
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  try {
+    if (state.mode === 'body') trackFrame();
+    if (state.phase === 'play') update(dt, now);
+    draw(now);
+  } catch (e) {
+    if (loopErr++ < 3) console.error('[loop]', e);
+  }
+}
+requestAnimationFrame(loop);
+
+/* ---- 測試勾子（給開發用，玩家碰不到） ---- */
+window.__art = () => ART_IDS.filter(id => !IMG[id]);
+window.__dbg = () => ({
+  phase: state.phase, step: state.step, paused: state.paused,
+  bag: state.bag, stage: state.stage, stageName: curStage().name,
+  santaX: +state.santaX.toFixed(2), target: state.target, chim: targetHouse().chim,
+  hold: state.hold.slice(), falling: state.gifts.length, flying: state.flying.map(f => f.phase),
+  delivered: state.delivered.map(a => a.length),
+  event: state.event ? state.event.kind + ':' + state.event.phase : null,
+  snack: state.snack ? state.snack.phase : null,
+  roll: !!state.roll, spin: !!state.spin,
+  finale: state.finale ? state.finale.phase + ':' + state.finale.t.toFixed(1) : null,
+  assist: +state.assist.toFixed(1), throwArm: +throwArm.toFixed(2), t: +state.t.toFixed(2),
+});
+// 手動步進：不靠 requestAnimationFrame（背景分頁會被凍結），可離線快轉驗證
+window.__step = (secs = 5, { toss = false, squat: sq = false, x = null, fps = 60 } = {}) => {
+  const dt = 1 / fps, n = Math.round(secs * fps);
+  window.__clock = Math.max(window.__clock || 0, performance.now());
+  let now = window.__clock;
+  for (let i = 0; i < n; i++) {
+    if (x != null) state.targetX = x;
+    if (toss && i === 0) throwPulse = true;
+    touchSquat = sq && i === 0;
+    now += dt * 1000;
+    update(dt, now);
+  }
+  window.__clock = now;
+  draw(now);
+  return window.__dbg();
+};
+// 自動玩一局：驗證十六袋、八段推進、事件、點心與結局都走得完，而且不會卡住
+window.__sim = async (bags = TOTAL_BAGS, { lazy = false } = {}) => {
+  if (state.phase === 'menu') { startOverlay.style.display = 'none'; audioInit(); await loadArt(); loadVoices(); }
+  state.mode = 'touch'; state.phase = 'play'; state.paused = false;
+  startLocal();
+  let guard = 0;
+  while (state.bag < bags && guard++ < bags * 80) {
+    if (state.step === 'catch') {
+      if (lazy) { __step(1.0); continue; }
+      const g = state.gifts[0];
+      __step(g ? 0.25 : 0.3, { x: g ? g.x : null });
+      const e = state.event;
+      if (e && e.kind === 'bear' && e.phase === 'jam') __step(0.2, { squat: true });
+      if (e && (e.kind === 'cat' || e.kind === 'bird') && (e.phase === 'sit' || e.phase === 'carry')) __step(0.3, { toss: true });
+    } else if (state.step === 'full') __step(0.9);
+    else if (state.step === 'deliver') {
+      const cx = targetHouse().chim;
+      __step(0.8, { x: cx });
+      const e = state.event;
+      if (e && e.kind === 'blanket' && e.phase === 'block') { __step(0.3, { x: e.x }); __step(0.2, { x: e.x, squat: true }); __step(1.2, { x: cx }); }
+      if (lazy) __step(1.0, { x: cx });
+      else __step(0.6, { x: cx, toss: true });
+    } else if (state.step === 'snack') { if (!lazy) __step(0.3, { squat: true }); __step(1.2); }
+    else if (state.step === 'stage') __step(0.6);
+    else if (state.step === 'finale') { __step(1.0, { squat: true }); __step(1.0, { toss: true }); __step(2.0); }
+    else if (state.step === 'done') break;
+    else __step(0.5);
+  }
+  return window.__dbg();
+};
+</script>
+</body>
+</html>

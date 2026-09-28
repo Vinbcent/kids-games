@@ -1,0 +1,171 @@
+{
+ "_scene": "You are the narrator of a toddler's Christmas game, talking softly to a 5-year-old who is pretending to be Santa on a Taiwanese rooftop late on Christmas Eve. Everyone in the houses below is fast asleep, so the whole performance is hushed, cosy and conspiratorial — a warm stage whisper, never loud, never shouting, never scary. Playful and giggly, clearly articulated, short sentences. Think of a grown-up crouching down and whispering something exciting into a child's ear.",
+ "s1": {
+  "text": "Shh, everyone's asleep.",
+  "dir": "A soft hush on 'Shh', then a warm secretive whisper. Sets the whole night-time mood."
+ },
+ "s2": {
+  "text": "Santa, let's go.",
+  "dir": "Quiet excitement, like tiptoeing off to start an adventure."
+ },
+ "s3": {
+  "text": "Move and catch.",
+  "dir": "Gentle instruction with a little side-to-side sway in the rhythm."
+ },
+ "s4": {
+  "text": "You caught it!",
+  "dir": "Whispered delight, a tiny squeak of joy, still careful not to wake anyone."
+ },
+ "s5": {
+  "text": "Your bag is full.",
+  "dir": "Pleased and a bit puffed up, like a sack bulging with presents."
+ },
+ "s6": {
+  "text": "Over to the chimney.",
+  "dir": "Soft guiding voice, gently leading the eye across the rooftop."
+ },
+ "s7": {
+  "text": "Toss one present.",
+  "dir": "Playful invitation with a light throwing lift on 'toss'."
+ },
+ "s8": {
+  "text": "Down the chimney.",
+  "dir": "Whooshy whispered slide, pitch dropping down on 'down'."
+ },
+ "s9": {
+  "text": "Right beside the tree.",
+  "dir": "Tender satisfied placement, like setting something down carefully."
+ },
+ "s10": {
+  "text": "A little car!",
+  "dir": "Small excited whisper with a tiny toy-car zoom."
+ },
+ "s11": {
+  "text": "Into the stocking.",
+  "dir": "Soft plop feeling, cosy and satisfied."
+ },
+ "s12": {
+  "text": "Sweet dreams.",
+  "dir": "Very gentle lullaby whisper, warm and slow."
+ },
+ "s13": {
+  "text": "Crouch for a cookie.",
+  "dir": "Mischievous conspiratorial whisper, like sneaking a treat."
+ },
+ "s14": {
+  "text": "A cookie in your beard!",
+  "dir": "Stifled giggle, trying not to laugh out loud."
+ },
+ "s15": {
+  "text": "A little sip of milk.",
+  "dir": "Cosy contented whisper with a small satisfied sigh."
+ },
+ "s16": {
+  "text": "A carrot for you.",
+  "dir": "Kind and affectionate, talking to the reindeer."
+ },
+ "s17": {
+  "text": "Grandma's asleep too.",
+  "dir": "Soft affectionate whisper, fond and cosy."
+ },
+ "s18": {
+  "text": "The other chimney.",
+  "dir": "Light guiding whisper, turning attention to the other side."
+ },
+ "s19": {
+  "text": "What a big bear!",
+  "dir": "Amazed hushed wow, stretching 'big' wide."
+ },
+ "s20": {
+  "text": "Crouch to squish it.",
+  "dir": "Silly whispered instruction, pressing down on 'squish'."
+ },
+ "s21": {
+  "text": "Boing, in you go.",
+  "dir": "Soft bouncy cartoon 'boing', then a pleased little whisper."
+ },
+ "s22": {
+  "text": "Kitty, that's my bag.",
+  "dir": "Mock-complaining whisper to a cheeky cat, clearly amused."
+ },
+ "s23": {
+  "text": "Swing your arm, shoo kitty.",
+  "dir": "Playful whispered instruction with a swinging lift on 'swing'."
+ },
+ "s24": {
+  "text": "Crouch under the blanket.",
+  "dir": "Hushed sneaky whisper, ducking the voice low."
+ },
+ "s25": {
+  "text": "Silly little bird.",
+  "dir": "Fond quiet giggle."
+ },
+ "s26": {
+  "text": "Swing your arm, shoo bird.",
+  "dir": "Light friendly whisper with a swinging motion in the voice."
+ },
+ "s27": {
+  "text": "Oops, back in the bag.",
+  "dir": "Playful whispered oops, springy and reassuring, never disappointed."
+ },
+ "s28": {
+  "text": "A belly bounce!",
+  "dir": "Stifled laugh, bouncy and silly."
+ },
+ "s29": {
+  "text": "Santa's rolling!",
+  "dir": "Whispered belly laugh, the funniest line, still keeping it quiet."
+ },
+ "s30": {
+  "text": "Here it comes.",
+  "dir": "Soft anticipation, drawing the eye to a falling present."
+ },
+ "s31": {
+  "text": "Back to the sleigh.",
+  "dir": "Warm cosy whisper, moving on to the next house."
+ },
+ "s32": {
+  "text": "One more bag.",
+  "dir": "Encouraging whisper, celebratory not pressuring."
+ },
+ "s33": {
+  "text": "A present for Santa!",
+  "dir": "Delighted hushed surprise, tender and heart-warming."
+ },
+ "s34": {
+  "text": "Crouch, Santa.",
+  "dir": "Playful whisper, dipping down, full of anticipation."
+ },
+ "s35": {
+  "text": "Give a toss, boing!",
+  "dir": "Energetic but still hushed, with a bouncy cartoon 'boing'."
+ },
+ "s36": {
+  "text": "Still fast asleep.",
+  "dir": "Very soft, smiling, almost a lullaby."
+ },
+ "s37": {
+  "text": "Merry Christmas.",
+  "dir": "Warm glowing whispered farewell, cosy and generous."
+ },
+ "s38": {
+  "text": "Step back, please.",
+  "dir": "Calm clear grown-up request, slightly louder than the whispers but kind."
+ },
+ "s39": {
+  "text": "Let's keep going.",
+  "dir": "Warm welcoming whisper, happy to have him back."
+ },
+ "s40": {
+  "text": "Let's deliver again.",
+  "dir": "Bright inviting whisper, ready for another round."
+ },
+ "s41": {
+  "text": "Toss the next one.",
+  "dir": "Light playful nudge with a small throwing lift."
+ },
+ "s42": {
+  "text": "An empty-handed spin!",
+  "dir": "Quiet giggle at Santa's own clumsiness, fond not mocking."
+ }
+}

@@ -164,14 +164,14 @@ const ART_IDS = [
   'CH001', 'CH002', 'CH003', 'CH005', 'CH006', 'CH007', 'CH008',  // 聖誕老人：待機／走路兩格／蹲下／四腳朝天／投擲預備／投擲出手
   'CH101', 'CH102',                                               // 屋頂貓：坐／仰倒
   'CH201', 'CH202',                                               // 麻雀：收翅／張翅
-  'CH303', 'CH403',                                               // 熟睡的小朋友／熟睡的阿嬤（躺著）
-  'CH501', 'VH001',                                               // 馴鹿／雪橇
+  'CH303', 'CH304',                                               // 兩位熟睡的小朋友（躺著，短髮男孩／綁髮女孩）
+  'VH001',                                                        // 麋鹿拉雪橇的飛行隊伍（永遠一起動，所以是同一張）
   'IT001', 'IT002', 'IT003', 'IT004', 'IT005', 'IT006',           // 禮物盒／玩具車／熊玩偶／麵包紙袋／紅包袋／點心餐盤
-  'TP001', 'TP003', 'TP004', 'TP005', 'TP006',                    // 屋頂平台／公寓／店面／機車／聖誕樹
-  'TP007', 'TP008', 'TP009', 'TP010', 'TP011', 'TP012',           // 聖誕紅／晾衣被／禮物袋／煙囪與煙道／聖誕襪／床與床頭矮櫃
-  'BG001', 'BG002',                                               // 遠景橫幅／街道橫幅
+  'TP001', 'TP003', 'TP006', 'TP008', 'TP009',                    // 屋頂平台／公寓／聖誕樹／晾衣被／禮物袋
+  'TP010', 'TP011', 'TP013', 'TP014',                             // 矮煙囪頭／聖誕襪／開放滑道／淺住宅剖面
+  'BG001',                                                        // 遠景橫幅
 ];
-const EXT = { BG001: 'jpg', BG002: 'jpg' };
+const EXT = { BG001: 'jpg' };
 for (const id of ART_IDS) ART[id] = {};
 function loadArt() {
   return Promise.all(ART_IDS.map(id => new Promise(res => {
@@ -309,7 +309,7 @@ const LINES = {
   s14: ['A cookie in your beard!',     '餅乾卡在鬍子上了！'],
   s15: ['A little sip of milk.',       '再喝一口牛奶。'],
   s16: ['A carrot for you.',           '這根紅蘿蔔給你。'],
-  s17: ["Grandma's asleep too.",       '阿嬤也睡著了。'],
+  s17: ["She's fast asleep too.",      '這個小朋友也睡著了。'],
   s18: ['The other chimney.',          '換另一座煙囪。'],
   s19: ['What a big bear!',            '好大一隻熊！'],
   s20: ['Crouch to squish it.',        '蹲下壓一壓。'],
@@ -384,25 +384,27 @@ function say(key, { gap = 2600, priority = 1 } = {}) {
 
 /* ================== 版面（座標集中在這裡，照 scene.md） ================== */
 const LAY = {
-  roofY:     0.46,   // 屋頂平台面 ＝ 聖誕老人腳底線
-  roofH:     0.045,
-  santaH:    0.235,
-  sackH:     0.115,
-  chimTop:   0.372,  // 煙囪口
-  chimH:     0.305,  // 煙囪＋煙道總高（底端就是室內出口）
-  roomTop:   0.525,  // 室內剖面
-  roomBot:   0.845,
-  groundTop: 0.855,
-  giftH:     0.070,
+  flyY:      0.17,   // 飛行航帶：麋鹿雪橇在這個高度飛過並把禮物放下來
+  roofY:     0.67,   // 屋頂平台面 ＝ 聖誕老人腳底線
+  roofH:     0.032,
+  santaH:    0.25,
+  sackH:     0.12,
+  chimTop:   0.605,  // 矮胖煙囪頭（坐在屋頂上）
+  chimH:     0.075,
+  chuteTop:  0.700,  // 開放滑道：從屋頂線接到淺室內帶
+  chuteH:    0.105,
+  roomTop:   0.700,  // 淺室內帶（約占畫面 22%，比上一版少三分之一）
+  roomBot:   0.920,
+  baseTop:   0.920,  // 建築基座收邊（街道層已移除）
+  giftH:     0.062,
 };
-const WALK_MIN = 0.24, WALK_MAX = 0.88;   // 屋頂可走位範圍（左側讓給雪橇與馴鹿）
-const SLEIGH_X = 0.085, DEER_X = 0.185;
+const WALK_MIN = 0.16, WALK_MAX = 0.86;   // 屋頂可走位範圍（雪橇不再長期占住左側）
 
 // 兩戶住家：前兩段只有一戶，第三段起變兩戶
 const HOUSE_ONE = [{ x0: 0.22, x1: 0.86, chim: 0.54, who: 'CH303', wall: '#b9c4d2', name: '小朋友家' }];
 const HOUSE_TWO = [
   { x0: 0.045, x1: 0.475, chim: 0.29, who: 'CH303', wall: '#b9c4d2', name: '小朋友家' },
-  { x0: 0.525, x1: 0.955, chim: 0.71, who: 'CH403', wall: '#d6cdbc', name: '阿嬤家' },
+  { x0: 0.525, x1: 0.955, chim: 0.71, who: 'CH304', wall: '#d6cdbc', name: '妹妹家' },
 ];
 const houses = () => (state.stage >= 2 ? HOUSE_TWO : HOUSE_ONE);
 const targetHouse = () => houses()[Math.min(state.target, houses().length - 1)];
@@ -410,20 +412,21 @@ const targetHouse = () => houses()[Math.min(state.target, houses().length - 1)];
 const roofTopY = () => LAY.roofY * H;
 const sackX = () => state.santaX * W + W * 0.038;
 const sackMouthY = () => roofTopY() - LAY.sackH * H * 0.92;
-const chimMouth = h => ({ x: h.chim * W, y: LAY.chimTop * H + H * 0.012 });
-const chimExit = h => ({ x: h.chim * W, y: (LAY.chimTop + LAY.chimH) * H - H * 0.015 });
+const chimMouth = h => ({ x: h.chim * W, y: LAY.chimTop * H + H * 0.016 });
+const chimExit = h => ({ x: h.chim * W, y: (LAY.chuteTop + LAY.chuteH) * H - H * 0.010 });   // 滑道下端的出口
 // 室內的固定位置（樹、襪子、床、餐盤）
 function roomSpots(h) {
   const cx = h.chim * W, left = h.x0 * W, right = h.x1 * W;
-  const treeSide = (h.chim - h.x0) > (h.x1 - h.chim) ? -1 : 1;     // 樹放在煙道空間比較大的那一側
-  const floorY = LAY.roomBot * H - H * 0.012;
+  const treeSide = (h.chim - h.x0) > (h.x1 - h.chim) ? -1 : 1;     // 收禮區放在空間比較大的那一側
+  const floorY = LAY.roomBot * H - H * 0.010;
   return {
     floorY, dir: treeSide,
-    tree:  { x: cx + treeSide * W * 0.150, y: floorY },
-    drop:  { x: cx + treeSide * W * 0.105, y: floorY },             // 樹旁放大禮物的空地
-    sock:  { x: cx + treeSide * W * 0.075, y: chimExit(h).y + H * 0.018 },   // 掛在煙道與樹之間，遠離床，不會疊到睡著的人
-    bed:   { x: treeSide > 0 ? left + W * 0.085 : right - W * 0.085, y: floorY },
-    plate: { x: treeSide > 0 ? left + W * 0.160 : right - W * 0.160, y: floorY - H * 0.048 },
+    tree:  { x: cx + treeSide * W * 0.145, y: floorY },
+    drop:  { x: cx + treeSide * W * 0.095, y: floorY },             // 樹旁放大禮物的空地
+    sock:  { x: cx + treeSide * W * 0.058, y: chimExit(h).y + H * 0.010 },   // 掛在滑道出口旁，遠離床
+    bed:   { x: treeSide > 0 ? left + W * 0.090 : right - W * 0.090, y: floorY },
+    // 餐盤要放在 TP014 那一端的床頭矮櫃上（單體鏡像時矮櫃跟著換邊），不要疊到小孩的臉
+    plate: { x: treeSide > 0 ? right - W * 0.050 : left + W * 0.050, y: floorY - H * 0.022 },
   };
 }
 const SMALL_GIFT = { IT002: 1, IT005: 1 };   // 小禮物進襪子，大禮物放樹旁
@@ -432,7 +435,7 @@ const SMALL_GIFT = { IT002: 1, IT005: 1 };   // 小禮物進襪子，大禮物�
 const STAGES = [
   { name: '第一間亮著小燈的房子', gifts: ['IT001'],                            ev: null,      tint: 0.00 },
   { name: '禮物裡有車車',         gifts: ['IT001', 'IT002', 'IT004'],          ev: null,      tint: 0.02 },
-  { name: '阿嬤也睡著了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: null,      tint: 0.04 },
+  { name: '隔壁的小朋友也睡著了', gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: null,      tint: 0.04 },
   { name: '這隻熊太大了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'bear',    tint: 0.06 },
   { name: '屋頂貓來幫倒忙',       gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'cat',     tint: 0.08 },
   { name: '晾衣被的捷徑',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'blanket', tint: 0.10 },
@@ -446,6 +449,8 @@ const ASSIST_AFTER = 5.0;
 const FALL_T = 2.6;
 const THROW_ANIM = 0.34;       // 預備＋出手兩格連播的長度
 const NEAR_CHIM = 0.30;        // 站得夠近才丟得到；太遠就是好笑的肚子彈一下再補送
+
+const LAY_FLY = 0.17;
 
 const state = {
   phase: 'menu', mode: null,
@@ -468,7 +473,8 @@ const state = {
   paused: false,
   finale: null,
   stageFlash: 0,
-  sleigh: 0,             // 換場時雪橇滑一段
+  // 麋鹿拉的雪橇：在空中飛，飛到落點上方才把禮物放下來（禮物看得出是從牠那裡掉的）
+  sleigh: { x: -0.15, y: LAY_FLY, want: 0.5, hold: null, mode: 'in', t: 0 },
 };
 
 function curStage() { return STAGES[Math.min(state.stage, STAGES.length - 1)]; }
@@ -481,7 +487,8 @@ function startLocal() {
   state.finale = null; state.delivered = [[], []]; state.dream = 0;
   state.throwAnim = 0; state.throwCool = 0; state.squatCool = 0;
   state.assist = 0; state.assisting = false; state.idle = 0;
-  state.target = 0; state.spawnGap = 0.6; state.sleigh = 0;
+  state.target = 0; state.spawnGap = 0.6;
+  state.sleigh = { x: -0.15, y: LAY.flyY, want: 0.5, hold: null, mode: 'in', t: 0 };
 }
 
 /* ================== 體感追蹤（MediaPipe Pose） ================== */
@@ -696,8 +703,44 @@ function pickGiftX() {
   const x = state.santaX + (Math.random() < 0.5 ? -1 : 1) * (0.03 + Math.random() * spread);
   return Math.max(WALK_MIN, Math.min(WALK_MAX, x));
 }
-function spawnGift() {
-  state.gifts.push({ id: pickGiftId(), x: pickGiftX(), t: 0, dur: FALL_T, caught: false, bounce: null });
+// 叫雪橇去送下一件：先挑落點，隊伍飛過去，到了才放
+function requestGift() {
+  const sl = state.sleigh;
+  if (sl.hold) return;
+  sl.hold = pickGiftId();
+  sl.want = pickGiftX();
+  sl.mode = 'toDrop';
+}
+function releaseGift() {
+  const sl = state.sleigh;
+  if (!sl.hold) return;
+  state.gifts.push({ id: sl.hold, x: sl.x, t: 0, dur: FALL_T, caught: false, bounce: null, fromY: sl.y });
+  sl.hold = null; sl.mode = 'linger'; sl.t = 0;   // 放完先停在禮物正上方，讓五歲看出是牠掉的
+}
+// 雪橇每一幀：飛向落點 → 放禮物 → 退到旁邊安靜懸停。任何時候都不讓玩家空等牠繞回來
+function updateSleigh(dt) {
+  const sl = state.sleigh;
+  sl.t += dt;
+  const hold = (state.event && (state.event.kind === 'bear' || state.event.kind === 'cat')) || state.step !== 'catch';
+  let want = sl.want;
+  if (sl.mode === 'in') { want = 0.5; if (Math.abs(sl.x - 0.5) < 0.02) sl.mode = 'idle'; }
+  else if (sl.mode === 'linger') { want = sl.x; if (sl.t > 0.9) sl.mode = 'idle'; }
+  else if (sl.mode === 'toDrop') {
+    if (hold) want = sl.x;                                   // 事件處理中：原地懸停，禮物留在貨艙口
+    else if (Math.abs(sl.x - sl.want) < 0.012) { releaseGift(); want = sl.x; }
+  } else {
+    // 沒事做：送禮階段退到遠離目標煙囪的那一側，避開投擲弧線
+    if (state.step === 'deliver' || state.step === 'snack') want = targetHouse().chim > 0.5 ? 0.12 : 0.88;
+    else want = Math.max(0.14, Math.min(0.86, state.santaX));
+  }
+  const speed = sl.mode === 'toDrop' ? 0.55 : 0.28;          // 每秒幾個畫面寬
+  const d = want - sl.x;
+  const step = Math.sign(d) * Math.min(Math.abs(d), speed * dt);
+  if (Math.abs(step) > 0.0004) sl.dir = Math.sign(step);
+  sl.x += step;
+  // 點心那一段整隊降低到屋頂邊緣（屋主留的紅蘿蔔是給麋鹿的）
+  const wantY = (state.snack && state.snack.phase === 'carrot') ? LAY.roofY - 0.13 : LAY.flyY;
+  sl.y += (wantY - sl.y) * Math.min(1, dt * 2.2);
 }
 function maybeStartEvent() {
   if (state.event || state.step !== 'catch') return;
@@ -771,7 +814,8 @@ function nextBag() {
   const newStage = Math.floor(state.bag / BAGS_PER_STAGE);
   if (newStage !== state.stage) {
     state.stage = newStage;
-    state.step = 'stage'; state.t = 0; state.stageFlash = 1.6; state.sleigh = 1;
+    state.step = 'stage'; state.t = 0; state.stageFlash = 1.6;
+    state.sleigh.mode = 'in'; state.sleigh.x = -0.15; state.sleigh.hold = null;   // 換場：整隊飛出去再從左邊飛回來
     state.delivered = [[], []];              // 換一條街，換兩間新房子
     sfxSleigh(); say('s31', { priority: 2 });
     if (newStage === 2) setTimeout(() => say('s17', { priority: 2 }), 1200);
@@ -852,7 +896,6 @@ function update(dt, now) {
   if (throwLock > 0) throwLock -= dt;
   if (state.stageFlash > 0) state.stageFlash -= dt;
   if (state.dream > 0) state.dream -= dt;
-  if (state.sleigh > 0) state.sleigh -= dt;
   if (caption.t > 0) caption.t -= dt;
 
   /* ---- 輸入：同一時間只解讀一項 ---- */
@@ -909,14 +952,16 @@ function update(dt, now) {
     } else doSpin();
   }
 
+  updateSleigh(dt);
+
   /* ---- 各階段推進 ---- */
   if (state.step === 'catch') {
     const jammed = state.event && state.event.kind === 'bear' && state.event.phase === 'jam';
     state.spawnGap -= dt;
-    if (!jammed && state.spawnGap <= 0 && state.gifts.length < 2 && state.hold.length + state.gifts.length < BAG_SIZE) {
-      spawnGift(); state.spawnGap = 1.5 + Math.random() * 0.5;
+    if (!jammed && state.spawnGap <= 0 && state.gifts.length < 2 && !state.sleigh.hold
+        && state.hold.length + state.gifts.length < BAG_SIZE) {
+      requestGift(); state.spawnGap = 1.4 + Math.random() * 0.4;
       if (state.bag === 0 && state.hold.length === 0) say('s3', { priority: 2 });
-      else if (state.stage === 1 && state.gifts[state.gifts.length - 1].id === 'IT002') say('s10', { gap: 12000 });
       else say('s30', { gap: 9000 });
     }
     if (!state.event && state.hold.length === 1) maybeStartEvent();
@@ -1038,7 +1083,7 @@ function catchGift(g, i, bounced) {
 
 function giftFallY(g) {
   const prog = Math.max(0, Math.min(1, g.t / g.dur));
-  const y0 = -LAY.giftH * H, y1 = sackMouthY();
+  const y0 = (g.fromY != null ? g.fromY : LAY.flyY) * H + H * 0.02, y1 = sackMouthY();
   if (g.bounce) {
     const k = g.bounce.t / 0.7;
     return roofTopY() - Math.sin(Math.PI * k) * H * 0.12 - LAY.giftH * H * 0.4;
@@ -1114,25 +1159,22 @@ function drawBackground() {
   const shift = state.stage * W * 0.05;
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, roofY); ctx.clip();
   picBottom('TP003', W * 0.13 - shift * 0.2, roofY + H * 0.10, { h: H * 0.38, alpha: 0.95 });
-  picBottom('TP004', W * 0.45, roofY + H * 0.05, { h: H * 0.19, alpha: 0.95 });
   picBottom('TP003', W * 0.80 + shift * 0.15, roofY + H * 0.12, { h: H * 0.34, flip: true, alpha: 0.95 });
   ctx.restore();
   tintRect(0.18 + t * 0.6, 0, roofY + 2);
 
   // 主場建築的外牆（屋頂線以下到街道）
-  const fg = ctx.createLinearGradient(0, roofY, 0, H * LAY.groundTop);
+  const fg = ctx.createLinearGradient(0, roofY, 0, H * LAY.baseTop);
   fg.addColorStop(0, '#b3ab9c'); fg.addColorStop(1, '#9e9789');
-  ctx.fillStyle = fg; ctx.fillRect(0, roofY, W, H * LAY.groundTop - roofY);
-  tintRect(0.16 + t * 0.7, roofY, H * LAY.groundTop);
+  ctx.fillStyle = fg; ctx.fillRect(0, roofY, W, H * LAY.baseTop - roofY);
+  tintRect(0.16 + t * 0.7, roofY, H * LAY.baseTop);
 
-  // 近景街道
-  ctx.fillStyle = '#6f7076'; ctx.fillRect(0, H * LAY.groundTop, W, H * (1 - LAY.groundTop));
-  tileBand('BG002', H * LAY.groundTop, H * (1 - LAY.groundTop), 0);
-  picBottom('TP005', W * 0.16, H * 0.985, { h: H * 0.075 });
-  picBottom('TP005', W * 0.86, H * 0.985, { h: H * 0.075, flip: true });
-  if (state.stage >= 7) picBottom('TP006', W * 0.62, H * 0.995, { h: H * 0.13 });
-  picBottom('TP007', W * 0.48, H * 0.99, { h: H * 0.045 });
-  tintRect(0.2 + t * 0.5, H * LAY.groundTop, H);
+  // 畫面下緣：建築基座收邊（街道層已移除，但不能收成一片死黑）
+  const bg2 = ctx.createLinearGradient(0, H * LAY.baseTop, 0, H);
+  bg2.addColorStop(0, '#7d7a72'); bg2.addColorStop(1, '#5d5f68');
+  ctx.fillStyle = bg2; ctx.fillRect(0, H * LAY.baseTop, W, H * (1 - LAY.baseTop));
+  ctx.fillStyle = 'rgba(255,252,244,.10)'; ctx.fillRect(0, H * LAY.baseTop, W, H * 0.006);
+  tintRect(t * 0.4, H * LAY.baseTop, H);
 
   drawLights();
 }
@@ -1164,36 +1206,34 @@ function drawRooms(now) {
   for (let i = 0; i < list.length; i++) {
     const h = list[i], sp = roomSpots(h);
     const x0 = h.x0 * W, x1 = h.x1 * W, y0 = LAY.roomTop * H, y1 = LAY.roomBot * H;
-    // 背牆與牆體切面
-    ctx.save();
-    ctx.fillStyle = h.wall; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-    ctx.fillStyle = 'rgba(80,76,70,.16)';
-    ctx.fillRect(x0, y0, W * 0.010, y1 - y0); ctx.fillRect(x1 - W * 0.010, y0, W * 0.010, y1 - y0);
-    ctx.fillRect(x0, y0, x1 - x0, H * 0.012);                       // 樓板
-    ctx.fillStyle = 'rgba(232,226,212,.75)';                        // 磨石子地
-    ctx.fillRect(x0, sp.floorY, x1 - x0, y1 - sp.floorY);
-    ctx.restore();
-
-    picBottom('TP012', sp.bed.x, sp.bed.y, { w: W * 0.20, flip: sp.bed.x > h.chim * W });
-    // 躺著睡的住戶：頭朝右，只做小幅呼吸起伏，永遠不會醒
-    const breathe = Math.sin(now / 900 + i) * H * 0.003;
+    // 沒有 TP014 時的備援底色（素材還沒生好也不會開天窗）
+    if (!IMG.TP014) {
+      ctx.save();
+      ctx.fillStyle = h.wall; ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.fillStyle = 'rgba(232,226,212,.75)'; ctx.fillRect(x0, sp.floorY, x1 - x0, y1 - sp.floorY);
+      ctx.restore();
+    } else {
+      // 住宅剖面單體：背牆、側牆、地板、低床與連體矮櫃永遠一起動
+      picBottom('TP014', (x0 + x1) / 2, y1, { w: x1 - x0, flip: sp.dir > 0 });
+    }
+    // 躺著睡的住戶：只做小幅呼吸起伏，永遠不會醒
+    const breathe = Math.sin(now / 900 + i) * H * 0.0025;
     const dream = state.dream > 0 ? Math.sin(state.dream * 12) * 0.05 : 0;
-    picBottom(h.who, sp.bed.x, sp.bed.y - H * 0.030 + breathe, { w: W * 0.145, rot: dream, flip: sp.bed.x > h.chim * W });
-    picBottom('IT006', sp.plate.x, sp.plate.y, { h: H * 0.038 });
-    picBottom('TP006', sp.tree.x, sp.tree.y, { h: H * 0.165 });
-    picBottom('TP011', sp.sock.x, sp.sock.y + H * 0.055, { h: H * 0.055 });
+    picBottom(h.who, sp.bed.x, sp.bed.y - H * 0.020 + breathe, { w: W * 0.115, rot: dream, flip: sp.bed.x > h.chim * W });
+    picBottom('IT006', sp.plate.x, sp.plate.y, { h: H * 0.030 });
+    picBottom('TP006', sp.tree.x, sp.tree.y, { h: H * 0.125 });
+    picBottom('TP011', sp.sock.x, sp.sock.y + H * 0.045, { h: H * 0.045 });
 
-    // 已送達的禮物：大的排在樹旁、小的露在襪口
     const got = state.delivered[i] || [];
     const bigN = got.filter(d => !d.small).length;
-    const gap = Math.min(W * 0.030, W * 0.115 / Math.max(1, bigN));   // 禮物越多排越密，不會一路堆到床上
+    const gap = Math.min(W * 0.026, W * 0.095 / Math.max(1, bigN));
     let big = 0, small = 0;
     for (const d of got) {
       if (d.small) {
-        pic(d.id, sp.sock.x + W * 0.004, sp.sock.y + H * 0.030 - small * H * 0.007, { h: H * 0.032, alpha: 0.98 });
+        pic(d.id, sp.sock.x + W * 0.003, sp.sock.y + H * 0.024 - small * H * 0.006, { h: H * 0.026, alpha: 0.98 });
         small++;
       } else {
-        picBottom(d.id, sp.drop.x + sp.dir * big * gap, sp.floorY, { h: H * (d.id === 'IT003' ? 0.075 : 0.055) });
+        picBottom(d.id, sp.drop.x + sp.dir * big * gap, sp.floorY, { h: H * (d.id === 'IT003' ? 0.060 : 0.045) });
         big++;
       }
     }
@@ -1202,6 +1242,8 @@ function drawRooms(now) {
 
 function drawChimneys() {
   for (const h of houses()) {
+    // 滑道先畫（在室內帶裡），煙囪頭後畫（坐在屋頂線上），接縫就在屋頂線
+    picBottom('TP013', h.chim * W, (LAY.chuteTop + LAY.chuteH) * H, { h: LAY.chuteH * H });
     picBottom('TP010', h.chim * W, (LAY.chimTop + LAY.chimH) * H, { h: LAY.chimH * H });
   }
 }
@@ -1218,15 +1260,13 @@ function drawRoof() {
 }
 
 function drawSleigh(now) {
-  const slide = state.sleigh > 0 ? (1 - state.sleigh / 1.4) : 1;
-  const dx = state.sleigh > 0 ? (1 - slide) * W * 0.25 : 0;
-  picBottom('VH001', SLEIGH_X * W - dx, roofTopY(), { h: LAY.santaH * H * 0.5 });
-  const bob = Math.sin(now / 700) * H * 0.004;
-  picBottom('CH501', DEER_X * W - dx, roofTopY() + bob, { h: LAY.santaH * H * 0.75 });
-  // 點心事件的紅蘿蔔階段：馴鹿低頭一下
-  if (state.snack && state.snack.phase === 'carrot') {
-    pic('IT006', DEER_X * W + W * 0.035, roofTopY() - H * 0.03, { h: H * 0.034 });
-  }
+  const sl = state.sleigh;
+  const bob = Math.sin(now / 620) * H * 0.006;
+  const tilt = Math.sin(now / 900) * 0.02;
+  const h = LAY.santaH * H * 0.62;
+  picBottom('VH001', sl.x * W, sl.y * H + bob, { h, flip: sl.dir < 0, rot: tilt });
+  // 待送的禮物掛在貨艙口：五歲才看得出「等一下會從那裡掉下來」
+  if (sl.hold) pic(sl.hold, sl.x * W - (sl.dir < 0 ? -1 : 1) * W * 0.045, sl.y * H + bob + H * 0.012, { h: LAY.giftH * H * 0.9 });
 }
 
 function santaFrame() {

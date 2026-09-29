@@ -402,6 +402,7 @@ const LAY = {
   baseTop:   0.920,  // 建築基座收邊（街道層已移除）
   giftH:     0.062,
 };
+const ELF_Y = 0.315;                      // 小精靈飛的高度：在聖誕老人頭上、雪橇下面
 const WALK_MIN = 0.16, WALK_MAX = 0.86;   // 屋頂可走位範圍（雪橇不再長期占住左側）
 
 // 兩戶住家：前兩段只有一戶，第三段起變兩戶
@@ -770,9 +771,9 @@ function maybeStartEvent() {
     state.event = { kind: 'bird', phase: 'carry', t: 0 };
     sfxChirp(); say('s25', { priority: 2 }); setTimeout(() => say('s26', { priority: 2 }), 900);
   } else {
-    // 搗亂小精靈：站在離聖誕老人比較遠的那一側，朝他丟炸蛋
-    const side = state.santaX > 0.5 ? WALK_MIN - 0.06 : WALK_MAX + 0.06;
-    state.event = { kind: 'elf', phase: 'wind', t: 0, x: side, thrown: 0 };
+    // 搗亂小精靈：長了一對小翅膀，從側邊飛進來、飛到聖誕老人上方空投炸蛋
+    const side = state.santaX > 0.5 ? -0.10 : 1.10;
+    state.event = { kind: 'elf', phase: 'fly', t: 0, x: side, y: ELF_Y, want: state.santaX, thrown: 0, flap: 0 };
     sfxStomp(); say('s13', { priority: 2 }); setTimeout(() => say('s14', { priority: 2 }), 1000);
   }
 }
@@ -1031,10 +1032,9 @@ function update(dt, now) {
     const eg = state.eggs[i];
     eg.t += dt;
     const k = clamp01(eg.t / eg.dur);
-    eg.cx = (eg.x0 + (eg.x1 - eg.x0) * k) * W;
-    eg.cy = (roofTopY() - LAY.santaH * H * 0.75) + (sackMouthY() - (roofTopY() - LAY.santaH * H * 0.75)) * k
-            - Math.sin(Math.PI * k) * H * 0.10;
-    eg.rot = k * 6;
+    eg.cx = (eg.x0 + eg.drift * k) * W;
+    eg.cy = eg.y0 * H + (sackMouthY() - eg.y0 * H) * (k * k);     // 越掉越快
+    eg.rot = k * 5;
     if (k >= 1) {
       state.eggs.splice(i, 1);
       if (Math.abs(eg.cx - sackX()) < W * 0.075) eggCaught();
@@ -1057,13 +1057,21 @@ function update(dt, now) {
       if (e.phase === 'carry' && e.t > 7) { e.phase = 'leave'; e.t = 0; }
       else if (e.phase === 'leave' && e.t > 1.1) state.event = null;
     } else if (e.kind === 'elf') {
-      // 預備 → 丟蛋 → 稍等 → 再丟一顆 → 自己跺腳走人（不趕也不會卡住）
-      if (e.phase === 'wind' && e.t > 0.55) { throwEgg(e); e.phase = 'wait'; e.t = 0; }
-      else if (e.phase === 'wait' && e.t > 2.4) {
-        if (e.thrown >= 2) { e.phase = 'leave'; e.t = 0; sfxStomp(); }
-        else { e.phase = 'wind'; e.t = 0; }
+      e.flap += dt * 9;
+      // 飛到目標上方 → 停一下把炸蛋舉高 → 空投 → 換位置再投一次 → 自己飛走
+      if (e.phase === 'fly') {
+        e.want = Math.max(WALK_MIN, Math.min(WALK_MAX, state.santaX));
+        const d = e.want - e.x;
+        e.x += Math.sign(d) * Math.min(Math.abs(d), 0.42 * dt);
+        if (Math.abs(d) < 0.02) { e.phase = 'wind'; e.t = 0; }
+        else if (e.t > 3.5) { e.phase = 'wind'; e.t = 0; }        // 追不到也會投，不會一直繞
       }
-      else if (e.phase === 'leave' && e.t > 1.0) state.event = null;
+      else if (e.phase === 'wind' && e.t > 0.6) { dropEgg(e); e.phase = 'wait'; e.t = 0; }
+      else if (e.phase === 'wait' && e.t > 1.6) {
+        if (e.thrown >= 2) { e.phase = 'leave'; e.t = 0; sfxStomp(); }
+        else { e.phase = 'fly'; e.t = 0; }
+      }
+      else if (e.phase === 'leave' && e.t > 1.2) state.event = null;
     } else if (e.kind === 'blanket') {
       if (e.phase === 'block' && e.t > ASSIST_AFTER + 2) { e.phase = 'lift'; e.t = 0; }
       else if (e.phase === 'duck' && e.t > 0.9) { e.phase = 'lift'; e.t = 0; }
@@ -1095,10 +1103,10 @@ function update(dt, now) {
   }
 }
 
-function throwEgg(e) {
+// 空投：炸蛋從小精靈腳下垂直掉下來（只有很小的左右飄），玩家靠走位閃
+function dropEgg(e) {
   e.thrown++;
-  state.eggs.push({ x: e.x, y: roofTopY() - LAY.santaH * H * 0.75, t: 0, dur: 1.5,
-                    x0: e.x, x1: state.santaX + (Math.random() - 0.5) * 0.06, rot: 0 });
+  state.eggs.push({ x0: e.x, y0: e.y + 0.035, t: 0, dur: 1.35, drift: (Math.random() - 0.5) * 0.05, rot: 0 });
   sfxEggFly();
 }
 // 接到炸蛋＝好笑的獎勵，不是懲罰：原地轉一大圈，袋子裡的禮物一件都不會少
@@ -1427,11 +1435,23 @@ function drawEvent(now) {
       picBottom('CH202', sx + W * (0.10 + 0.16 * k), H * (0.20 - 0.06 * k), { h: H * 0.070, rot: -k * 1.2 });
     }
   } else if (e.kind === 'elf') {
-    const id = (e.phase === 'wind' && e.t > 0.25) ? 'CH602' : 'CH601';
+    // 飛行中：兩格交替＝振翅；投蛋那一下固定用出手那格
+    let id = (Math.floor(e.flap) % 2 === 0) ? 'CH601' : 'CH602';
+    if (e.phase === 'wind') id = 'CH601';
+    if (e.phase === 'wait' && e.t < 0.45) id = 'CH602';
     const faceRight = e.x < state.santaX;
-    let dx = 0, dy = 0;
-    if (e.phase === 'leave') { const k = clamp01(e.t / 1.0); dx = (faceRight ? -1 : 1) * W * 0.12 * k; dy = -Math.abs(Math.sin(k * Math.PI)) * H * 0.02; }
-    picBottom(id, e.x * W + dx, roofTopY() + dy, { h: LAY.santaH * H * 0.62, flip: !faceRight });
+    let dx = 0, dy = Math.sin(now / 260) * H * 0.006;
+    let rot = 0;
+    if (e.phase === 'leave') {                       // 被趕走或自己走：翻著飛出畫面
+      const k = clamp01(e.t / 1.2);
+      dx = (faceRight ? -1 : 1) * W * 0.30 * k;
+      dy -= Math.sin(k * Math.PI) * H * 0.05;
+      rot = k * 3;
+    }
+    const eh = LAY.santaH * H * 0.55;
+    pic(id, e.x * W + dx, e.y * H + dy, { h: eh, flip: !faceRight, rot });
+    // 舉高那一格：把待投的炸蛋畫在他手上，看得出「等一下要丟這個」
+    if (e.phase === 'wind') pic('OB001', e.x * W + (faceRight ? -1 : 1) * eh * 0.26, e.y * H + dy - eh * 0.40, { h: LAY.giftH * H * 0.95 });
   } else if (e.kind === 'blanket') {
     let lift = 0;
     if (e.phase === 'duck') lift = clamp01(e.t / 0.9) * 0.4;
@@ -1561,8 +1581,8 @@ requestAnimationFrame(loop);
 
 /* ---- 測試勾子（給開發用，玩家碰不到） ---- */
 window.__elf = () => {
-  const side = state.santaX > 0.5 ? WALK_MIN - 0.06 : WALK_MAX + 0.06;
-  state.event = { kind: 'elf', phase: 'wind', t: 0, x: side, thrown: 0 };
+  const side = state.santaX > 0.5 ? -0.10 : 1.10;
+  state.event = { kind: 'elf', phase: 'fly', t: 0, x: side, y: ELF_Y, want: state.santaX, thrown: 0, flap: 0 };
   sfxStomp(); return window.__dbg();
 };
 window.__art = () => ART_IDS.filter(id => !IMG[id]);

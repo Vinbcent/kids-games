@@ -127,7 +127,6 @@
 
 <div id="touchUI">
   <button id="btnThrow">🎁 丟禮物</button>
-  <button id="btnDown">🧎 蹲下</button>
 </div>
 
 <div class="overlay" id="loadingOverlay">
@@ -140,7 +139,7 @@
   <h1>聖誕老人送禮去</h1>
   <button class="btn" id="btnBody">🏃 用身體玩（站在電視前）</button>
   <button class="btn" id="btnTouch">👆 用手指玩</button>
-  <div class="hint">平安夜，大家都睡著了 🌙 左右走，用大袋子接住禮物！袋子滿了就走到煙囪旁，<b>揮手一件一件丟下去</b> 🎁<br>禮物會滑到聖誕樹旁、或掉進掛著的襪子裡。蹲一下會有好笑的事發生 😆 接不到也沒關係，禮物會自己彈回袋子裡。<br>影像只在裝置上運算，不會上傳。</div>
+  <div class="hint">平安夜，大家都睡著了 🌙 左右走，用大袋子接住禮物！袋子滿了就走到煙囪旁，<b>揮手一件一件丟下去</b> 🎁<br>禮物會滑到聖誕樹旁、或掉進掛著的襪子裡。空手揮一下會出糗 😆 小心天上的搗蛋小精靈會丟炸蛋——接到會轉一大圈，但禮物一件都不會少。<br>影像只在裝置上運算，不會上傳。</div>
 </div>
 
 <script type="module">
@@ -166,9 +165,10 @@ const ART_IDS = [
   'CH201', 'CH202',                                               // 麻雀：收翅／張翅
   'CH303', 'CH304',                                               // 兩位熟睡的小朋友（躺著，短髮男孩／綁髮女孩）
   'CH601', 'CH602', 'OB001',                                      // 搗亂小精靈：預備／出手，以及牠丟的炸蛋
+  'FX001', 'FX002',                                               // 炸蛋的爆炸雲（棉花糖式，兩格連播）
   'VH001',                                                        // 麋鹿拉雪橇的飛行隊伍（永遠一起動，所以是同一張）
   'IT001', 'IT002', 'IT003', 'IT004', 'IT005',                    // 禮物盒／玩具車／熊玩偶／麵包紙袋／紅包袋
-  'TP001', 'TP003', 'TP006', 'TP008', 'TP009',                    // 屋頂平台／公寓／聖誕樹／晾衣被／禮物袋
+  'TP001', 'TP003', 'TP006', 'TP009',                             // 屋頂平台／公寓／聖誕樹／禮物袋
   'TP010', 'TP011', 'TP013', 'TP014',                             // 矮煙囪頭／聖誕襪／開放滑道／淺住宅剖面
   'BG001',                                                        // 遠景橫幅
 ];
@@ -282,7 +282,6 @@ const sfxSquish  = () => { sweepDown(520, 180, 0.22, 0.12); tone(680, 0.14, 'tri
 const sfxMeow    = () => { tone(520, 0.14, 'sawtooth', 0.07); tone(420, 0.18, 'sawtooth', 0.06, 0.12); }
 const sfxChirp   = () => { tone(1500, 0.05, 'sine', 0.08); tone(1900, 0.05, 'sine', 0.07, 0.07); }
 const sfxShoo    = () => [520, 700, 900, 1150].forEach((f, i) => tone(f, 0.09, 'square', 0.1, i * 0.05));
-const sfxDuck    = () => { for (let i = 0; i < 5; i++) tone(700 - i * 90, 0.07, 'sine', 0.08, i * 0.05); }
 const sfxEggFly  = () => { for (let i = 0; i < 4; i++) tone(320 + i * 40, 0.09, 'triangle', 0.07, i * 0.07); }
 const sfxEggPop  = () => { sweepDown(420, 120, 0.25, 0.12); tone(300, 0.12, 'square', 0.08, 0.22); }   // 噗——不是爆炸
 const sfxWhirl   = () => { sweepDown(900, 260, 0.55, 0.10); tone(660, 0.14, 'triangle', 0.1, 0.55); }
@@ -316,11 +315,8 @@ const LINES = {
   s17: ["She's fast asleep too.",      '這個小朋友也睡著了。'],
   s18: ['The other chimney.',          '換另一座煙囪。'],
   s19: ['What a big bear!',            '好大一隻熊！'],
-  s20: ['Crouch to squish it.',        '蹲下壓一壓。'],
-  s21: ['Boing, in you go.',           '啵，進去了。'],
   s22: ["Kitty, that's my bag.",       '貓咪，那是我的袋子。'],
   s23: ['Swing your arm, shoo kitty.', '揮一下，請貓咪讓開。'],
-  s24: ['Crouch under the blanket.',   '蹲下，鑽過被子。'],
   s25: ['Silly little bird.',          '淘氣的小麻雀。'],
   s26: ['Swing your arm, shoo bird.',  '揮一下，請麻雀讓開。'],
   s27: ['Oops, back in the bag.',      '哎呀，彈回袋子裡了。'],
@@ -330,7 +326,6 @@ const LINES = {
   s31: ['Back to the sleigh.',         '回雪橇，去下一間。'],
   s32: ['One more bag.',               '再送一袋。'],
   s33: ['A present for Santa!',        '這份是送給聖誕老人的！'],
-  s34: ['Crouch, Santa.',              '蹲下，聖誕老人。'],
   s35: ['Give a toss, boing!',         '揮一下，連自己也彈起來！'],
   s36: ['Still fast asleep.',          '大家還睡得好熟。'],
   s37: ['Merry Christmas.',            '耶誕快樂。'],
@@ -446,11 +441,11 @@ const STAGES = [
   { name: '第一間亮著小燈的房子', gifts: ['IT001'],                            ev: null,      tint: 0.00 },
   { name: '搗蛋小精靈來了',       gifts: ['IT001', 'IT002', 'IT004'],          ev: 'elf',     tint: 0.02 },
   { name: '隔壁的小朋友也睡著了', gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: null,      tint: 0.04 },
-  { name: '這隻熊太大了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'bear',    tint: 0.06 },
-  { name: '屋頂貓來幫倒忙',       gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'catelf',  tint: 0.08 },
-  { name: '晾衣被的捷徑',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'blanket', tint: 0.10 },
-  { name: '麻雀與小精靈一起鬧',   gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'birdelf', tint: 0.12 },
-  { name: '整條街的回禮',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'mix',     tint: 0.14 },
+  { name: '熊玩偶也來了',         gifts: ['IT001', 'IT002', 'IT003', 'IT004', 'IT005'], ev: null, tint: 0.06 },
+  { name: '屋頂貓來幫倒忙',       gifts: ['IT001', 'IT002', 'IT003', 'IT004', 'IT005'], ev: 'catelf', tint: 0.08 },
+  { name: '小精靈又來了',         gifts: ['IT001', 'IT002', 'IT003', 'IT004', 'IT005'], ev: 'elf',  tint: 0.10 },
+  { name: '麻雀與小精靈一起鬧',   gifts: ['IT001', 'IT002', 'IT003', 'IT004', 'IT005'], ev: 'birdelf', tint: 0.12 },
+  { name: '整條街的回禮',         gifts: ['IT001', 'IT002', 'IT003', 'IT004', 'IT005'], ev: 'mix',   tint: 0.14 },
 ];
 const BAGS_PER_STAGE = 2;
 const BAG_SIZE = 4;
@@ -474,7 +469,6 @@ const state = {
   spawnGap: 0,
   target: 0,
   throwAnim: 0, throwCool: 0,
-  squatCool: 0,
   event: null,
   roll: null, spin: null, whirl: null,
   eggs: [],            // 小精靈丟過來的炸蛋
@@ -496,7 +490,7 @@ function startLocal() {
   state.gifts = []; state.hold = []; state.flying = [];
   state.event = null; state.roll = null; state.spin = null; state.whirl = null; state.eggs = [];
   state.finale = null; state.delivered = [[], []]; state.dream = 0;
-  state.throwAnim = 0; state.throwCool = 0; state.squatCool = 0;
+  state.throwAnim = 0; state.throwCool = 0;
   state.assist = 0; state.assisting = false; state.idle = 0;
   state.target = 0; state.spawnGap = 0.6;
   state.sleigh = { x: -0.15, y: LAY.flyY, want: 0.5, hold: null, mode: 'in', t: 0 };
@@ -510,8 +504,7 @@ let poseLandmarker = null;
 let lastVideoTime = -1;
 let lastSeen = 0;
 let personX = 0.5;
-let squat = false, squatPrev = false;
-let standH = 0, shoulderW = 0;
+let shoulderW = 0;
 let tooCloseSince = 0, pauseUntil = 0, wasPaused = false;
 // 揮擲：讀手腕相對肩線的上升速度尖峰（時間性偵測，不是單格姿勢）
 let throwPulse = false;          // 這一幀有沒有丟出去（遊戲邏輯消耗掉）
@@ -572,7 +565,7 @@ function trackFrame() {
   const nowT = performance.now();
   if (!lm) {
     // 追蹤丟失太久 → 重置姿勢與速度歷史，不然蹲下／揮擲會卡住或誤觸
-    if (nowT - lastSeen > 700) { squat = false; wristHist.length = 0; throwArm = 0; }
+    if (nowT - lastSeen > 700) { wristHist.length = 0; throwArm = 0; }
     return;
   }
   lastSeen = nowT;
@@ -614,19 +607,12 @@ function trackFrame() {
   throwArm = best;
   if (throwLock <= 0 && best > THROW_SPEED) { throwPulse = true; throwLock = THROW_COOL; wristHist.length = 0; }
 
-  // 蹲下：肩到踝的高度比例掉到站姿基準的 0.80 才算蹲、回到 0.90 才算站起
-  const ankleY = Math.max(lm[27].y, lm[28].y);
-  const bodyH = Math.abs(ankleY - shoulderY);
-  if (bodyH > 0.02) standH = standH ? Math.max(standH * 0.995, bodyH) : bodyH;
-  const ratio = standH ? bodyH / standH : 1;
-  if (ratio < 0.80) squat = true; else if (ratio > 0.90) squat = false;
 
   pipDot.style.left = (personX * 100) + '%';
-  pipDot.style.background = squat ? '#ff8800' : (throwLock > 0 ? '#ffdd00' : '#00ff88');
+  pipDot.style.background = throwLock > 0 ? '#ffdd00' : '#00ff88';
 }
 
 /* ================== 觸控模式 ================== */
-let touchSquat = false;
 const touchUI = document.getElementById('touchUI');
 canvas.addEventListener('pointerdown', e => {
   if (state.mode !== 'touch' || state.phase !== 'play') return;
@@ -637,7 +623,6 @@ canvas.addEventListener('pointermove', e => {
   state.targetX = Math.max(WALK_MIN, Math.min(WALK_MAX, e.clientX / W));
 });
 document.getElementById('btnThrow').addEventListener('pointerdown', e => { e.preventDefault(); throwPulse = true; });
-document.getElementById('btnDown').addEventListener('pointerdown', e => { e.preventDefault(); touchSquat = true; });
 
 /* ================== 開始流程 ================== */
 const startOverlay = document.getElementById('startOverlay');
@@ -732,7 +717,7 @@ function releaseGift() {
 function updateSleigh(dt) {
   const sl = state.sleigh;
   sl.t += dt;
-  const hold = (state.event && (state.event.kind === 'bear' || state.event.kind === 'cat')) || state.step !== 'catch';
+  const hold = (state.event && state.event.kind === 'cat') || state.step !== 'catch';
   let want = sl.want;
   if (sl.mode === 'in') { want = 0.5; if (Math.abs(sl.x - 0.5) < 0.02) sl.mode = 'idle'; }
   else if (sl.mode === 'linger') { want = sl.x; if (sl.t > 0.9) sl.mode = 'idle'; }
@@ -755,16 +740,12 @@ function maybeStartEvent() {
   if (state.event || state.step !== 'catch') return;
   const kind = curStage().ev;
   if (!kind) return;
-  const POOLS = { mix: ['bear', 'cat', 'bird', 'elf'], birdelf: ['bird', 'elf'], catelf: ['cat', 'elf'] };
+  const POOLS = { mix: ['cat', 'bird', 'elf'], birdelf: ['bird', 'elf'], catelf: ['cat', 'elf'] };
   const pool = POOLS[kind] || [kind];
   const pick = pool[(Math.random() * pool.length) | 0];
-  if (pick === 'blanket') return;               // 晾衣被屬於送禮路上的事件
   const firstOfStage = (state.bag % BAGS_PER_STAGE) === 0;
   if (!firstOfStage && Math.random() > 0.55) return;   // 每段第一袋一定出現，第二袋才隨機
-  if (pick === 'bear') {
-    state.event = { kind: 'bear', phase: 'jam', t: 0 };
-    say('s19', { priority: 2 }); setTimeout(() => say('s20', { priority: 2 }), 900);
-  } else if (pick === 'cat') {
+  if (pick === 'cat') {
     state.event = { kind: 'cat', phase: 'sit', t: 0 };
     sfxMeow(); say('s22', { priority: 2 }); setTimeout(() => say('s23', { priority: 2 }), 1000);
   } else if (pick === 'bird') {
@@ -781,11 +762,6 @@ function bagFull() {
   state.step = 'full'; state.t = 0;
   state.target = houses().length > 1 ? ((Math.random() * houses().length) | 0) : 0;
   sfxFull(); say('s5', { priority: 2 });
-  if (curStage().ev === 'blanket' || (curStage().ev === 'mix' && Math.random() < 0.35)) {
-    const bx = targetHouse().chim;
-    const mid = (state.santaX + bx) / 2;
-    state.event = { kind: 'blanket', phase: 'block', t: 0, x: Math.max(WALK_MIN + 0.08, Math.min(WALK_MAX - 0.08, mid)) };
-  }
 }
 function startDeliver() {
   state.step = 'deliver'; state.t = 0; state.idle = 0;
@@ -843,22 +819,22 @@ function startFinale() {
   state.finale = { phase: 'come', t: 0, y: -0.12, total: 0 };
   say('s33', { priority: 2 }); sfxSleigh();
 }
-function doRoll() {
-  if (state.squatCool > 0 || state.roll) return;
-  state.roll = { t: 0 };
-  state.squatCool = 2.2;
-  say('s29', { gap: 7000 });
-  sfxRoll();
-}
-function doSpin() {   // 空袋揮擲：腳滑轉一圈，不扣進度
+let spinTurn = 0;
+function doSpin() {   // 空手揮擲：一次腳滑轉圈、一次摔成四腳朝天，輪流出現（不扣任何進度）
   if (state.spin) return;
-  state.spin = { t: 0 };
-  state.throwAnim = THROW_ANIM;
-  say('s42', { gap: 9000 });
-  sfxSpin();
+  const tumble = (spinTurn++ % 2) === 1;
+  state.spin = { t: 0, tumble };
+  state.throwAnim = tumble ? 0 : THROW_ANIM;
+  say(tumble ? 's29' : 's42', { gap: 7000 });
+  if (tumble) sfxRoll(); else sfxSpin();
 }
 
 const FX = [];
+const BOOMS = [];
+function boom(x, y, big = 1) {
+  BOOMS.push({ x, y, t: 0, life: 0.7, big });
+  sparkle(x, y);
+}
 function sparkle(x, y) {
   for (let i = 0; i < 7; i++) FX.push({
     x, y,
@@ -893,7 +869,7 @@ function update(dt, now) {
     wasPaused = false; tooCloseSince = 0;
     for (const g of state.gifts) if (!g.caught) { g.t = 0; g.bounce = null; }
     state.roll = null; state.spin = null; FX.length = 0;
-    if (state.event && state.event.kind !== 'blanket') state.event.t = 0;
+    if (state.event) state.event.t = 0;
     throwPulse = false; throwLock = THROW_COOL; wristHist.length = 0;
     state.assist = 0;
     say('s39', { priority: 2 });
@@ -902,7 +878,6 @@ function update(dt, now) {
     (state.mode === 'body' && now - lastSeen > 1500) ? 'block' : 'none';
 
   state.t += dt;
-  if (state.squatCool > 0) state.squatCool -= dt;
   if (state.throwAnim > 0) state.throwAnim -= dt;
   if (throwLock > 0) throwLock -= dt;
   if (state.stageFlash > 0) state.stageFlash -= dt;
@@ -911,14 +886,11 @@ function update(dt, now) {
 
   /* ---- 輸入：同一時間只解讀一項 ---- */
   const busy = state.step === 'stage';
-  const sq = state.mode === 'body' ? squat : false;
-  const squatEdge = (sq && !squatPrev) || touchSquat;
-  squatPrev = sq; touchSquat = false;
-  const tossEdge = throwPulse && !sq;      // 半蹲揮手不算丟
+  const tossEdge = throwPulse;
   throwPulse = false;
 
   // 走位：蹲著或正在出手的那零點三秒不換位置
-  if (!busy && !sq && state.throwAnim <= 0) {
+  if (!busy && state.throwAnim <= 0) {
     // 結局是演出，不讓身體位置把他拉離舞台中央
     if (state.mode === 'body' && state.step !== 'finale') state.targetX = Math.max(WALK_MIN, Math.min(WALK_MAX, personX));
     const prev = state.santaX;
@@ -932,18 +904,6 @@ function update(dt, now) {
       state.assist = 0;
     }
   } else state.moving = false;
-
-  // 蹲下：壓熊／鑽被子／偷吃點心／結局接熊／沒事就翻滾
-  if (!busy && squatEdge) {
-    const e = state.event;
-    if (e && e.kind === 'bear' && e.phase === 'jam') {
-      e.phase = 'squish'; e.t = 0; sfxSquish(); say('s21', { priority: 2 }); state.assist = 0;
-    } else if (e && e.kind === 'blanket' && e.phase === 'block' && Math.abs(state.santaX - e.x) < 0.12) {
-      e.phase = 'duck'; e.t = 0; sfxDuck(); state.assist = 0;
-    } else if (state.step === 'finale' && state.finale && state.finale.phase === 'wait') {
-      state.finale.phase = 'sit'; state.finale.t = 0; sfxSquish(); say('s35', { priority: 2 });
-    } else doRoll();
-  }
 
   // 揮擲：丟禮物／趕動物／空揮出糗／結局彈起／完成畫面重玩
   if (!busy && tossEdge) {
@@ -966,9 +926,8 @@ function update(dt, now) {
 
   /* ---- 各階段推進 ---- */
   if (state.step === 'catch') {
-    const jammed = state.event && state.event.kind === 'bear' && state.event.phase === 'jam';
     state.spawnGap -= dt;
-    if (!jammed && state.spawnGap <= 0 && state.gifts.length < 2 && !state.sleigh.hold
+    if (state.spawnGap <= 0 && state.gifts.length < 2 && !state.sleigh.hold
         && state.hold.length + state.gifts.length < BAG_SIZE) {
       requestGift(); state.spawnGap = 1.4 + Math.random() * 0.4;
       if (state.bag === 0 && state.hold.length === 0) say('s3', { priority: 2 });
@@ -1038,19 +997,17 @@ function update(dt, now) {
     if (k >= 1) {
       state.eggs.splice(i, 1);
       if (Math.abs(eg.cx - sackX()) < W * 0.075) eggCaught();
-      else { sfxEggPop(); sparkle(eg.cx, roofTopY() - H * 0.02); }   // 沒接到：在屋頂上噗一聲洩氣
+      else { sfxEggPop(); boom(eg.cx, roofTopY() - H * 0.04, 1); }   // 沒接到：在屋頂上爆出一團棉花糖煙雲
     }
   }
   if (state.whirl) { state.whirl.t += dt; if (state.whirl.t > 1.3) state.whirl = null; }
+  for (let i = BOOMS.length - 1; i >= 0; i--) { BOOMS[i].t += dt; if (BOOMS[i].t > BOOMS[i].life) BOOMS.splice(i, 1); }
 
   /* ---- 事件推進（每一段都有不會卡住的後路）---- */
   if (state.event) {
     const e = state.event;
     e.t += dt;
-    if (e.kind === 'bear') {
-      if (e.phase === 'jam' && e.t > ASSIST_AFTER) { e.phase = 'squish'; e.t = 0; sfxSquish(); }
-      else if (e.phase === 'squish' && e.t > 0.7) { state.hold.push('IT003'); sfxCatch(); state.event = null; }
-    } else if (e.kind === 'cat') {
+    if (e.kind === 'cat') {
       if (e.phase === 'sit' && e.t > 7) { e.phase = 'leave'; e.t = 0; }
       else if (e.phase === 'leave' && e.t > 1.1) state.event = null;
     } else if (e.kind === 'bird') {
@@ -1072,10 +1029,6 @@ function update(dt, now) {
         else { e.phase = 'fly'; e.t = 0; }
       }
       else if (e.phase === 'leave' && e.t > 1.2) state.event = null;
-    } else if (e.kind === 'blanket') {
-      if (e.phase === 'block' && e.t > ASSIST_AFTER + 2) { e.phase = 'lift'; e.t = 0; }
-      else if (e.phase === 'duck' && e.t > 0.9) { e.phase = 'lift'; e.t = 0; }
-      else if (e.phase === 'lift' && e.t > 1.2) state.event = null;
     }
   }
 
@@ -1115,7 +1068,7 @@ function eggCaught() {
   state.eggs.length = 0;
   sfxEggPop(); sfxWhirl();
   say('s15', { priority: 2, gap: 6000 });
-  sparkle(sackX(), sackMouthY());
+  boom(sackX(), sackMouthY(), 1.15);
 }
 function catchGift(g, i, bounced) {
   g.caught = true;
@@ -1146,7 +1099,7 @@ function updateFinale(dt) {
     f.y += dt * 0.20;
     if (f.y > LAY.roofY - 0.26) { f.phase = 'wait'; f.t = 0; say('s34', { priority: 2 }); }
   } else if (f.phase === 'wait') {
-    if (f.t > ASSIST_AFTER) { f.phase = 'sit'; f.t = 0; sfxSquish(); }
+    if (f.t > 1.2) { f.phase = 'sit'; f.t = 0; sfxSquish(); say('s35', { priority: 2 }); }   // 大熊自己坐上肚子
   } else if (f.phase === 'sit') {
     if (f.t > ASSIST_AFTER) { f.phase = 'boing'; f.t = 0; sfxSleigh(); }
   } else if (f.phase === 'boing') {
@@ -1317,6 +1270,7 @@ function drawSleigh(now) {
 
 function santaFrame() {
   if (state.whirl) return 'CH001';
+  if (state.spin && state.spin.tumble && state.spin.t > 0.18) return 'CH006';
   if (state.roll) return 'CH006';
   if (state.finale) {
     if (state.finale.phase === 'sit') return 'CH006';
@@ -1324,8 +1278,6 @@ function santaFrame() {
   }
   if (state.throwAnim > 0) return state.throwAnim > THROW_ANIM * 0.55 ? 'CH007' : 'CH008';
   const e = state.event;
-  if (e && e.kind === 'bear' && e.phase === 'squish') return 'CH005';
-  if (e && e.kind === 'blanket' && e.phase === 'duck') return 'CH005';
   if (state.moving) return (Math.floor(state.walkPhase) % 2 === 0) ? 'CH002' : 'CH003';
   return 'CH001';
 }
@@ -1339,9 +1291,16 @@ function drawSanta(now) {
     const k = clamp01(state.roll.t / 1.3);
     rot = Math.sin(k * Math.PI) * 0.5; dy = -Math.sin(k * Math.PI) * H * 0.03; h *= 0.92;
   }
-  if (state.spin) {                                   // 空揮：整個人轉一圈
-    rot = clamp01(state.spin.t / 1.0) * Math.PI * 2;
-    dy = -Math.sin(clamp01(state.spin.t) * Math.PI) * H * 0.012;
+  if (state.spin) {
+    const k = clamp01(state.spin.t / 1.0);
+    if (state.spin.tumble) {                          // 空揮之二：整個人摔成四腳朝天再自己爬起來
+      rot = Math.sin(k * Math.PI) * 0.45;
+      dy = -Math.sin(k * Math.PI) * H * 0.02;
+      h *= 0.92;
+    } else {                                          // 空揮之一：腳滑轉一圈
+      rot = k * Math.PI * 2;
+      dy = -Math.sin(k * Math.PI) * H * 0.012;
+    }
   }
   if (state.whirl) {                                  // 接到炸蛋：轉兩大圈再站穩（好笑，不扣任何進度）
     const k = clamp01(state.whirl.t / 1.3);
@@ -1415,11 +1374,7 @@ function drawFlying() {
 function drawEvent(now) {
   const e = state.event; if (!e) return;
   const sx = sackX();
-  if (e.kind === 'bear') {
-    let sy = 1, dy = 0;
-    if (e.phase === 'squish') { const k = clamp01(e.t / 0.7); sy = 1 - Math.sin(Math.PI * k) * 0.45; dy = Math.sin(Math.PI * k) * H * 0.02; }
-    pic('IT003', sx, sackMouthY() - H * 0.02 + dy, { h: LAY.giftH * H * 1.5, sy });
-  } else if (e.kind === 'cat') {
+  if (e.kind === 'cat') {
     if (e.phase === 'sit') picBottom('CH101', sx, sackMouthY() + H * 0.02 + Math.sin(now / 320) * H * 0.004, { h: H * 0.10 });
     else {
       const k = clamp01(e.t / 1.1);
@@ -1452,11 +1407,6 @@ function drawEvent(now) {
     pic(id, e.x * W + dx, e.y * H + dy, { h: eh, flip: !faceRight, rot });
     // 舉高那一格：把待投的炸蛋畫在他手上，看得出「等一下要丟這個」
     if (e.phase === 'wind') pic('OB001', e.x * W + (faceRight ? -1 : 1) * eh * 0.26, e.y * H + dy - eh * 0.40, { h: LAY.giftH * H * 0.95 });
-  } else if (e.kind === 'blanket') {
-    let lift = 0;
-    if (e.phase === 'duck') lift = clamp01(e.t / 0.9) * 0.4;
-    if (e.phase === 'lift') lift = 0.4 + clamp01(e.t / 1.2) * 0.6;
-    picBottom('TP008', e.x * W, roofTopY() - H * 0.10 * lift, { h: H * 0.15, alpha: 1 - lift * 0.35 });
   }
 }
 
@@ -1555,6 +1505,11 @@ function draw(now) {
   drawEggs();
   drawFlying();
   if (state.step === 'finale') drawFinale(now);
+  for (const b of BOOMS) {
+    const k = clamp01(b.t / b.life);
+    const id = k < 0.35 ? 'FX001' : 'FX002';
+    pic(id, b.x, b.y - k * H * 0.03, { h: H * 0.11 * b.big * (0.7 + k * 0.7), alpha: 1 - k * 0.85 });
+  }
   for (const f of FX) {
     ctx.save(); ctx.globalAlpha = Math.max(0, 1 - f.t / f.life);
     ctx.fillStyle = f.c; ctx.beginPath(); ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
@@ -1598,14 +1553,13 @@ window.__dbg = () => ({
   assist: +state.assist.toFixed(1), throwArm: +throwArm.toFixed(2), t: +state.t.toFixed(2),
 });
 // 手動步進：不靠 requestAnimationFrame（背景分頁會被凍結），可離線快轉驗證
-window.__step = (secs = 5, { toss = false, squat: sq = false, x = null, fps = 60 } = {}) => {
+window.__step = (secs = 5, { toss = false, x = null, fps = 60 } = {}) => {
   const dt = 1 / fps, n = Math.round(secs * fps);
   window.__clock = Math.max(window.__clock || 0, performance.now());
   let now = window.__clock;
   for (let i = 0; i < n; i++) {
     if (x != null) state.targetX = x;
     if (toss && i === 0) throwPulse = true;
-    touchSquat = sq && i === 0;
     now += dt * 1000;
     update(dt, now);
   }
@@ -1625,19 +1579,17 @@ window.__sim = async (bags = TOTAL_BAGS, { lazy = false } = {}) => {
       const g = state.gifts[0];
       __step(g ? 0.25 : 0.3, { x: g ? g.x : null });
       const e = state.event;
-      if (e && e.kind === 'bear' && e.phase === 'jam') __step(0.2, { squat: true });
       if (e && (e.kind === 'cat' || e.kind === 'bird') && (e.phase === 'sit' || e.phase === 'carry')) __step(0.3, { toss: true });
     } else if (state.step === 'full') __step(0.9);
     else if (state.step === 'deliver') {
       const cx = targetHouse().chim;
       __step(0.8, { x: cx });
       const e = state.event;
-      if (e && e.kind === 'blanket' && e.phase === 'block') { __step(0.3, { x: e.x }); __step(0.2, { x: e.x, squat: true }); __step(1.2, { x: cx }); }
       if (lazy) __step(1.0, { x: cx });
       else __step(0.6, { x: cx, toss: true });
     }
     else if (state.step === 'stage') __step(0.6);
-    else if (state.step === 'finale') { __step(1.0, { squat: true }); __step(1.0, { toss: true }); __step(2.0); }
+    else if (state.step === 'finale') { __step(1.2); __step(1.0, { toss: true }); __step(2.5); }
     else if (state.step === 'done') break;
     else __step(0.5);
   }

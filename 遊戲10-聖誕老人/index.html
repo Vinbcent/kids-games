@@ -443,12 +443,12 @@ const SMALL_GIFT = { IT002: 1, IT005: 1 };   // 小禮物進襪子，大禮物�
 /* ================== 八段推進（每兩袋一段） ================== */
 const STAGES = [
   { name: '第一間亮著小燈的房子', gifts: ['IT001'],                            ev: null,      tint: 0.00 },
-  { name: '禮物裡有車車',         gifts: ['IT001', 'IT002', 'IT004'],          ev: null,      tint: 0.02 },
+  { name: '搗蛋小精靈來了',       gifts: ['IT001', 'IT002', 'IT004'],          ev: 'elf',     tint: 0.02 },
   { name: '隔壁的小朋友也睡著了', gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: null,      tint: 0.04 },
   { name: '這隻熊太大了',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'bear',    tint: 0.06 },
-  { name: '搗蛋小精靈來了',       gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'elf',     tint: 0.08 },
+  { name: '屋頂貓來幫倒忙',       gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'catelf',  tint: 0.08 },
   { name: '晾衣被的捷徑',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'blanket', tint: 0.10 },
-  { name: '麻雀與小精靈一起鬧',   gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'birdelf',  tint: 0.12 },
+  { name: '麻雀與小精靈一起鬧',   gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'birdelf', tint: 0.12 },
   { name: '整條街的回禮',         gifts: ['IT001', 'IT002', 'IT004', 'IT005'], ev: 'mix',     tint: 0.14 },
 ];
 const BAGS_PER_STAGE = 2;
@@ -754,10 +754,12 @@ function maybeStartEvent() {
   if (state.event || state.step !== 'catch') return;
   const kind = curStage().ev;
   if (!kind) return;
-  const pool = kind === 'mix' ? ['bear', 'cat', 'bird', 'elf'] : (kind === 'birdelf' ? ['bird', 'elf'] : [kind]);
+  const POOLS = { mix: ['bear', 'cat', 'bird', 'elf'], birdelf: ['bird', 'elf'], catelf: ['cat', 'elf'] };
+  const pool = POOLS[kind] || [kind];
   const pick = pool[(Math.random() * pool.length) | 0];
   if (pick === 'blanket') return;               // 晾衣被屬於送禮路上的事件
-  if (Math.random() > 0.55) return;
+  const firstOfStage = (state.bag % BAGS_PER_STAGE) === 0;
+  if (!firstOfStage && Math.random() > 0.55) return;   // 每段第一袋一定出現，第二袋才隨機
   if (pick === 'bear') {
     state.event = { kind: 'bear', phase: 'jam', t: 0 };
     say('s19', { priority: 2 }); setTimeout(() => say('s20', { priority: 2 }), 900);
@@ -1558,6 +1560,11 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 /* ---- 測試勾子（給開發用，玩家碰不到） ---- */
+window.__elf = () => {
+  const side = state.santaX > 0.5 ? WALK_MIN - 0.06 : WALK_MAX + 0.06;
+  state.event = { kind: 'elf', phase: 'wind', t: 0, x: side, thrown: 0 };
+  sfxStomp(); return window.__dbg();
+};
 window.__art = () => ART_IDS.filter(id => !IMG[id]);
 window.__dbg = () => ({
   phase: state.phase, step: state.step, paused: state.paused,
